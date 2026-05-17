@@ -451,7 +451,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.2.4</div>
+    <div id="version-number">v1.2.5</div>
 
     <div id="main-wrapper">
         <div id="hud" class="hidden">
@@ -724,8 +724,9 @@
                         <option value="local" ${defaultType === 'local' ? 'selected' : ''}>Local</option>
                         <option value="ai_online" ${defaultType === 'ai_online' ? 'selected' : ''}>Online</option>
                         <option value="ai_only" ${defaultType === 'ai_only' ? 'selected' : ''}>AI</option>
-                        <option value="friend_only" ${defaultType === 'friend_only' ? 'selected' : ''}>Humans can only join with a friend code</option>
+                        <option value="ai_friend" ${defaultType === 'ai_friend' ? 'selected' : ''}>AI (Friends Allowed <3)</option>
                         <option value="inactive" ${defaultType === 'inactive' ? 'selected' : ''}>Disabled</option>
+                        <option value="friend_only" ${defaultType === 'friend_only' ? 'selected' : ''}>Disabled (Friends Allowed <3)</option>
                     </select>
                     <select class="control-select" style="display: ${defaultType === 'local' ? 'block' : 'none'}">
                         <option value="WASD" ${defaultControl === 'WASD' ? 'selected' : ''}>WASD Keys</option>
@@ -736,7 +737,7 @@
                         <option value="controller_1">Controller 1 (Dummy)</option>
                         <option value="controller_2">Controller 2 (Dummy)</option>
                     </select>
-                    <div class="ai-settings" style="display: ${defaultType === 'ai_online' || defaultType === 'ai_only' ? 'flex' : 'none'}; flex-direction: column; gap: 5px;">
+                    <div class="ai-settings" style="display: ${defaultType === 'ai_only' || defaultType === 'ai_friend' ? 'flex' : 'none'}; flex-direction: column; gap: 5px;">
                         <select class="ai-speed-select">
                             <option value="random">Speed: Random</option>
                             <option value="scaling" selected>Speed: Scaling</option>
@@ -788,10 +789,10 @@
                     if (val === 'local') {
                         controlSelect.style.display = 'block';
                         aiSettings.style.display = 'none';
-                    } else if (val === 'ai_online' || val === 'ai_only') {
+                    } else if (val === 'ai_only' || val === 'ai_friend') {
                         controlSelect.style.display = 'none';
                         aiSettings.style.display = 'flex';
-                    } else { // Handle inactive and friend_code
+                    } else {
                         controlSelect.style.display = 'none';
                         aiSettings.style.display = 'none';
                     }
@@ -819,7 +820,7 @@
                 const type = slot.typeSelect.value;
                 if (type !== 'inactive') {
                     // For prototype purposes, we'll treat "friend_code" as a local player who isn't fully active but shown
-                    const isLocal = (type === 'local' || type === 'friend_code');
+                    const isLocal = (type === 'local' || type === 'friend_only');
                     activePlayersData.push({
                         id: slot.id,
                         color: slot.color,

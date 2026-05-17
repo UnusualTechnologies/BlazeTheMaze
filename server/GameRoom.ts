@@ -142,7 +142,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         // Friend-code joiners can also claim friend_only slots; random joiners cannot
         let assignedSlotIndex = this.state.slots.findIndex(s => {
             if (s.sessionId !== "") return false;
-            if (joinedViaCode) return s.mode === "local" || s.mode === "ai_online" || s.mode === "friend_only";
+            if (joinedViaCode) return s.mode === "local" || s.mode === "ai_online" || s.mode === "friend_only" || s.mode === "ai_friend";
             return s.mode === "local" || s.mode === "ai_online";
         });
 
@@ -225,6 +225,14 @@ export class GameRoom extends Room<{ state: GameState }> {
                 this.state.players.set(aiId, player);
                 this.initAIState(aiId, player);
                 console.log(`Player ${client.sessionId} left. AI taking over slot ${slotIndex}.`);
+            } else if (slot.mode === "ai_friend") {
+                const aiId = `ai_${slotIndex}`;
+                player.isAI = true;
+                slot.sessionId = "";
+                this.state.players.delete(client.sessionId);
+                this.state.players.set(aiId, player);
+                this.initAIState(aiId, player);
+                console.log(`Friend left slot ${slotIndex}. AI resuming.`);
             } else if (slot.mode === "friend_only") {
                 slot.sessionId = "";
                 this.state.players.delete(client.sessionId);
