@@ -95,25 +95,38 @@
         
         #scoreboard {
             display: flex;
-            flex-direction: column;
-            gap: 0;
-            font-size: 1.2rem;
+            flex-direction: row;
+            gap: 6px;
             color: #fff;
             font-family: monospace;
             background: rgba(0,0,0,0.5);
-            padding: 15px;
+            padding: 10px;
             border-radius: 8px;
             border: 1px solid rgba(255,255,255,0.1);
             width: 100%;
         }
 
         .score-col {
+            flex: 1;
             display: flex;
             flex-direction: column;
-            line-height: 1.6;
+            align-items: center;
+            min-width: 0;
         }
 
-        .score-col:empty { display: none; }
+        .score-header {
+            font-size: 0.9rem;
+            color: #00ffff;
+            min-height: 1.3em;
+            margin-bottom: 4px;
+        }
+
+        .score-players {
+            font-size: 0.8rem;
+            line-height: 1.5;
+            text-align: center;
+            word-break: break-word;
+        }
 
         #friend-code-hud {
             font-family: monospace;
@@ -559,20 +572,11 @@
             }
         }
 
-        /* Desktop: scoreboard columns — players 5-8 left, players 1-4 right */
-        @media (min-width: 901px) and (min-aspect-ratio: 1/1) {
-            #scoreboard {
-                flex-direction: row-reverse;
-                gap: 12px;
-                align-items: flex-start;
-            }
-            .score-col { flex: 1; }
-        }
     </style>
 </head>
 <body>
 
-    <div id="version-number">v1.2.17</div>
+    <div id="version-number">v1.2.18</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1591,12 +1595,20 @@
                 const nb = parseInt(b.id.replace(/\D/g, '')) || 0;
                 return na - nb;
             });
-            const entry = b => `<span style="color:${b.color}">${b.id}: ${scores[b.id] ?? 0}/${WINS_NEEDED}</span>`;
-            const p1to4 = sorted.filter(b => (parseInt(b.id.replace(/\D/g, '')) || 0) <= 4);
-            const p5to8 = sorted.filter(b => (parseInt(b.id.replace(/\D/g, '')) || 0) >= 5);
-            scoreboardElement.innerHTML =
-                `<div class="score-col">${p1to4.map(entry).join('')}</div>` +
-                `<div class="score-col">${p5to8.map(entry).join('')}</div>`;
+            // Group players by win count (capped at 2 since 3 = instant win)
+            const groups = [[], [], []];
+            sorted.forEach(b => {
+                const w = Math.min(scores[b.id] ?? 0, 2);
+                const num = b.id.replace(/\D/g, '');
+                groups[w].push(`<span style="color:${b.color}">P${num}</span>`);
+            });
+            const headers = ['', '🏁', '🏁🏁'];
+            scoreboardElement.innerHTML = headers.map((h, i) =>
+                `<div class="score-col">` +
+                    `<div class="score-header">${h}</div>` +
+                    `<div class="score-players">${groups[i].join(', ')}</div>` +
+                `</div>`
+            ).join('');
         }
 
         function initMatch() {
