@@ -93,11 +93,12 @@
             text-shadow: 0 0 5px #000, 0 0 10px #000;
         }
         
-        #scoreboard { 
-            font-size: 1.2rem; 
-            color: #fff; 
-            text-align: left; 
-            line-height: 1.6; 
+        #scoreboard {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            font-size: 1.2rem;
+            color: #fff;
             font-family: monospace;
             background: rgba(0,0,0,0.5);
             padding: 15px;
@@ -105,6 +106,14 @@
             border: 1px solid rgba(255,255,255,0.1);
             width: 100%;
         }
+
+        .score-col {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.6;
+        }
+
+        .score-col:empty { display: none; }
 
         #friend-code-hud {
             font-family: monospace;
@@ -551,11 +560,21 @@
                 padding: 6px;
             }
         }
+
+        /* Desktop: scoreboard columns — players 5-8 left, players 1-4 right */
+        @media (min-width: 901px) and (min-aspect-ratio: 1/1) {
+            #scoreboard {
+                flex-direction: row-reverse;
+                gap: 12px;
+                align-items: flex-start;
+            }
+            .score-col { flex: 1; }
+        }
     </style>
 </head>
 <body>
 
-    <div id="version-number">v1.2.15</div>
+    <div id="version-number">v1.2.16</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -728,19 +747,20 @@
 
         const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-        // Version number: desktop → bottom-right of game-container square
-        //                 mobile  → bottom-right of #hud (below the maze, above nothing)
+        // Version: in-game → bottom-right of #hud (below the maze)
+        //          menu    → bottom-right of game-container (inside the neon square)
+        let updateVersionPosition = () => {};
         (function positionVersion() {
-            const ver = document.getElementById('version-number');
-            const gc  = document.getElementById('game-container');
+            const ver   = document.getElementById('version-number');
+            const gc    = document.getElementById('game-container');
             const hudEl = document.getElementById('hud');
             function update() {
                 const pad = 10;
-                const isMobileLayout = window.innerWidth <= window.innerHeight || window.innerWidth <= 900;
-                const r = (isMobileLayout ? hudEl : gc).getBoundingClientRect();
+                const r = (hudEl.classList.contains('hidden') ? gc : hudEl).getBoundingClientRect();
                 ver.style.right  = Math.max(window.innerWidth  - r.right  + pad, pad) + 'px';
                 ver.style.bottom = Math.max(window.innerHeight - r.bottom + pad, pad) + 'px';
             }
+            updateVersionPosition = update;
             new ResizeObserver(update).observe(gc);
             window.addEventListener('resize', update);
             requestAnimationFrame(update);
@@ -1586,9 +1606,12 @@
                 const nb = parseInt(b.id.replace(/\D/g, '')) || 0;
                 return na - nb;
             });
-            scoreboardElement.innerHTML = sorted.map(b =>
-                `<span style="color: ${b.color}">${b.id}: ${scores[b.id] ?? 0}/${WINS_NEEDED}</span>`
-            ).join('<br>');
+            const entry = b => `<span style="color:${b.color}">${b.id}: ${scores[b.id] ?? 0}/${WINS_NEEDED}</span>`;
+            const p1to4 = sorted.filter(b => (parseInt(b.id.replace(/\D/g, '')) || 0) <= 4);
+            const p5to8 = sorted.filter(b => (parseInt(b.id.replace(/\D/g, '')) || 0) >= 5);
+            scoreboardElement.innerHTML =
+                `<div class="score-col">${p1to4.map(entry).join('')}</div>` +
+                `<div class="score-col">${p5to8.map(entry).join('')}</div>`;
         }
 
         function initMatch() {
@@ -1613,6 +1636,7 @@
             postMatchLayer.classList.add('hidden');
             hud.classList.remove('hidden');
             hudBar.classList.remove('hidden');
+            updateVersionPosition();
 
             // Clear any leftover bugs; players are created fresh via onStateChange.
             bugs = [];
@@ -1654,6 +1678,7 @@
             postMatchLayer.classList.remove('winner-pulse');
             hud.classList.add('hidden');
             hudBar.classList.add('hidden');
+            updateVersionPosition();
             lobbyLayer.classList.add('hidden');
             initialMenu.classList.remove('hidden');
             Synth.muffle(true);
