@@ -76,10 +76,9 @@
             align-items: start;
         }
 
-        #friend-code-hud { grid-column: 1; grid-row: 1; }
-        #timer           { grid-column: 2; grid-row: 1; }
-        #scoreboard      { grid-column: 1; grid-row: 2; }
-        #dpad            { grid-column: 2; grid-row: 2; align-self: start; }
+        #timer      { grid-column: 1; grid-row: 1; }
+        #scoreboard { grid-column: 1; grid-row: 2; }
+        #dpad       { grid-column: 2; grid-row: 1 / span 2; align-self: start; }
 
         .hud-buttons {
             display: flex;
@@ -109,14 +108,14 @@
 
         #friend-code-hud {
             font-family: monospace;
-            font-size: 1.1rem;
-            background: rgba(0,0,0,0.5);
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid rgba(255,255,255,0.1);
-            width: 100%;
-            text-align: left;
+            font-size: 0.85rem;
             color: rgba(255, 255, 255, 0.7);
+            text-align: center;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            padding: 0 8px;
         }
 
         #game-container {
@@ -385,17 +384,6 @@
             margin: 0;
         }
 
-        #controls-hint {
-            position: absolute;
-            bottom: max(10px, env(safe-area-inset-bottom));
-            color: rgba(255, 255, 255, 0.3);
-            font-size: 0.8rem;
-            text-align: center;
-            width: 100%;
-            pointer-events: none;
-            z-index: 10;
-        }
-
         .lobby-settings-panel {
             margin-bottom: 20px;
             display: flex;
@@ -409,13 +397,13 @@
         }
 
         #version-number {
-            position: absolute;
-            bottom: 10px;
-            right: 12px;
+            position: fixed;
+            bottom: max(10px, env(safe-area-inset-bottom));
+            right: max(10px, env(safe-area-inset-right));
             font-family: monospace;
             font-size: 0.75rem;
             color: #00ffff;
-            z-index: 100;
+            z-index: 2000;
             pointer-events: none;
             text-shadow: 0 0 6px rgba(0, 255, 255, 0.8), 0 0 12px rgba(0, 255, 255, 0.4);
         }
@@ -558,7 +546,7 @@
                 flex-wrap: wrap;
             }
 
-            #scoreboard, #friend-code-hud {
+            #scoreboard {
                 font-size: 0.78rem;
                 padding: 6px;
             }
@@ -566,6 +554,8 @@
     </style>
 </head>
 <body>
+
+    <div id="version-number">v1.2.14</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -580,6 +570,7 @@
                     <svg class="slash" viewBox="0 0 40 40"><line x1="31" y1="7" x2="9" y2="33" stroke="#ff4444" stroke-width="2.5" stroke-linecap="round"/></svg>
                 </button>
             </div>
+            <div id="friend-code-hud">Friend code: <span class="display-friend-code" style="color: #00ffff; font-weight: bold;"></span></div>
             <div class="hud-buttons">
                 <button class="action-btn secondary-btn" id="in-game-menu-btn" style="padding: 10px; font-size: 0.9rem; flex: 1; margin: 0;">Menu</button>
             </div>
@@ -587,7 +578,6 @@
 
         <div id="game-container">
             <canvas id="gameCanvas"></canvas>
-            <div id="version-number">v1.2.13</div>
             
             <!-- This menu now ONLY appears when the entire match is over -->
             <div id="post-match-layer" class="menu-overlay hidden">
@@ -669,9 +659,8 @@
             </div>
         </div>
 
-        <!-- Bottom controls: friend-code + scoreboard (left) | timer + dpad (right) -->
+        <!-- Bottom controls: timer + scoreboard (left) | dpad (right, spans both rows) -->
         <div id="hud" class="hidden">
-            <div id="friend-code-hud">Friend code: <span class="display-friend-code" style="color: #00ffff; font-weight: bold;"></span></div>
             <div id="timer">00:00.000</div>
             <div id="scoreboard"></div>
             <div id="dpad" class="hidden">
@@ -682,8 +671,6 @@
             </div>
         </div>
     </div>
-
-    <div id="controls-hint">Desktop: Assigned Keys | Mobile: Swipe</div>
 
     <script>
         // --- BULLETPROOF AUDIO SYSTEM ---
@@ -740,6 +727,21 @@
         // --- END AUDIO SYSTEM ---
 
         const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+        // Keep version number anchored to game-container's bottom-right corner
+        (function positionVersion() {
+            const ver = document.getElementById('version-number');
+            const gc  = document.getElementById('game-container');
+            function update() {
+                const r = gc.getBoundingClientRect();
+                const pad = 10;
+                ver.style.right  = Math.max(window.innerWidth  - r.right  + pad, pad) + 'px';
+                ver.style.bottom = Math.max(window.innerHeight - r.bottom + pad, pad) + 'px';
+            }
+            new ResizeObserver(update).observe(gc);
+            window.addEventListener('resize', update);
+            requestAnimationFrame(update);
+        })();
 
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d', { alpha: false });
