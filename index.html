@@ -509,50 +509,78 @@
                 gap: 10px;
             }
 
+            /* HUD becomes two equal columns: left = audio/friend-code/dpad,
+               right = menu/timer/scoreboard */
             #hud {
-                flex-direction: row;
-                flex-wrap: wrap;
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: auto auto auto;
                 width: 100%;
                 max-width: 85vmin;
                 max-height: none;
                 overflow-y: visible;
-                justify-content: space-between;
-                align-items: center;
                 height: auto;
                 padding: 0;
                 gap: 8px;
+                align-items: start;
+                align-self: center;
             }
 
-            /* D-pad becomes compact inline block in the horizontal HUD strip */
+            /* Left column */
+            .audio-controls {
+                grid-column: 1;
+                grid-row: 1;
+                margin-bottom: 0;
+            }
+
+            #friend-code-hud {
+                grid-column: 1;
+                grid-row: 2;
+                width: 100%;
+                padding: 8px;
+                font-size: 0.85rem;
+                text-align: left;
+            }
+
             #dpad {
-                width: auto;
+                grid-column: 1;
+                grid-row: 3;
                 position: static;
+                width: auto;
                 grid-template-columns: repeat(3, 48px);
                 grid-template-rows: repeat(2, 48px);
                 gap: 5px;
-                order: -1; /* Show before other HUD items on mobile */
+                align-self: start;
             }
 
+            /* Right column */
             .hud-buttons {
-                width: auto !important;
+                grid-column: 2;
+                grid-row: 1;
+                width: 100% !important;
                 margin-bottom: 0 !important;
+                display: flex !important;
             }
 
             #in-game-menu-btn {
-                width: auto !important;
+                width: 100% !important;
                 padding: 8px 15px !important;
                 font-size: 0.9rem !important;
                 margin: 0 !important;
-                flex: none !important;
+                flex: 1 !important;
             }
 
-            #scoreboard, #friend-code-hud {
-                width: 48%;
+            #timer {
+                grid-column: 2;
+                grid-row: 2;
+            }
+
+            #scoreboard {
+                grid-column: 2;
+                grid-row: 3;
+                width: 100%;
                 padding: 8px;
                 font-size: 0.85rem;
-            }
-            #friend-code-hud {
-                text-align: left;
             }
 
             #game-container {
@@ -595,7 +623,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.2.8</div>
+    <div id="version-number">v1.2.9</div>
 
     <div id="main-wrapper">
         <div id="hud" class="hidden">
