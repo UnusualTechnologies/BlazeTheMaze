@@ -11,6 +11,8 @@ export class GameRoom extends Room<{ state: GameState }> {
 
     // BFS distance map from goal — flat array indexed [x * rows + y]
     distanceMap: number[] = [];
+    // Tracks which connected sessionIds joined via friend code (cannot be kicked)
+    friendCodeJoiners = new Set<string>();
     // Per-AI session state (not broadcast)
     aiCooldowns = new Map<string, number>();
     explorerLastPos = new Map<string, { x: number; y: number }>();
@@ -133,19 +135,44 @@ export class GameRoom extends Room<{ state: GameState }> {
     onJoin(client: Client, options: any) {
         console.log(`Client ${client.sessionId} joining...`);
 
+        const joinedViaCode = !!options.joinedViaCode;
         const isHost = this.clients.length === 1;
-        let assignedSlotIndex = -1;
 
-        if (isHost) {
-            assignedSlotIndex = this.state.slots.findIndex(s => s.mode === "local" || s.mode === "ai_online");
-        } else {
-            assignedSlotIndex = this.state.slots.findIndex(s => s.mode === "ai_online" && s.sessionId === "");
+        // Step 1: find an empty slot (AI placeholder not yet taken by a human)
+        let assignedSlotIndex = this.state.slots.findIndex(
+            s => (s.mode === "local" || s.mode === "ai_online") && s.sessionId === ""
+        );
+
+        // Step 2 (friend-code join only): kick a non-friend-code human to make room
+        if (assignedSlotIndex === -1 && joinedViaCode) {
+            const kickIdx = this.state.slots.findIndex(
+                s => s.mode === "ai_online" && s.sessionId !== "" && !this.friendCodeJoiners.has(s.sessionId)
+            );
+            if (kickIdx !== -1) {
+                const kickSlot = this.state.slots[kickIdx];
+                const kickedId = kickSlot.sessionId;
+                const kickedPlayer = this.state.players.get(kickedId);
+                if (kickedPlayer) {
+                    this.state.players.delete(kickedId);
+                    kickedPlayer.isAI = true;
+                    const aiId = `ai_${kickIdx}`;
+                    this.state.players.set(aiId, kickedPlayer);
+                    this.initAIState(aiId, kickedPlayer);
+                }
+                kickSlot.sessionId = "";
+                this.friendCodeJoiners.delete(kickedId);
+                this.clients.find(c => c.sessionId === kickedId)?.leave(4001);
+                assignedSlotIndex = kickIdx;
+            }
         }
 
         if (assignedSlotIndex === -1) {
             console.log(`No available slots for client ${client.sessionId}`);
             throw new Error("ROOM_FULL");
         }
+
+        // Host and friend-code joiners are protected from future kicks
+        if (isHost || joinedViaCode) this.friendCodeJoiners.add(client.sessionId);
 
         const slot = this.state.slots[assignedSlotIndex];
         slot.sessionId = client.sessionId;
@@ -182,6 +209,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     }
 
     onLeave(client: Client, _code?: number) {
+        this.friendCodeJoiners.delete(client.sessionId);
         const player = this.state.players.get(client.sessionId);
         if (player) {
             const slotIndex = player.slotIndex;

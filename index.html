@@ -451,7 +451,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.2.0</div>
+    <div id="version-number">v1.2.1</div>
 
     <div id="main-wrapper">
         <div id="hud" class="hidden">
@@ -2103,6 +2103,13 @@
                 }
             });
 
+            room.onLeave((code) => {
+                if (code === 4001) {
+                    alert("You were removed from the room to make space for a friend-code player.");
+                    location.reload();
+                }
+            });
+
             room.onMessage("round_reset", () => {
                 bugs.forEach(bug => {
                     // Clear teleport animations
@@ -2166,7 +2173,7 @@
 
             bugs = [];
             try {
-                const newRoom = await client.joinById(joinCodeInput.value);
+                const newRoom = await client.joinById(joinCodeInput.value, { joinedViaCode: true });
                 setupRoom(newRoom);
             } catch (e) {
                 console.error("Could not join room", e);
