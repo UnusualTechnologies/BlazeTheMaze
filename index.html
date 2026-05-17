@@ -409,14 +409,15 @@
         }
 
         #version-number {
-            position: fixed;
-            bottom: max(10px, env(safe-area-inset-bottom));
-            right: max(15px, env(safe-area-inset-right));
+            position: absolute;
+            bottom: 10px;
+            right: 12px;
             font-family: monospace;
-            font-size: 0.8rem;
-            color: #888;
+            font-size: 0.75rem;
+            color: #00ffff;
             z-index: 100;
             pointer-events: none;
+            text-shadow: 0 0 6px rgba(0, 255, 255, 0.8), 0 0 12px rgba(0, 255, 255, 0.4);
         }
 
         .audio-controls {
@@ -566,8 +567,6 @@
 </head>
 <body>
 
-    <div id="version-number">v1.2.12</div>
-
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
         <div id="hud-bar" class="hidden">
@@ -588,6 +587,7 @@
 
         <div id="game-container">
             <canvas id="gameCanvas"></canvas>
+            <div id="version-number">v1.2.13</div>
             
             <!-- This menu now ONLY appears when the entire match is over -->
             <div id="post-match-layer" class="menu-overlay hidden">
