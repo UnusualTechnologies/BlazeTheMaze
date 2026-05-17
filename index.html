@@ -451,7 +451,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.2.2</div>
+    <div id="version-number">v1.2.3</div>
 
     <div id="main-wrapper">
         <div id="hud" class="hidden">
@@ -707,7 +707,8 @@
                 
                 let defaultType = 'friend_only';
                 if (i === 0) defaultType = 'local';
-                
+                else if (i < 4) defaultType = 'ai_online';
+
                 let defaultControl = 'WASD';
                 if (i === 1) defaultControl = 'TFGH';
                 else if (i === 2) defaultControl = 'IJKL';
@@ -720,11 +721,11 @@
                         <span>Player ${i + 1}</span>
                     </div>
                     <select class="type-select">
-                        <option value="inactive" ${defaultType === 'inactive' ? 'selected' : ''}>Disable</option>
-                        <option value="local" ${defaultType === 'local' ? 'selected' : ''}>Local Player</option>
-                        <option value="friend_only" ${defaultType === 'friend_only' ? 'selected' : ''}>Inactive unless via friend code</option>
+                        <option value="local" ${defaultType === 'local' ? 'selected' : ''}>Local</option>
                         <option value="ai_online" ${defaultType === 'ai_online' ? 'selected' : ''}>Online</option>
-                        <option value="ai_only" ${defaultType === 'ai_only' ? 'selected' : ''}>Computer</option>
+                        <option value="ai_only" ${defaultType === 'ai_only' ? 'selected' : ''}>AI</option>
+                        <option value="friend_only" ${defaultType === 'friend_only' ? 'selected' : ''}>Disabled (Friends Allowed <3)</option>
+                        <option value="inactive" ${defaultType === 'inactive' ? 'selected' : ''}>Disabled</option>
                     </select>
                     <select class="control-select" style="display: ${defaultType === 'local' ? 'block' : 'none'}">
                         <option value="WASD" ${defaultControl === 'WASD' ? 'selected' : ''}>WASD Keys</option>
