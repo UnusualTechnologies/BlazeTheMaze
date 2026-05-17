@@ -19,6 +19,8 @@ export class GameRoom extends Room<{ state: GameState }> {
     guesserData = new Map<string, { target: { x: number; y: number }; distMap: number[] }>();
     // Freeze simulation while waiting for round reset
     roundOver: boolean = false;
+    // True once a match is won; blocks new joins until someone with the code restarts
+    matchComplete: boolean = false;
 
     // --- Lifecycle ---
 
@@ -137,6 +139,17 @@ export class GameRoom extends Room<{ state: GameState }> {
 
         const joinedViaCode = !!options.joinedViaCode;
         const isHost = this.clients.length === 1;
+
+        if (this.matchComplete) {
+            if (!joinedViaCode) throw new Error("MATCH_OVER");
+            // First friend-code joiner after match end restarts the game for everyone
+            for (const c of [...this.clients]) {
+                if (c.sessionId !== client.sessionId) c.leave(4002);
+            }
+            this.resetMatch();
+            this.matchComplete = false;
+            this.unlock();
+        }
 
         // Step 1: find an empty slot
         // Friend-code joiners can also claim friend_only slots; random joiners cannot
@@ -485,14 +498,54 @@ export class GameRoom extends Room<{ state: GameState }> {
                 winnerScore: player.score,
                 isMatchWon,
             });
-            // Reset round after 3 s (match over skips reset — clients navigate away)
-            if (!isMatchWon) {
+            if (isMatchWon) {
+                this.matchComplete = true;
+                this.lock();
+            } else {
                 this.clock.setTimeout(() => {
                     this.broadcast("round_reset");
                     this.resetRound();
                 }, 3000);
             }
         }
+    }
+
+    resetMatch() {
+        // Convert all human players back to AI and free their slots, then full reset.
+        // This runs synchronously in onJoin before any onLeave callbacks fire, so
+        // subsequent onLeave calls for the kicked clients become no-ops.
+        const toConvert: Array<{ sessionId: string; player: Player; slotIndex: number }> = [];
+        this.state.players.forEach((player, sessionId) => {
+            if (!player.isAI) toConvert.push({ sessionId, player, slotIndex: player.slotIndex });
+        });
+        for (const { sessionId, player, slotIndex } of toConvert) {
+            const slot = this.state.slots[slotIndex];
+            const aiId = `ai_${slotIndex}`;
+            player.isAI = true;
+            player.score = 0;
+            slot.sessionId = "";
+            this.state.players.delete(sessionId);
+            this.state.players.set(aiId, player);
+            this.initAIState(aiId, player);
+            this.friendCodeJoiners.delete(sessionId);
+        }
+        // Reset AI scores too
+        this.state.players.forEach((player) => { player.score = 0; });
+
+        this.roundOver = false;
+        this.state.grid.clear();
+        this.generateMaze();
+        this.distanceMap = this.computeDistanceMap(this.state.goalX, this.state.goalY);
+        this.spawnPowerUps(this.spawnOptions);
+        this.state.timer = 0;
+
+        this.state.players.forEach((player, sessionId) => {
+            const spawn = this.getSpawnPosition(player.slotIndex);
+            player.x = spawn.x;
+            player.y = spawn.y;
+            this.aiCooldowns.set(sessionId, 0);
+            if (player.isAI) this.initAIState(sessionId, player);
+        });
     }
 
     resetRound() {
