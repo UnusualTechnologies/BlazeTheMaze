@@ -509,6 +509,30 @@
                 gap: 10px;
             }
 
+            /* Canvas goes on top — hud is second in DOM so needs order override */
+            #game-container {
+                order: -1;
+            }
+
+            /* Menus cover the full viewport on mobile, not just the canvas square */
+            .menu-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                height: auto;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+                z-index: 1000;
+            }
+
+            /* Lobby has lots of content — start from top and let it scroll */
+            #lobby-layer {
+                justify-content: flex-start;
+                padding-top: max(24px, env(safe-area-inset-top));
+            }
+
             /* HUD becomes two equal columns: left = audio/friend-code/dpad,
                right = menu/timer/scoreboard */
             #hud {
@@ -623,7 +647,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.2.9</div>
+    <div id="version-number">v1.2.10</div>
 
     <div id="main-wrapper">
         <div id="hud" class="hidden">
