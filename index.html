@@ -451,7 +451,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.2.1</div>
+    <div id="version-number">v1.2.2</div>
 
     <div id="main-wrapper">
         <div id="hud" class="hidden">
@@ -705,9 +705,8 @@
                 const slotDiv = document.createElement('div');
                 slotDiv.className = 'player-slot';
                 
-                let defaultType = 'inactive';
+                let defaultType = 'friend_only';
                 if (i === 0) defaultType = 'local';
-                else if (i < 4) defaultType = 'ai_online';
                 
                 let defaultControl = 'WASD';
                 if (i === 1) defaultControl = 'TFGH';
@@ -723,6 +722,7 @@
                     <select class="type-select">
                         <option value="inactive" ${defaultType === 'inactive' ? 'selected' : ''}>Disable</option>
                         <option value="local" ${defaultType === 'local' ? 'selected' : ''}>Local Player</option>
+                        <option value="friend_only" ${defaultType === 'friend_only' ? 'selected' : ''}>Inactive unless via friend code</option>
                         <option value="ai_online" ${defaultType === 'ai_online' ? 'selected' : ''}>Online</option>
                         <option value="ai_only" ${defaultType === 'ai_only' ? 'selected' : ''}>Computer</option>
                     </select>
@@ -781,7 +781,7 @@
                 typeSelect.addEventListener('change', (e) => {
                     const val = e.target.value;
                     
-                    if (val === 'inactive') slotDiv.classList.add('inactive');
+                    if (val === 'inactive' || val === 'friend_only') slotDiv.classList.add('inactive');
                     else slotDiv.classList.remove('inactive');
 
                     if (val === 'local') {
@@ -796,7 +796,7 @@
                     }
                 });
 
-                if (defaultType === 'inactive') slotDiv.classList.add('inactive');
+                if (defaultType === 'inactive' || defaultType === 'friend_only') slotDiv.classList.add('inactive');
 
                 slotsContainer.appendChild(slotDiv);
                 lobbySlots.push({

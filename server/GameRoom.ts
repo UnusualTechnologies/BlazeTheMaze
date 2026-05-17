@@ -76,7 +76,7 @@ export class GameRoom extends Room<{ state: GameState }> {
             }
             state.slots.push(slot);
 
-            if (slot.mode !== "inactive") {
+            if (slot.mode !== "inactive" && slot.mode !== "friend_only") {
                 const player = new Player();
                 player.id = slot.id;
                 player.color = slot.color;
@@ -138,10 +138,13 @@ export class GameRoom extends Room<{ state: GameState }> {
         const joinedViaCode = !!options.joinedViaCode;
         const isHost = this.clients.length === 1;
 
-        // Step 1: find an empty slot (AI placeholder not yet taken by a human)
-        let assignedSlotIndex = this.state.slots.findIndex(
-            s => (s.mode === "local" || s.mode === "ai_online") && s.sessionId === ""
-        );
+        // Step 1: find an empty slot
+        // Friend-code joiners can also claim friend_only slots; random joiners cannot
+        let assignedSlotIndex = this.state.slots.findIndex(s => {
+            if (s.sessionId !== "") return false;
+            if (joinedViaCode) return s.mode === "local" || s.mode === "ai_online" || s.mode === "friend_only";
+            return s.mode === "local" || s.mode === "ai_online";
+        });
 
         // Step 2 (friend-code join only): kick a non-friend-code human to make room
         if (assignedSlotIndex === -1 && joinedViaCode) {
@@ -222,6 +225,9 @@ export class GameRoom extends Room<{ state: GameState }> {
                 this.state.players.set(aiId, player);
                 this.initAIState(aiId, player);
                 console.log(`Player ${client.sessionId} left. AI taking over slot ${slotIndex}.`);
+            } else if (slot.mode === "friend_only") {
+                slot.sessionId = "";
+                this.state.players.delete(client.sessionId);
             }
         }
     }
