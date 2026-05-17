@@ -405,16 +405,14 @@
             border: 1px solid rgba(255, 255, 255, 0.15);
         }
 
-        #version-number {
-            position: fixed;
-            bottom: max(10px, env(safe-area-inset-bottom));
-            right: max(10px, env(safe-area-inset-right));
+        #version-number { display: none; }
+
+        .ver-text {
             font-family: monospace;
             font-size: 0.75rem;
-            color: #00ffff;
-            z-index: 2000;
-            pointer-events: none;
-            text-shadow: 0 0 6px rgba(0, 255, 255, 0.8), 0 0 12px rgba(0, 255, 255, 0.4);
+            color: rgba(0, 255, 255, 0.6);
+            white-space: nowrap;
+            flex-shrink: 0;
         }
 
         .audio-controls {
@@ -574,7 +572,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.2.16</div>
+    <div id="version-number">v1.2.17</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -589,7 +587,8 @@
                     <svg class="slash" viewBox="0 0 40 40"><line x1="31" y1="7" x2="9" y2="33" stroke="#ff4444" stroke-width="2.5" stroke-linecap="round"/></svg>
                 </button>
             </div>
-            <div id="friend-code-hud">Friend code: <span class="display-friend-code" style="color: #00ffff; font-weight: bold;"></span></div>
+            <div id="friend-code-hud">Friend code:<br><span class="display-friend-code" style="color: #00ffff; font-weight: bold;"></span></div>
+            <span class="ver-text"></span>
             <div class="hud-buttons">
                 <button class="action-btn secondary-btn" id="in-game-menu-btn" style="padding: 10px; font-size: 0.9rem; flex: 1; margin: 0;">Menu</button>
             </div>
@@ -617,6 +616,7 @@
 
             <!-- Initial Main Menu -->
             <div id="initial-menu" class="menu-overlay">
+                <span class="ver-text"></span>
                 <div class="audio-controls">
                     <button class="audio-btn music-btn" title="Toggle Music">
                         <svg class="icon" viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg>
@@ -747,24 +747,9 @@
 
         const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-        // Version: in-game → bottom-right of #hud (below the maze)
-        //          menu    → bottom-right of game-container (inside the neon square)
-        let updateVersionPosition = () => {};
-        (function positionVersion() {
-            const ver   = document.getElementById('version-number');
-            const gc    = document.getElementById('game-container');
-            const hudEl = document.getElementById('hud');
-            function update() {
-                const pad = 10;
-                const r = (hudEl.classList.contains('hidden') ? gc : hudEl).getBoundingClientRect();
-                ver.style.right  = Math.max(window.innerWidth  - r.right  + pad, pad) + 'px';
-                ver.style.bottom = Math.max(window.innerHeight - r.bottom + pad, pad) + 'px';
-            }
-            updateVersionPosition = update;
-            new ResizeObserver(update).observe(gc);
-            window.addEventListener('resize', update);
-            requestAnimationFrame(update);
-        })();
+        // Populate all .ver-text spans from the hidden #version-number source element
+        const _verText = document.getElementById('version-number').textContent;
+        document.querySelectorAll('.ver-text').forEach(el => el.textContent = _verText);
 
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d', { alpha: false });
@@ -1636,7 +1621,6 @@
             postMatchLayer.classList.add('hidden');
             hud.classList.remove('hidden');
             hudBar.classList.remove('hidden');
-            updateVersionPosition();
 
             // Clear any leftover bugs; players are created fresh via onStateChange.
             bugs = [];
@@ -1678,7 +1662,6 @@
             postMatchLayer.classList.remove('winner-pulse');
             hud.classList.add('hidden');
             hudBar.classList.add('hidden');
-            updateVersionPosition();
             lobbyLayer.classList.add('hidden');
             initialMenu.classList.remove('hidden');
             Synth.muffle(true);
