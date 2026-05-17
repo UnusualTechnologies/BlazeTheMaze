@@ -26,6 +26,11 @@
             overflow: hidden;
             touch-action: none;
             transition: filter 0.1s;
+            /* Respect notch / home bar on iOS and Android */
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+            padding-left: env(safe-area-inset-left);
+            padding-right: env(safe-area-inset-right);
         }
 
         /* Layout wrapper to handle side-by-side or stacked orientation */
@@ -34,10 +39,10 @@
             flex-direction: row;
             align-items: center;
             justify-content: center;
-            gap: 40px;
+            gap: clamp(10px, 3vw, 40px);
             width: 100%;
             height: 100%;
-            padding: 20px;
+            padding: clamp(10px, 2vw, 20px);
             box-sizing: border-box;
         }
 
@@ -47,7 +52,7 @@
             justify-content: flex-start;
             align-items: flex-start;
             gap: 15px;
-            width: 250px; /* Fixed width for side panel */
+            width: clamp(180px, 20vw, 250px);
             flex-shrink: 0;
             z-index: 5;
             transition: opacity 0.3s;
@@ -62,11 +67,11 @@
             margin-bottom: 5px;
         }
         
-        #timer { 
-            font-size: 2.5rem; 
-            font-weight: bold; 
-            color: #fff; 
-            font-family: monospace; 
+        #timer {
+            font-size: clamp(1.4rem, 3.5vw, 2.5rem);
+            font-weight: bold;
+            color: #fff;
+            font-family: monospace;
             text-shadow: 0 0 5px #000, 0 0 10px #000;
         }
         
@@ -148,7 +153,7 @@
         }
 
         h1 {
-            font-size: 3rem;
+            font-size: clamp(1.6rem, 5vw, 3rem);
             margin-bottom: 1rem;
             text-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff;
             color: #fff;
@@ -361,7 +366,7 @@
 
         #controls-hint {
             position: absolute;
-            bottom: 10px;
+            bottom: max(10px, env(safe-area-inset-bottom));
             color: rgba(255, 255, 255, 0.3);
             font-size: 0.8rem;
             text-align: center;
@@ -384,8 +389,8 @@
 
         #version-number {
             position: fixed;
-            bottom: 10px;
-            right: 15px;
+            bottom: max(10px, env(safe-area-inset-bottom));
+            right: max(15px, env(safe-area-inset-right));
             font-family: monospace;
             font-size: 0.8rem;
             color: #888;
@@ -400,8 +405,8 @@
         }
 
         .audio-btn {
-            width: 40px;
-            height: 40px;
+            width: 44px;
+            height: 44px;
             padding: 0;
             border: 1px solid rgba(0, 255, 255, 0.4);
             border-radius: 8px;
@@ -450,8 +455,8 @@
             display: grid;
             grid-template-areas: ". up ." "left down right";
             grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: repeat(2, 50px);
-            gap: 5px;
+            grid-template-rows: repeat(2, 56px);
+            gap: 8px;
             width: 100%;
             position: sticky;
             top: 0;
@@ -488,26 +493,42 @@
             transform: translateY(2px);
         }
 
+        /* Lobby slots go single-column below 600px */
+        @media (max-width: 600px) {
+            #slots-container { grid-template-columns: 1fr; }
+        }
+
         /* Mobile / Portrait Viewport adjustments */
         @media (max-width: 900px), (max-aspect-ratio: 1/1) {
-            h1 { font-size: 2rem; }
             #slots-container { grid-template-columns: 1fr; }
-            
+
             #main-wrapper {
                 flex-direction: column;
-                gap: 15px;
+                gap: 10px;
             }
 
             #hud {
                 flex-direction: row;
-                flex-wrap: wrap; /* allow natural wrapping on small screens */
+                flex-wrap: wrap;
                 width: 100%;
                 max-width: 85vmin;
+                max-height: none;
+                overflow-y: visible;
                 justify-content: space-between;
                 align-items: center;
                 height: auto;
                 padding: 0;
-                gap: 10px;
+                gap: 8px;
+            }
+
+            /* D-pad becomes compact inline block in the horizontal HUD strip */
+            #dpad {
+                width: auto;
+                position: static;
+                grid-template-columns: repeat(3, 48px);
+                grid-template-rows: repeat(2, 48px);
+                gap: 5px;
+                order: -1; /* Show before other HUD items on mobile */
             }
 
             .hud-buttons {
@@ -523,18 +544,13 @@
                 flex: none !important;
             }
 
-            #timer { 
-                font-size: 1.8rem; 
-            }
-
-            #scoreboard, #friend-code-hud { 
-                text-align: right; 
-                width: 48%; /* Split space half and half to sit nicely together */
-                padding: 10px;
-                font-size: 0.9rem;
+            #scoreboard, #friend-code-hud {
+                width: 48%;
+                padding: 8px;
+                font-size: 0.85rem;
             }
             #friend-code-hud {
-                text-align: left; /* Keep left alignment for text inside */
+                text-align: left;
             }
 
             #game-container {
@@ -543,12 +559,41 @@
                 max-width: 85vmin;
                 max-height: 85vmin;
             }
+
+            /* Join code input grows to fill available space */
+            .join-group {
+                width: 90%;
+            }
+            .join-group input[type="text"] {
+                flex: 1;
+                width: auto;
+                min-width: 80px;
+            }
+        }
+
+        /* Extra-small phones (≤ 480px) */
+        @media (max-width: 480px) {
+            .menu-overlay { padding: 12px; }
+
+            button.action-btn {
+                padding: 12px 28px;
+                font-size: 1rem;
+            }
+
+            .lobby-settings-panel > div {
+                flex-wrap: wrap;
+            }
+
+            #scoreboard, #friend-code-hud {
+                font-size: 0.78rem;
+                padding: 6px;
+            }
         }
     </style>
 </head>
 <body>
 
-    <div id="version-number">v1.2.6</div>
+    <div id="version-number">v1.2.7</div>
 
     <div id="main-wrapper">
         <div id="hud" class="hidden">
@@ -616,7 +661,7 @@
                 <button class="action-btn tertiary-btn" id="custom-settings-btn">Custom</button>
 
                 <div class="join-group">
-                    <input type="text" id="join-code-input" placeholder="Code..." maxlength="12" style="text-transform: uppercase;">
+                    <input type="text" id="join-code-input" placeholder="Code..." maxlength="12" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" style="text-transform: uppercase;">
                     <button class="action-btn secondary-btn" id="join-friend-btn">Join Friend</button>
                 </div>
             </div>
@@ -632,19 +677,19 @@
                 <div class="lobby-settings-panel">
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <label for="grid-size-input" style="font-size: 1.2rem;">Grid Size:</label>
-                        <input type="number" id="grid-size-input" value="20" min="5" max="100" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
+                        <input type="number" id="grid-size-input" value="20" min="5" max="100" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <label for="pu-opp-input" style="font-size: 1.2rem;">Orbs (Teleport Others):</label>
-                        <input type="number" id="pu-opp-input" value="10" min="0" max="100" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
+                        <input type="number" id="pu-opp-input" value="10" min="0" max="100" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <label for="pu-self-input" style="font-size: 1.2rem;">Holes (Teleport Self):</label>
-                        <input type="number" id="pu-self-input" value="10" min="0" max="100" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
+                        <input type="number" id="pu-self-input" value="10" min="0" max="100" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <label for="pu-rocket-input" style="font-size: 1.2rem;">Homing Rockets:</label>
-                        <input type="number" id="pu-rocket-input" value="0" min="0" max="100" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
+                        <input type="number" id="pu-rocket-input" value="0" min="0" max="100" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <input type="checkbox" id="collisions-toggle" checked style="width: 20px; height: 20px; cursor: pointer;"> 
@@ -1993,16 +2038,16 @@
         }
 
         canvas.addEventListener('touchstart', (e) => {
-            touchStartX = e.changedTouches[0].screenX;
-            touchStartY = e.changedTouches[0].screenY;
+            touchStartX = e.changedTouches[0].clientX;
+            touchStartY = e.changedTouches[0].clientY;
         }, {passive: true});
 
         canvas.addEventListener('touchend', (e) => {
             if (!room && gameState === 'ROUND_OVER_COUNTDOWN') { roundCountdown = 0; return; }
             if (gameState !== 'PLAYING') return;
             applySwipe(
-                e.changedTouches[0].screenX - touchStartX,
-                e.changedTouches[0].screenY - touchStartY,
+                e.changedTouches[0].clientX - touchStartX,
+                e.changedTouches[0].clientY - touchStartY,
                 30
             );
         }, {passive: true});
