@@ -488,7 +488,10 @@ export class GameRoom extends Room<{ state: GameState }> {
                 do {
                     x = Math.floor(Math.random() * this.cols);
                     y = Math.floor(Math.random() * this.rows);
-                } while (this.isReservedCell(x, y));
+                } while (
+                    this.isReservedCell(x, y) ||
+                    this.state.powerUps.some((pu: PowerUp) => pu.x === x && pu.y === y)
+                );
                 pu.x = x;
                 pu.y = y;
                 pu.type = type;
@@ -613,10 +616,19 @@ export class GameRoom extends Room<{ state: GameState }> {
     }
 
     getSpawnPosition(slotIndex: number): { x: number; y: number } {
-        return {
-            x: (slotIndex % 2 === 0) ? 0 : this.cols - 1,
-            y: (slotIndex < 2 || slotIndex > 5) ? 0 : this.rows - 1,
-        };
+        const midX = Math.floor(this.cols / 2);
+        const midY = Math.floor(this.rows / 2);
+        const spawns = [
+            { x: 0,             y: 0             }, // slot 0: top-left corner
+            { x: this.cols - 1, y: 0             }, // slot 1: top-right corner
+            { x: 0,             y: this.rows - 1 }, // slot 2: bottom-left corner
+            { x: this.cols - 1, y: this.rows - 1 }, // slot 3: bottom-right corner
+            { x: midX,          y: 0             }, // slot 4: mid top edge
+            { x: midX,          y: this.rows - 1 }, // slot 5: mid bottom edge
+            { x: 0,             y: midY          }, // slot 6: mid left edge
+            { x: this.cols - 1, y: midY          }, // slot 7: mid right edge
+        ];
+        return spawns[slotIndex] ?? { x: 0, y: 0 };
     }
 
     isReservedCell(x: number, y: number): boolean {
@@ -637,7 +649,8 @@ export class GameRoom extends Room<{ state: GameState }> {
         } while (
             (x === startX && y === startY) ||
             this.isReservedCell(x, y) ||
-            this.state.powerUps.some((pu: PowerUp) => pu.x === x && pu.y === y)
+            this.state.powerUps.some((pu: PowerUp) => pu.x === x && pu.y === y) ||
+            this.state.players.some((p: Player) => p.x === x && p.y === y)
         );
         player.x = x;
         player.y = y;
