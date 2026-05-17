@@ -21,6 +21,9 @@ export class GameRoom extends Room<{ state: GameState }> {
     roundOver: boolean = false;
     // True once a match is won; blocks new joins until someone with the code restarts
     matchComplete: boolean = false;
+    // Last input timestamp per human sessionId — used for idle kick
+    lastInputTime = new Map<string, number>();
+    static readonly IDLE_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
 
     // --- Lifecycle ---
 
@@ -109,8 +112,21 @@ export class GameRoom extends Room<{ state: GameState }> {
         this.setSimulationInterval((dt) => {
             if (this.roundOver) return; // Freeze everything during round-over countdown
             this.state.timer += dt / 1000;
+
+            // Idle kick: disconnect human players with no input for 3 minutes
+            const now = Date.now();
+            for (const client of [...this.clients]) {
+                const last = this.lastInputTime.get(client.sessionId);
+                if (last !== undefined && now - last > GameRoom.IDLE_TIMEOUT_MS) {
+                    this.lastInputTime.delete(client.sessionId);
+                    client.leave(4003);
+                }
+            }
+
             this.state.players.forEach((player, sessionId) => {
                 if (player.isAI) {
+                    // 'local' slots are meant for human co-op on the host machine — skip AI
+                    if (this.state.slots[player.slotIndex]?.mode === 'local') return;
                     const cooldown = (this.aiCooldowns.get(sessionId) ?? 0) + dt;
                     this.aiCooldowns.set(sessionId, cooldown);
                     const slotSpeed = this.state.slots[player.slotIndex]?.aiSpeed ?? 600;
@@ -126,9 +142,25 @@ export class GameRoom extends Room<{ state: GameState }> {
             if (this.roundOver) return; // Reject moves during round-over countdown
             const player = this.state.players.get(client.sessionId);
             if (!player || player.isAI) return;
+            this.lastInputTime.set(client.sessionId, Date.now());
             player.x = message.x;
             player.y = message.y;
             this.checkCollisions(player, client.sessionId);
+        });
+
+        // Allows the host to drive unclaimed 'local' slots from the same machine (co-op)
+        this.onMessage("move_secondary", (client, message) => {
+            if (this.roundOver) return;
+            const { slotIndex, x, y } = message;
+            const slot = this.state.slots[slotIndex];
+            if (!slot || slot.mode !== 'local' || slot.sessionId !== '') return;
+            const aiId = `ai_${slotIndex}`;
+            const player = this.state.players.get(aiId);
+            if (!player || !player.isAI) return;
+            this.lastInputTime.set(client.sessionId, Date.now()); // host is active
+            player.x = x;
+            player.y = y;
+            this.checkCollisions(player, aiId);
         });
 
         console.log(`Room created: ${this.roomId}`);
@@ -221,10 +253,12 @@ export class GameRoom extends Room<{ state: GameState }> {
             player.y = spawn.y;
             this.state.players.set(client.sessionId, player);
         }
+        this.lastInputTime.set(client.sessionId, Date.now()); // start idle clock from join time
         console.log(`Client ${client.sessionId} assigned to slot ${assignedSlotIndex}`);
     }
 
     onLeave(client: Client, _code?: number) {
+        this.lastInputTime.delete(client.sessionId);
         this.friendCodeJoiners.delete(client.sessionId);
         const player = this.state.players.get(client.sessionId);
         if (player) {
@@ -250,6 +284,13 @@ export class GameRoom extends Room<{ state: GameState }> {
                 slot.sessionId = "";
                 this.state.players.delete(client.sessionId);
             }
+        }
+
+        // Shut down if no human players remain (excluding this departing client)
+        const remaining = this.clients.filter(c => c.sessionId !== client.sessionId);
+        if (remaining.length === 0) {
+            console.log(`Room ${this.roomId}: no players remain. Shutting down.`);
+            this.disconnect();
         }
     }
 
@@ -588,11 +629,13 @@ export class GameRoom extends Room<{ state: GameState }> {
     }
 
     teleportPlayer(player: Player) {
+        const startX = player.x, startY = player.y;
         let x: number, y: number;
         do {
             x = Math.floor(Math.random() * this.cols);
             y = Math.floor(Math.random() * this.rows);
         } while (
+            (x === startX && y === startY) ||
             this.isReservedCell(x, y) ||
             this.state.powerUps.some((pu: PowerUp) => pu.x === x && pu.y === y)
         );

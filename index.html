@@ -591,7 +591,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.3.5</div>
+    <div id="version-number">v1.5.0</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -808,12 +808,15 @@
         let grid = [];
         let distanceMap = [];
         let blazers = [];
-        let powerUps = []; 
+        let powerUps = [];
+        let powerUpBursts = []; // burst animations for collected opponents power-ups
+        let smokePuffs = [];    // smoke trails left at teleport departure points
         let shockwaves = []; 
         let particles = [];
         let rockets = []; // Store active homing rockets
         
         let localControlScheme = 'WASD'; // captured from lobby before connecting
+        let localSlotSchemes = {}; // slotIndex → controlScheme for secondary local (co-op) slots
         let gameState = 'MENU'; // MENU, PLAYING, ROUND_OVER_COUNTDOWN, MATCH_OVER, INITIALIZING
         let animationId;
         let lastTime = 0;
@@ -830,6 +833,7 @@
         let roundTimes = [];
         let lastRoomCode = null;
 
+        let roundFlashStart = null; // performance.now() timestamp when white flash begins
         let bestTime = parseFloat(localStorage.getItem('neonBlazerBestTime')) || null;
         let worstTime = parseFloat(localStorage.getItem('neonBlazerWorstTime')) || null;
 
@@ -1193,6 +1197,8 @@
                 this.color = data.color;
                 this.isPlayer = data.isPlayer;
                 this.isLocal = !!data.isLocal;
+                this.isSecondaryLocal = !!data.isSecondaryLocal;
+                this.slotIndex = data.slotIndex ?? -1;
                 this.controlScheme = data.controlScheme || 'WASD';
                 
                 this.trail = [];
@@ -1273,8 +1279,12 @@
                 
                 // Authoritative local check for sending moves to server
                 const isActuallyLocal = (room && room.sessionId) ? (this.sessionId === room.sessionId) : this.isLocal;
-                if (isActuallyLocal && room) {
-                    room.send("move", { x: this.gridX, y: this.gridY });
+                if (room) {
+                    if (isActuallyLocal) {
+                        room.send("move", { x: this.gridX, y: this.gridY });
+                    } else if (this.isSecondaryLocal) {
+                        room.send("move_secondary", { slotIndex: this.slotIndex, x: this.gridX, y: this.gridY });
+                    }
                 }
             }
 
@@ -1282,7 +1292,9 @@
                 const now = performance.now();
 
                 // Authoritative local check for movement prediction
-                const isActuallyLocal = (room && room.sessionId) ? (this.sessionId === room.sessionId) : this.isLocal;
+                const isActuallyLocal = (room && room.sessionId)
+                    ? (this.sessionId === room.sessionId || this.isSecondaryLocal)
+                    : this.isLocal;
 
                 if (this.isPlayer && this.state === 'normal' && isActuallyLocal) {
                     if (now - this.lastMoveTime >= this.moveCooldown) {
@@ -1666,7 +1678,8 @@
             shockwaves = [];
             particles = [];
             rockets = [];
-            
+            smokePuffs = [];
+            powerUpBursts = [];
             powerUps = []; // Will be repopulated by server state
             screenShake = 0;
             
@@ -1815,6 +1828,50 @@
             ctx.restore();
         }
 
+        function drawSmokePuffs() {
+            const SMOKE_MS = 1000;
+            const now = performance.now();
+            // Offsets for the overlapping cloud circles (relative to puff radius)
+            const cloudOffsets = [
+                { dx:  0.00, dy:  0.00, rs: 1.00 },
+                { dx:  0.45, dy: -0.30, rs: 0.72 },
+                { dx: -0.40, dy: -0.25, rs: 0.68 },
+                { dx:  0.20, dy:  0.42, rs: 0.65 },
+                { dx: -0.30, dy:  0.38, rs: 0.60 },
+                { dx:  0.05, dy: -0.50, rs: 0.55 },
+            ];
+            smokePuffs = smokePuffs.filter(puff => {
+                const progress = Math.min((now - puff.startTime) / SMOKE_MS, 1);
+                if (progress >= 1) return false;
+
+                const fromPx = puff.fromX * cellSize + cellSize / 2;
+                const fromPy = puff.fromY * cellSize + cellSize / 2;
+                const toPx   = puff.toX   * cellSize + cellSize / 2;
+                const toPy   = puff.toY   * cellSize + cellSize / 2;
+
+                // Drift slowly toward destination — fades well before arriving
+                const cx = fromPx + (toPx - fromPx) * progress * 0.28;
+                const cy = fromPy + (toPy - fromPy) * progress * 0.28;
+
+                // Cloud expands as it disperses
+                const puffR  = cellSize * (0.22 + progress * 0.38);
+                const alpha  = (1 - progress) * 0.38;
+
+                cloudOffsets.forEach(o => {
+                    ctx.beginPath();
+                    ctx.arc(cx + o.dx * puffR * 1.3, cy + o.dy * puffR * 1.3, puffR * o.rs, 0, Math.PI * 2);
+                    ctx.fillStyle = puff.color;
+                    ctx.globalAlpha = alpha;
+                    ctx.shadowBlur = 18;
+                    ctx.shadowColor = puff.color;
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                });
+                ctx.globalAlpha = 1;
+                return true;
+            });
+        }
+
         function drawPowerUps() {
             const time = performance.now() / 200;
             powerUps.forEach(p => {
@@ -1822,31 +1879,50 @@
                 ctx.save();
                 ctx.translate(px, py);
                 if (p.type === 'opponents') {
-                    const pulse = 1 + Math.sin(time * 2) * 0.1;
-                    ctx.scale(pulse, pulse);
-                    ctx.beginPath();
-                    ctx.arc(0, 0, cellSize * 0.25, 0, Math.PI * 2);
-                    ctx.fillStyle = '#ffffff'; 
-                    ctx.shadowBlur = 20;
-                    ctx.shadowColor = colors.powerupOpponents; 
-                    ctx.fill();
-                    ctx.beginPath();
-                    ctx.arc(0, 0, cellSize * 0.15, 0, Math.PI * 2);
-                    ctx.fillStyle = colors.powerupOpponents;
-                    ctx.fill();
+                    ctx.globalAlpha = 0.5;
+                    const wedgeColors = blazers.length > 0 ? blazers.map(b => b.color) : ['#ffffff'];
+                    const n = wedgeColors.length;
+                    const sliceAngle = (Math.PI * 2) / n;
+                    ctx.rotate(time);
+                    wedgeColors.forEach((col, i) => {
+                        const startA = i * sliceAngle;
+                        const endA = startA + sliceAngle;
+                        // draw twice: wide outer glow pass then solid fill pass
+                        for (let pass = 0; pass < 2; pass++) {
+                            ctx.beginPath();
+                            ctx.moveTo(0, 0);
+                            ctx.arc(0, 0, cellSize * 0.32, startA, endA);
+                            ctx.closePath();
+                            ctx.fillStyle = col;
+                            ctx.shadowBlur = pass === 0 ? 28 : 10;
+                            ctx.shadowColor = col;
+                            ctx.fill();
+                        }
+                        ctx.shadowBlur = 0;
+                        // thin separator line between wedges
+                        if (n > 1) {
+                            ctx.beginPath();
+                            ctx.moveTo(0, 0);
+                            ctx.lineTo(Math.cos(startA) * cellSize * 0.32, Math.sin(startA) * cellSize * 0.32);
+                            ctx.lineWidth = 1;
+                            ctx.strokeStyle = colors.bg;
+                            ctx.stroke();
+                        }
+                    });
+                    ctx.globalAlpha = 1;
                 } else if (p.type === 'self') {
                     ctx.rotate(-time);
                     ctx.beginPath();
                     ctx.arc(0, 0, cellSize * 0.3, 0, Math.PI * 2);
-                    ctx.fillStyle = colors.bg; 
+                    ctx.fillStyle = colors.bg;
                     ctx.fill();
                     ctx.lineWidth = 2;
                     ctx.strokeStyle = colors.powerupSelf;
-                    ctx.setLineDash([5, 5]); 
+                    ctx.setLineDash([5, 5]);
                     ctx.shadowBlur = 10;
                     ctx.shadowColor = colors.powerupSelf;
                     ctx.stroke();
-                    ctx.setLineDash([]); 
+                    ctx.setLineDash([]);
                 } else if (p.type === 'rocket') {
                     const pulse = 1 + Math.sin(time * 3) * 0.1;
                     ctx.scale(pulse, pulse);
@@ -1862,6 +1938,57 @@
                     ctx.fill();
                 }
                 ctx.restore();
+            });
+
+            // Burst animations for collected opponents power-ups
+            const BURST_MS = 600;
+            const burstNow = performance.now();
+            powerUpBursts = powerUpBursts.filter(burst => {
+                const progress = Math.min((burstNow - burst.startTime) / BURST_MS, 1);
+                if (progress >= 1) return false;
+
+                const px = burst.gridX * cellSize + cellSize / 2;
+                const py = burst.gridY * cellSize + cellSize / 2;
+                const radius = cellSize * 0.32;
+
+                ctx.save();
+                ctx.translate(px, py);
+
+                // Collector colour: fills instantly, fades out
+                const fillAlpha = progress < 0.1 ? 1 : Math.max(0, 1 - (progress - 0.1) / 0.9);
+                ctx.globalAlpha = fillAlpha;
+                ctx.beginPath();
+                ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                ctx.fillStyle = burst.hitColor;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = burst.hitColor;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+
+                // Other wedges fly toward the player they represent, fading as they reach ~8 cells out
+                const maxDist = cellSize * 2.8;
+                burst.otherPlayers.forEach(p => {
+                    const dist = progress * maxDist;
+                    const pieceAlpha = Math.max(0, 1 - progress);
+                    ctx.globalAlpha = pieceAlpha;
+                    ctx.save();
+                    ctx.translate(Math.cos(p.angle) * dist, Math.sin(p.angle) * dist);
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    const spread = Math.PI / 6;
+                    ctx.arc(0, 0, radius, p.angle - spread, p.angle + spread);
+                    ctx.closePath();
+                    ctx.fillStyle = p.color;
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = p.color;
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                    ctx.restore();
+                });
+
+                ctx.globalAlpha = 1;
+                ctx.restore();
+                return true;
             });
         }
 
@@ -1893,6 +2020,8 @@
 
             blazers.sort((a, b) => (a.isPlayer === b.isPlayer) ? 0 : a.isPlayer ? 1 : -1);
             blazers.forEach(blazer => { blazer.update(dt); blazer.draw(); });
+
+            drawSmokePuffs();
 
             for (let i = rockets.length - 1; i >= 0; i--) {
                 const r = rockets[i];
@@ -1950,7 +2079,22 @@
                 }
             }
 
-            ctx.restore(); 
+            ctx.restore();
+
+            // Round-transition white flash — drawn after restore so it ignores screen shake
+            if (roundFlashStart !== null) {
+                const elapsed = performance.now() - roundFlashStart;
+                const HOLD_MS = 600, FADE_MS = 800, TOTAL_MS = HOLD_MS + FADE_MS;
+                if (elapsed >= TOTAL_MS) {
+                    roundFlashStart = null;
+                } else {
+                    const alpha = elapsed < HOLD_MS ? 1.0 : 1.0 - (elapsed - HOLD_MS) / FADE_MS;
+                    ctx.globalAlpha = Math.max(0, alpha);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, width, height);
+                    ctx.globalAlpha = 1;
+                }
+            }
 
             if (gameState !== 'MENU') {
                 if (animationId) cancelAnimationFrame(animationId);
@@ -1991,7 +2135,9 @@
 
                 const blazer = blazers.find(b => {
                     if (!b.isPlayer || b.controlScheme !== scheme) return false;
-                    return (room && room.sessionId) ? b.sessionId === room.sessionId : b.isLocal;
+                    return (room && room.sessionId)
+                        ? (b.sessionId === room.sessionId || b.isSecondaryLocal)
+                        : b.isLocal;
                 });
 
                 if (!gp || !blazer) {
@@ -2101,7 +2247,9 @@
                 if (!blazer.isPlayer) return;
                 
                 // Authoritative local check for input processing
-                const isActuallyLocal = (room && room.sessionId) ? (blazer.sessionId === room.sessionId) : blazer.isLocal;
+                const isActuallyLocal = (room && room.sessionId)
+                    ? (blazer.sessionId === room.sessionId || blazer.isSecondaryLocal)
+                    : blazer.isLocal;
                 if (!isActuallyLocal) return;
 
                 const map = controlsMap[blazer.controlScheme];
@@ -2131,7 +2279,9 @@
                 if (!blazer.isPlayer) return;
 
                 // Authoritative local check for input processing
-                const isActuallyLocal = (room && room.sessionId) ? (blazer.sessionId === room.sessionId) : blazer.isLocal;
+                const isActuallyLocal = (room && room.sessionId)
+                    ? (blazer.sessionId === room.sessionId || blazer.isSecondaryLocal)
+                    : blazer.isLocal;
                 if (!isActuallyLocal) return;
 
                 const map = controlsMap[blazer.controlScheme];
@@ -2158,11 +2308,7 @@
         let mouseStartX = 0, mouseStartY = 0;
 
         function getSwipeTarget() {
-            return blazers.find(b => b.controlScheme === 'TouchMouse' && b.isLocal)
-                || blazers.find(b => {
-                    const isActuallyLocal = (room && room.sessionId) ? (b.sessionId === room.sessionId) : b.isLocal;
-                    return b.isPlayer && isActuallyLocal;
-                });
+            return blazers.find(b => b.controlScheme === 'TouchMouse' && b.isLocal);
         }
 
         function applySwipe(dx, dy, threshold) {
@@ -2329,15 +2475,41 @@
                 }
 
                 // Sync Power-ups
+                const prevPowerUps = powerUps.slice();
                 powerUps = [];
                 state.powerUps.forEach(pu => {
                     powerUps.push({ x: pu.x, y: pu.y, type: pu.type });
+                });
+                // Detect collected opponents power-ups and trigger burst animation
+                prevPowerUps.forEach(prev => {
+                    if (prev.type !== 'opponents') return;
+                    if (powerUps.some(p => p.x === prev.x && p.y === prev.y)) return;
+                    let hitColor = null;
+                    const otherPlayers = [];
+                    state.players.forEach(ps => {
+                        if (ps.x === prev.x && ps.y === prev.y) {
+                            hitColor = ps.color;
+                        } else {
+                            otherPlayers.push({
+                                color: ps.color,
+                                angle: Math.atan2(ps.y - prev.y, ps.x - prev.x)
+                            });
+                        }
+                    });
+                    powerUpBursts.push({ gridX: prev.x, gridY: prev.y, hitColor: hitColor || '#ffffff', otherPlayers, startTime: performance.now() });
                 });
 
                 // Sync Players
                 state.players.forEach((playerState, sessionId) => {
                     let blazer = blazers.find(b => b.sessionId === sessionId);
                     const isLocal = sessionId === room.sessionId;
+                    // Secondary local: an AI-held 'local' slot that this client owns (co-op on same machine)
+                    const slotIndex = playerState.slotIndex;
+                    const isSecondaryLocal = !isLocal && playerState.isAI &&
+                        Object.prototype.hasOwnProperty.call(localSlotSchemes, slotIndex);
+                    const effectiveScheme = isLocal ? localControlScheme
+                        : isSecondaryLocal ? localSlotSchemes[slotIndex] : 'WASD';
+
                     if (!blazer) {
                         // Create new blazer for joined player
                         blazer = new Blazer({
@@ -2346,16 +2518,19 @@
                             color: playerState.color,
                             x: playerState.x,
                             y: playerState.y,
-                            isPlayer: !playerState.isAI,
-                            isLocal: isLocal,
-                            controlScheme: isLocal ? localControlScheme : 'WASD'
+                            slotIndex: slotIndex,
+                            isPlayer: !playerState.isAI || isSecondaryLocal,
+                            isLocal: isLocal || isSecondaryLocal,
+                            isSecondaryLocal: isSecondaryLocal,
+                            controlScheme: effectiveScheme
                         });
                         blazers.push(blazer);
                         updateDpad();
                     } else {
                         // Ensure isLocal and isPlayer status is always correct
-                        blazer.isLocal = isLocal;
-                        blazer.isPlayer = !playerState.isAI;
+                        blazer.isLocal = isLocal || isSecondaryLocal;
+                        blazer.isSecondaryLocal = isSecondaryLocal;
+                        blazer.isPlayer = !playerState.isAI || isSecondaryLocal;
 
                         // Freeze position updates during round-over countdown — server is frozen too,
                         // so any position change here would be the reset teleport arriving early.
@@ -2364,6 +2539,13 @@
                         // If player position changed drastically, trigger teleport animation
                         if (Math.abs(blazer.gridX - playerState.x) > 1 || Math.abs(blazer.gridY - playerState.y) > 1) {
                             if (blazer.state === 'normal') {
+                                // Smoke puff at departure point, drifting toward destination
+                                smokePuffs.push({
+                                    fromX: blazer.gridX, fromY: blazer.gridY,
+                                    toX: playerState.x,  toY: playerState.y,
+                                    color: blazer.color,
+                                    startTime: performance.now()
+                                });
                                 // Trigger local teleport effect for visual consistency
                                 blazer.state = 'teleport_out';
                                 blazer.stateTimer = 1.0;
@@ -2380,7 +2562,7 @@
                             // so its canMove() checks are always correct. Applying server state here
                             // causes jitter because stale ticks (broadcast before the server processed
                             // the latest move) temporarily snap the player back one cell.
-                            if (!isLocal) {
+                            if (!isLocal && !blazer.isSecondaryLocal) {
                                 blazer.gridX = playerState.x;
                                 blazer.gridY = playerState.y;
                             }
@@ -2464,10 +2646,14 @@
                 } else if (code === 4002) {
                     // A new game was started — stay on the win screen, null out the stale room reference
                     room = null;
+                } else if (code === 4003) {
+                    alert("You were disconnected due to 3 minutes of inactivity.");
+                    location.reload();
                 }
             });
 
             room.onMessage("round_reset", () => {
+                roundFlashStart = performance.now();
                 blazers.forEach(blazer => {
                     // Clear teleport animations
                     blazer.state = 'normal';
@@ -2510,6 +2696,8 @@
 
                 const localSlot = lobbySlots.find(s => s.typeSelect.value === 'local');
                 localControlScheme = localSlot ? localSlot.controlSelect.value : 'WASD';
+                localSlotSchemes = {};
+                lobbySlots.forEach((s, i) => { if (s.typeSelect.value === 'local') localSlotSchemes[i] = s.controlSelect.value; });
 
                 const newRoom = await client.joinOrCreate("game", settings);
 
@@ -2535,6 +2723,7 @@
             try {
                 const localSlot = lobbySlots.find(s => s.typeSelect.value === 'local');
                 localControlScheme = localSlot ? localSlot.controlSelect.value : 'WASD';
+                localSlotSchemes = {}; // joining someone else's room — no secondary locals
 
                 const newRoom = await client.joinById(joinCodeInput.value, { joinedViaCode: true });
                 setupRoom(newRoom);
@@ -2580,6 +2769,8 @@
 
                 const localSlot = lobbySlots.find(s => s.typeSelect.value === 'local');
                 localControlScheme = localSlot ? localSlot.controlSelect.value : 'WASD';
+                localSlotSchemes = {};
+                lobbySlots.forEach((s, i) => { if (s.typeSelect.value === 'local') localSlotSchemes[i] = s.controlSelect.value; });
 
                 const newRoom = await client.create("game", settings);
                 setupRoom(newRoom);
@@ -2608,6 +2799,7 @@
             try {
                 const localSlot = lobbySlots.find(s => s.typeSelect.value === 'local');
                 localControlScheme = localSlot ? localSlot.controlSelect.value : 'WASD';
+                localSlotSchemes = {}; // rejoining — no secondary locals
                 const newRoom = await client.joinById(code, { joinedViaCode: true });
                 setupRoom(newRoom);
             } catch (e) {
