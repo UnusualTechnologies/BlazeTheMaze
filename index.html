@@ -96,11 +96,10 @@
         #scoreboard {
             display: flex;
             flex-direction: row;
-            gap: 6px;
             color: #fff;
             font-family: monospace;
             background: rgba(0,0,0,0.5);
-            padding: 10px;
+            padding: 10px 6px;
             border-radius: 8px;
             border: 1px solid rgba(255,255,255,0.1);
             width: 100%;
@@ -114,11 +113,21 @@
             min-width: 0;
         }
 
+        .score-col + .score-col {
+            border-left: 1px solid rgba(255,255,255,0.2);
+        }
+
         .score-header {
             font-size: 0.9rem;
-            color: #00ffff;
-            min-height: 1.3em;
+            width: 100%;
+            text-align: center;
+            padding-bottom: 4px;
             margin-bottom: 4px;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+            min-height: 1.4em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .score-players {
@@ -126,6 +135,7 @@
             line-height: 1.5;
             text-align: center;
             word-break: break-word;
+            padding: 0 4px;
         }
 
         #friend-code-hud {
@@ -576,7 +586,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.2.18</div>
+    <div id="version-number">v1.2.19</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1602,7 +1612,8 @@
                 const num = b.id.replace(/\D/g, '');
                 groups[w].push(`<span style="color:${b.color}">P${num}</span>`);
             });
-            const headers = ['', '🏁', '🏁🏁'];
+            const GOAL = `<svg width="13" height="13" viewBox="0 0 100 100" style="vertical-align:-1px"><polygon points="30,4 70,4 96,30 96,70 70,96 30,96 4,70 4,30" fill="none" stroke="#00ffff" stroke-width="9"/><circle cx="50" cy="50" r="10" fill="#ffffff"/></svg>`;
+            const headers = ['', GOAL, GOAL + GOAL];
             scoreboardElement.innerHTML = headers.map((h, i) =>
                 `<div class="score-col">` +
                     `<div class="score-header">${h}</div>` +
