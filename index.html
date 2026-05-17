@@ -33,38 +33,57 @@
             padding-right: env(safe-area-inset-right);
         }
 
-        /* Layout wrapper to handle side-by-side or stacked orientation */
+        /* All viewports: canvas centred in a column, controls above and below */
         #main-wrapper {
             display: flex;
-            flex-direction: row;
+            flex-direction: column;
             align-items: center;
-            justify-content: center;
-            gap: clamp(10px, 3vw, 40px);
+            justify-content: flex-start;
+            gap: 8px;
             width: 100%;
             height: 100%;
-            padding: clamp(10px, 2vw, 20px);
+            padding: clamp(10px, 2vh, 20px);
             box-sizing: border-box;
         }
 
-        #hud {
+        /* Top bar: audio controls on the left, menu button on the right */
+        #hud-bar {
             display: flex;
-            flex-direction: column;
-            justify-content: flex-start;
-            align-items: flex-start;
-            gap: 15px;
-            width: clamp(180px, 20vw, 250px);
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+            width: min(85vmin, calc(100vh - 280px));
+            max-width: 100%;
             flex-shrink: 0;
             z-index: 5;
             transition: opacity 0.3s;
-            overflow-y: auto;
-            max-height: 85vh;
         }
-        
+
+        /* Bottom controls: 2-col grid
+           Left  col: friend-code (row 1) | scoreboard (row 2)
+           Right col: timer       (row 1) | dpad       (row 2)  */
+        #hud {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto auto;
+            width: min(85vmin, calc(100vh - 280px));
+            max-width: 100%;
+            gap: 8px;
+            flex-shrink: 0;
+            margin-top: auto; /* dead space lives between canvas and these controls */
+            z-index: 5;
+            transition: opacity 0.3s;
+            align-items: start;
+        }
+
+        #friend-code-hud { grid-column: 1; grid-row: 1; }
+        #timer           { grid-column: 2; grid-row: 1; }
+        #scoreboard      { grid-column: 1; grid-row: 2; }
+        #dpad            { grid-column: 2; grid-row: 2; align-self: start; }
+
         .hud-buttons {
             display: flex;
             gap: 5px;
-            width: 100%;
-            margin-bottom: 5px;
         }
         
         #timer {
@@ -102,15 +121,15 @@
 
         #game-container {
             position: relative;
-            height: 100%;
-            max-height: 85vh; /* Keep it from touching screen bounds */
-            aspect-ratio: 1 / 1; /* Force perfect square */
+            flex-shrink: 0;
+            width: min(85vmin, calc(100vh - 280px));
+            max-width: 100%;
+            aspect-ratio: 1 / 1;
             border-radius: 12px;
             box-shadow: 0 0 40px rgba(0, 255, 255, 0.15);
             background: #000000;
             overflow: hidden;
             transition: filter 0.1s;
-            flex-shrink: 1;
         }
 
         canvas {
@@ -134,6 +153,8 @@
             z-index: 10;
             transition: opacity 0.3s, background-color 0.5s;
             padding: 20px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
         }
 
         /* Celebratory pulse effect for match winner */
@@ -401,7 +422,6 @@
         .audio-controls {
             display: flex;
             gap: 8px;
-            margin-bottom: 8px;
         }
 
         .audio-btn {
@@ -455,12 +475,9 @@
             display: grid;
             grid-template-areas: ". up ." "left down right";
             grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: repeat(2, 56px);
+            grid-template-rows: repeat(2, 60px);
             gap: 8px;
             width: 100%;
-            position: sticky;
-            top: 0;
-            z-index: 5;
         }
 
         #dpad.hidden { display: none; }
@@ -500,21 +517,12 @@
             #slots-container { grid-template-columns: 1fr; }
         }
 
-        /* Mobile / Portrait Viewport adjustments */
+        /* Mobile / Portrait — layout is already column from desktop styles.
+           Only override: menus go full-screen, lobby scrolls from top. */
         @media (max-width: 900px), (max-aspect-ratio: 1/1) {
             #slots-container { grid-template-columns: 1fr; }
 
-            #main-wrapper {
-                flex-direction: column;
-                gap: 10px;
-            }
-
-            /* Canvas goes on top — hud is second in DOM so needs order override */
-            #game-container {
-                order: -1;
-            }
-
-            /* Menus cover the full viewport on mobile, not just the canvas square */
+            /* Menus cover full viewport (not just the canvas square) */
             .menu-overlay {
                 position: fixed;
                 top: 0;
@@ -522,107 +530,18 @@
                 right: 0;
                 bottom: 0;
                 height: auto;
-                overflow-y: auto;
-                -webkit-overflow-scrolling: touch;
                 z-index: 1000;
             }
 
-            /* Lobby has lots of content — start from top and let it scroll */
+            /* Lobby has lots of content — start from top and scroll */
             #lobby-layer {
                 justify-content: flex-start;
                 padding-top: max(24px, env(safe-area-inset-top));
             }
 
-            /* HUD becomes two equal columns: left = audio/friend-code/dpad,
-               right = menu/timer/scoreboard */
-            #hud {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                grid-template-rows: auto auto auto;
-                width: 100%;
-                max-width: 85vmin;
-                max-height: none;
-                overflow-y: visible;
-                height: auto;
-                padding: 0;
-                gap: 8px;
-                align-items: start;
-                align-self: center;
-            }
-
-            /* Left column */
-            .audio-controls {
-                grid-column: 1;
-                grid-row: 1;
-                margin-bottom: 0;
-            }
-
-            #friend-code-hud {
-                grid-column: 1;
-                grid-row: 2;
-                width: 100%;
-                padding: 8px;
-                font-size: 0.85rem;
-                text-align: left;
-            }
-
-            #dpad {
-                grid-column: 1;
-                grid-row: 3;
-                position: static;
-                width: auto;
-                grid-template-columns: repeat(3, 48px);
-                grid-template-rows: repeat(2, 48px);
-                gap: 5px;
-                align-self: start;
-            }
-
-            /* Right column */
-            .hud-buttons {
-                grid-column: 2;
-                grid-row: 1;
-                width: 100% !important;
-                margin-bottom: 0 !important;
-                display: flex !important;
-            }
-
-            #in-game-menu-btn {
-                width: 100% !important;
-                padding: 8px 15px !important;
-                font-size: 0.9rem !important;
-                margin: 0 !important;
-                flex: 1 !important;
-            }
-
-            #timer {
-                grid-column: 2;
-                grid-row: 2;
-            }
-
-            #scoreboard {
-                grid-column: 2;
-                grid-row: 3;
-                width: 100%;
-                padding: 8px;
-                font-size: 0.85rem;
-            }
-
-            #game-container {
-                width: 100%;
-                height: auto;
-                max-width: 85vmin;
-                max-height: 85vmin;
-            }
-
-            /* Join code input grows to fill available space */
-            .join-group {
-                width: 90%;
-            }
-            .join-group input[type="text"] {
-                flex: 1;
-                width: auto;
-                min-width: 80px;
-            }
+            /* Join code input fills available space */
+            .join-group { width: 90%; }
+            .join-group input[type="text"] { flex: 1; width: auto; min-width: 80px; }
         }
 
         /* Extra-small phones (≤ 480px) */
@@ -647,10 +566,11 @@
 </head>
 <body>
 
-    <div id="version-number">v1.2.10</div>
+    <div id="version-number">v1.2.11</div>
 
     <div id="main-wrapper">
-        <div id="hud" class="hidden">
+        <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
+        <div id="hud-bar" class="hidden">
             <div class="audio-controls">
                 <button class="audio-btn music-btn" title="Toggle Music">
                     <svg class="icon" viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg>
@@ -664,15 +584,6 @@
             <div class="hud-buttons">
                 <button class="action-btn secondary-btn" id="in-game-menu-btn" style="padding: 10px; font-size: 0.9rem; flex: 1; margin: 0;">Menu</button>
             </div>
-            <div id="dpad" class="hidden">
-                <button class="dpad-btn" data-dir="up">▲</button>
-                <button class="dpad-btn" data-dir="left">◀</button>
-                <button class="dpad-btn" data-dir="down">▼</button>
-                <button class="dpad-btn" data-dir="right">▶</button>
-            </div>
-            <div id="friend-code-hud">Friend code: <span class="display-friend-code" style="color: #00ffff; font-weight: bold;"></span></div>
-            <div id="timer">00:00.000</div>
-            <div id="scoreboard"></div>
         </div>
 
         <div id="game-container">
@@ -757,8 +668,21 @@
                 </div>
             </div>
         </div>
+
+        <!-- Bottom controls: friend-code + scoreboard (left) | timer + dpad (right) -->
+        <div id="hud" class="hidden">
+            <div id="friend-code-hud">Friend code: <span class="display-friend-code" style="color: #00ffff; font-weight: bold;"></span></div>
+            <div id="timer">00:00.000</div>
+            <div id="scoreboard"></div>
+            <div id="dpad" class="hidden">
+                <button class="dpad-btn" data-dir="up">▲</button>
+                <button class="dpad-btn" data-dir="left">◀</button>
+                <button class="dpad-btn" data-dir="down">▼</button>
+                <button class="dpad-btn" data-dir="right">▶</button>
+            </div>
+        </div>
     </div>
-    
+
     <div id="controls-hint">Desktop: Assigned Keys | Mobile: Swipe</div>
 
     <script>
@@ -826,6 +750,7 @@
         const lobbyLayer = document.getElementById('lobby-layer');
         const postMatchLayer = document.getElementById('post-match-layer');
         const hud = document.getElementById('hud');
+        const hudBar = document.getElementById('hud-bar');
         const slotsContainer = document.getElementById('slots-container');
         
         // Buttons & Text
@@ -1682,7 +1607,8 @@
             lobbyLayer.classList.add('hidden');
             postMatchLayer.classList.add('hidden');
             hud.classList.remove('hidden');
-            
+            hudBar.classList.remove('hidden');
+
             // Clear any leftover bugs; players are created fresh via onStateChange.
             bugs = [];
             updateScoreboard();
@@ -1722,6 +1648,7 @@
             postMatchLayer.classList.add('hidden');
             postMatchLayer.classList.remove('winner-pulse');
             hud.classList.add('hidden');
+            hudBar.classList.add('hidden');
             lobbyLayer.classList.add('hidden');
             initialMenu.classList.remove('hidden');
             Synth.muffle(true);
