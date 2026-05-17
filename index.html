@@ -555,7 +555,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.2.14</div>
+    <div id="version-number">v1.2.15</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -728,13 +728,16 @@
 
         const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-        // Keep version number anchored to game-container's bottom-right corner
+        // Version number: desktop → bottom-right of game-container square
+        //                 mobile  → bottom-right of #hud (below the maze, above nothing)
         (function positionVersion() {
             const ver = document.getElementById('version-number');
             const gc  = document.getElementById('game-container');
+            const hudEl = document.getElementById('hud');
             function update() {
-                const r = gc.getBoundingClientRect();
                 const pad = 10;
+                const isMobileLayout = window.innerWidth <= window.innerHeight || window.innerWidth <= 900;
+                const r = (isMobileLayout ? hudEl : gc).getBoundingClientRect();
                 ver.style.right  = Math.max(window.innerWidth  - r.right  + pad, pad) + 'px';
                 ver.style.bottom = Math.max(window.innerHeight - r.bottom + pad, pad) + 'px';
             }
