@@ -591,7 +591,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.6</div>
+    <div id="version-number">v1.5.8</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1413,7 +1413,7 @@
             }
 
             draw() {
-                const size = cellSize * 0.4;
+                const size = cellSize * 0.216;
 
                 // Trail
                 ctx.lineWidth = size * 0.8;
@@ -1453,6 +1453,7 @@
                 // Body — drawn three times with decreasing shadowBlur for maximum bloom
                 const bodyColor = this.flashTimer > 0 ? '#ffffff' : this.color;
                 ctx.fillStyle = bodyColor;
+                ctx.globalAlpha = 0.75;
                 for (const blur of [80, 40, 15]) {
                     ctx.shadowBlur = blur;
                     ctx.shadowColor = bodyColor;
@@ -1461,6 +1462,7 @@
                     ctx.fill();
                 }
                 ctx.shadowBlur = 0;
+                ctx.globalAlpha = 1;
 
                 ctx.restore();
             }
