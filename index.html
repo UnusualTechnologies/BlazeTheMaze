@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Neon Bug Race</title>
+    <title>Blaze the Maze</title>
     <script src="https://unpkg.com/@colyseus/sdk@0.17.0/dist/colyseus.js"></script>
     <style>
         * {
@@ -44,13 +44,15 @@
         #hud {
             display: flex;
             flex-direction: column;
-            justify-content: center;
+            justify-content: flex-start;
             align-items: flex-start;
             gap: 15px;
             width: 250px; /* Fixed width for side panel */
             flex-shrink: 0;
             z-index: 5;
             transition: opacity 0.3s;
+            overflow-y: auto;
+            max-height: 85vh;
         }
         
         .hud-buttons {
@@ -391,6 +393,101 @@
             pointer-events: none;
         }
 
+        .audio-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .audio-btn {
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            border: 1px solid rgba(0, 255, 255, 0.4);
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.65);
+            color: #00ffff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            transition: color 0.2s, border-color 0.2s, box-shadow 0.2s;
+            box-shadow: 0 0 8px rgba(0, 255, 255, 0.2);
+        }
+
+        .audio-btn:hover {
+            box-shadow: 0 0 16px rgba(0, 255, 255, 0.5);
+        }
+
+        .audio-btn svg.icon {
+            width: 22px;
+            height: 22px;
+            fill: currentColor;
+        }
+
+        .audio-btn .slash {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .audio-btn.muted {
+            color: #555;
+            border-color: rgba(80, 80, 80, 0.4);
+            box-shadow: none;
+        }
+
+        .audio-btn.muted .slash {
+            display: block;
+        }
+
+        #dpad {
+            display: grid;
+            grid-template-areas: ". up ." "left down right";
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(2, 50px);
+            gap: 5px;
+            width: 100%;
+            position: sticky;
+            top: 0;
+            z-index: 5;
+        }
+
+        .dpad-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(15, 15, 25, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-bottom: 3px solid rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1.2rem;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            transition: background 0.07s, transform 0.07s, border-bottom-width 0.07s;
+        }
+
+        .dpad-btn[data-dir="up"]    { grid-area: up; }
+        .dpad-btn[data-dir="left"]  { grid-area: left; }
+        .dpad-btn[data-dir="right"] { grid-area: right; }
+        .dpad-btn[data-dir="down"]  { grid-area: down; }
+
+        .dpad-btn.pressed {
+            background: rgba(0, 255, 255, 0.15);
+            border-color: rgba(0, 255, 255, 0.45);
+            border-bottom-width: 1px;
+            color: #00ffff;
+            transform: translateY(2px);
+        }
+
         /* Mobile / Portrait Viewport adjustments */
         @media (max-width: 900px), (max-aspect-ratio: 1/1) {
             h1 { font-size: 2rem; }
@@ -418,7 +515,7 @@
                 margin-bottom: 0 !important;
             }
 
-            #in-game-menu-btn, #in-game-restart-btn, #in-game-mute-btn {
+            #in-game-menu-btn {
                 width: auto !important;
                 padding: 8px 15px !important;
                 font-size: 0.9rem !important;
@@ -451,18 +548,32 @@
 </head>
 <body>
 
-    <div id="version-number">v1.2.5</div>
+    <div id="version-number">v1.2.6</div>
 
     <div id="main-wrapper">
         <div id="hud" class="hidden">
+            <div class="audio-controls">
+                <button class="audio-btn music-btn" title="Toggle Music">
+                    <svg class="icon" viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg>
+                    <svg class="slash" viewBox="0 0 40 40"><line x1="31" y1="7" x2="9" y2="33" stroke="#ff4444" stroke-width="2.5" stroke-linecap="round"/></svg>
+                </button>
+                <button class="audio-btn sfx-btn" title="Toggle Sound Effects">
+                    <svg class="icon" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+                    <svg class="slash" viewBox="0 0 40 40"><line x1="31" y1="7" x2="9" y2="33" stroke="#ff4444" stroke-width="2.5" stroke-linecap="round"/></svg>
+                </button>
+            </div>
             <div class="hud-buttons">
                 <button class="action-btn secondary-btn" id="in-game-menu-btn" style="padding: 10px; font-size: 0.9rem; flex: 1; margin: 0;">Menu</button>
-                <button class="action-btn tertiary-btn" id="in-game-restart-btn" style="padding: 10px; font-size: 0.9rem; flex: 1; margin: 0;">Restart</button>
-                <button class="action-btn" id="in-game-mute-btn" style="padding: 10px; font-size: 0.9rem; flex: 1; margin: 0; background: #ff9900; box-shadow: 0 0 20px #ff9900; color: #000;">Mute</button>
             </div>
+            <div id="dpad" class="hidden">
+                <button class="dpad-btn" data-dir="up">▲</button>
+                <button class="dpad-btn" data-dir="left">◀</button>
+                <button class="dpad-btn" data-dir="down">▼</button>
+                <button class="dpad-btn" data-dir="right">▶</button>
+            </div>
+            <div id="friend-code-hud">Friend code: <span class="display-friend-code" style="color: #00ffff; font-weight: bold;"></span></div>
             <div id="timer">00:00.000</div>
             <div id="scoreboard"></div>
-            <div id="friend-code-hud">Friend code: <span class="display-friend-code" style="color: #00ffff; font-weight: bold;"></span></div>
         </div>
 
         <div id="game-container">
@@ -487,17 +598,27 @@
 
             <!-- Initial Main Menu -->
             <div id="initial-menu" class="menu-overlay">
-                <h1>Neon Bug Race</h1>
+                <div class="audio-controls">
+                    <button class="audio-btn music-btn" title="Toggle Music">
+                        <svg class="icon" viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg>
+                        <svg class="slash" viewBox="0 0 40 40"><line x1="31" y1="7" x2="9" y2="33" stroke="#ff4444" stroke-width="2.5" stroke-linecap="round"/></svg>
+                    </button>
+                    <button class="audio-btn sfx-btn" title="Toggle Sound Effects">
+                        <svg class="icon" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+                        <svg class="slash" viewBox="0 0 40 40"><line x1="31" y1="7" x2="9" y2="33" stroke="#ff4444" stroke-width="2.5" stroke-linecap="round"/></svg>
+                    </button>
+                </div>
+                <h1>Blaze the Maze</h1>
                 <p class="subtitle">First to 3 wins. Orbs teleport opponents, black holes teleport you.</p>
-                
-                <button class="action-btn" id="quick-start-btn">Quick Start</button>
-                
+
+                <button class="action-btn" id="quick-start-btn">Race!</button>
+
+                <button class="action-btn tertiary-btn" id="custom-settings-btn">Custom</button>
+
                 <div class="join-group">
                     <input type="text" id="join-code-input" placeholder="Code..." maxlength="12" style="text-transform: uppercase;">
                     <button class="action-btn secondary-btn" id="join-friend-btn">Join Friend</button>
                 </div>
-
-                <button class="action-btn tertiary-btn" id="custom-settings-btn">Custom</button>
             </div>
 
             <!-- Custom Lobby Menu -->
@@ -529,15 +650,11 @@
                         <input type="checkbox" id="collisions-toggle" checked style="width: 20px; height: 20px; cursor: pointer;"> 
                         <label for="collisions-toggle" style="font-size: 1.2rem; cursor: pointer; user-select: none;">Enable Collisions</label>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <input type="checkbox" id="private-toggle" style="width: 20px; height: 20px; cursor: pointer;"> 
-                        <label for="private-toggle" style="font-size: 1.2rem; cursor: pointer; user-select: none;">Friend Code Only</label>
-                    </div>
                 </div>
 
                 <div class="btn-group">
                     <button class="action-btn secondary-btn" id="lobby-back-btn">Back</button>
-                    <button class="action-btn" id="start-btn">Start Match</button>
+                    <button class="action-btn" id="start-btn">Race!</button>
                 </div>
             </div>
         </div>
@@ -549,27 +666,25 @@
         // --- BULLETPROOF AUDIO SYSTEM ---
         const Synth = {
             ctx: { state: 'running', resume: () => {} }, // Keep dummy for legacy UI code
-            isMuted: true,
+            isMusicMuted: false,
+            isSfxMuted: false,
             bgMusic: new Audio('./assets/audio/music.ogg'),
             init() {
                 this.bgMusic.loop = true;
                 this.bgMusic.volume = 0.4;
-                // Silently catch missing music files so the game doesn't crash on load
                 this.bgMusic.onerror = () => { console.log('Music file missing or failed to load. Running silently.'); };
-                
-                // Initialize UI state
-                const muteBtn = document.getElementById('in-game-mute-btn');
-                if (muteBtn) {
-                    muteBtn.innerText = "Unmute";
-                    muteBtn.classList.add('muted');
-                }
+                this._syncButtons();
+            },
+            _syncButtons() {
+                document.querySelectorAll('.music-btn').forEach(b => b.classList.toggle('muted', this.isMusicMuted));
+                document.querySelectorAll('.sfx-btn').forEach(b => b.classList.toggle('muted', this.isSfxMuted));
             },
             playSound(filename) {
-                if (this.isMuted) return;
+                if (this.isSfxMuted) return;
                 const audio = new Audio('./assets/audio/' + filename);
                 audio.volume = 0.6;
-                audio.onerror = () => {}; // Silently catch missing SFX files
-                audio.play().catch(() => {}); // Catch missing file promise rejections
+                audio.onerror = () => {};
+                audio.play().catch(() => {});
             },
             turn(isPlayer) { if (isPlayer) this.playSound('turn.ogg'); },
             bonk(isPlayer) { if (isPlayer) this.playSound('bonk.ogg'); },
@@ -578,24 +693,30 @@
             glitch() { this.playSound('glitch.ogg'); },
             win() { this.playSound('win.ogg'); },
             startMusic() {
-                if (!this.isMuted) {
+                if (!this.isMusicMuted) {
                     this.bgMusic.play().catch(() => {});
                 }
             },
             muffle(isMuffled) {
                 this.bgMusic.volume = isMuffled ? 0.15 : 0.4;
             },
-            toggleMute() {
-                this.isMuted = !this.isMuted;
-                if (this.isMuted) {
+            toggleMusic() {
+                this.isMusicMuted = !this.isMusicMuted;
+                if (this.isMusicMuted) {
                     this.bgMusic.pause();
                 } else {
                     this.bgMusic.play().catch(() => {});
                 }
-                return this.isMuted;
+                this._syncButtons();
+            },
+            toggleSfx() {
+                this.isSfxMuted = !this.isSfxMuted;
+                this._syncButtons();
             }
         };
         // --- END AUDIO SYSTEM ---
+
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d', { alpha: false });
@@ -610,8 +731,6 @@
         
         // Buttons & Text
         const inGameMenuBtn = document.getElementById('in-game-menu-btn');
-        const inGameRestartBtn = document.getElementById('in-game-restart-btn');
-        const inGameMuteBtn = document.getElementById('in-game-mute-btn');
         const gridSizeInput = document.getElementById('grid-size-input');
         const totalEntitiesInput = document.getElementById('total-entities-input');
         
@@ -641,6 +760,7 @@
         let particles = [];
         let rockets = []; // Store active homing rockets
         
+        let localControlScheme = 'WASD'; // captured from lobby before connecting
         let gameState = 'MENU'; // MENU, PLAYING, ROUND_OVER_COUNTDOWN, MATCH_OVER, INITIALIZING
         let animationId;
         let lastTime = 0;
@@ -709,7 +829,7 @@
                 if (i === 0) defaultType = 'local';
                 else if (i < 4) defaultType = 'ai_online';
 
-                let defaultControl = 'WASD';
+                let defaultControl = (i === 0 && isMobile) ? 'TouchMouse' : 'WASD';
                 if (i === 1) defaultControl = 'TFGH';
                 else if (i === 2) defaultControl = 'IJKL';
                 else if (i === 3) defaultControl = 'Arrows';
@@ -734,6 +854,7 @@
                         <option value="IJKL" ${defaultControl === 'IJKL' ? 'selected' : ''}>IJKL Keys</option>
                         <option value="Arrows" ${defaultControl === 'Arrows' ? 'selected' : ''}>Arrow Keys</option>
                         <option value="Numpad" ${defaultControl === 'Numpad' ? 'selected' : ''}>Numpad (8456)</option>
+                        <option value="TouchMouse" ${defaultControl === 'TouchMouse' ? 'selected' : ''}>Touch / Mouse</option>
                         <option value="controller_1">Controller 1 (Dummy)</option>
                         <option value="controller_2">Controller 2 (Dummy)</option>
                     </select>
@@ -1229,12 +1350,12 @@
 
             draw() {
                 const size = cellSize * 0.4;
-                
+
                 // Trail
                 ctx.lineWidth = size * 0.8;
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
-                
+
                 if (this.trail.length > 1) {
                     ctx.save();
                     for (let i = 1; i < this.trail.length; i++) {
@@ -1251,7 +1372,7 @@
 
                 ctx.save();
                 ctx.translate(this.pixelX, this.pixelY);
-                
+
                 // Teleport effect
                 if (this.state === 'teleport_out' || this.state === 'teleport_in') {
                     const scale = this.state === 'teleport_out' ? this.stateTimer : (1 - this.stateTimer);
@@ -1268,28 +1389,14 @@
                 // Glow
                 ctx.shadowBlur = 15;
                 ctx.shadowColor = this.color;
-                
+
                 // Body
                 ctx.fillStyle = this.color;
-                if (this.flashTimer > 0) {
-                    ctx.fillStyle = '#ffffff';
-                }
-                
+                if (this.flashTimer > 0) ctx.fillStyle = '#ffffff';
+
                 ctx.beginPath();
                 ctx.arc(0, 0, size, 0, Math.PI * 2);
                 ctx.fill();
-
-                // Direction indicator
-                if (this.lastDx !== 0 || this.lastDy !== 0) {
-                    const angle = Math.atan2(this.lastDy, this.lastDx);
-                    ctx.rotate(angle);
-                    ctx.fillStyle = '#ffffff';
-                    ctx.beginPath();
-                    ctx.moveTo(size * 0.5, -size * 0.3);
-                    ctx.lineTo(size * 0.8, 0);
-                    ctx.lineTo(size * 0.5, size * 0.3);
-                    ctx.fill();
-                }
 
                 ctx.restore();
             }
@@ -1445,9 +1552,14 @@
         }
 
         function updateScoreboard() {
-            scoreboardElement.innerHTML = activePlayersData.map(p => {
-                return `<span style="color: ${p.color}">${p.id}: ${scores[p.id]}/${WINS_NEEDED}</span>`;
-            }).join('<br>');
+            const sorted = [...bugs].sort((a, b) => {
+                const na = parseInt(a.id.replace(/\D/g, '')) || 0;
+                const nb = parseInt(b.id.replace(/\D/g, '')) || 0;
+                return na - nb;
+            });
+            scoreboardElement.innerHTML = sorted.map(b =>
+                `<span style="color: ${b.color}">${b.id}: ${scores[b.id] ?? 0}/${WINS_NEEDED}</span>`
+            ).join('<br>');
         }
 
         function initMatch() {
@@ -1455,11 +1567,6 @@
             if (document.activeElement) {
                 document.activeElement.blur();
             }
-
-            // Sync visual mute state
-            inGameMuteBtn.innerText = Synth.isMuted ? "Unmute" : "Mute";
-            if (Synth.isMuted) inGameMuteBtn.classList.add('muted');
-            else inGameMuteBtn.classList.remove('muted');
 
             postMatchLayer.classList.remove('winner-pulse');
 
@@ -1477,10 +1584,9 @@
             postMatchLayer.classList.add('hidden');
             hud.classList.remove('hidden');
             
-            updateScoreboard();
-
             // Clear any leftover bugs; players are created fresh via onStateChange.
             bugs = [];
+            updateScoreboard();
 
             initRound();
         }
@@ -1527,6 +1633,7 @@
             particles = [];
             shockwaves = [];
             rockets = [];
+            updateDpad();
             draw(true);
         }
 
@@ -1790,7 +1897,8 @@
             'TFGH': { up: ['t', 'T'], right: ['h', 'H'], down: ['g', 'G'], left: ['f', 'F'] },
             'IJKL': { up: ['i', 'I'], right: ['l', 'L'], down: ['k', 'K'], left: ['j', 'J'] },
             'Arrows': { up: ['ArrowUp'], right: ['ArrowRight'], down: ['ArrowDown'], left: ['ArrowLeft'] },
-            'Numpad': { up: ['8', 'Numpad8'], right: ['6', 'Numpad6'], down: ['5', 'Numpad5'], left: ['4', 'Numpad4'] }
+            'Numpad': { up: ['8', 'Numpad8'], right: ['6', 'Numpad6'], down: ['5', 'Numpad5'], left: ['4', 'Numpad4'] },
+            'TouchMouse': { up: [], right: [], down: [], left: [] }
         };
 
         window.addEventListener('keydown', (e) => {
@@ -1862,37 +1970,100 @@
             });
         });
 
-        // Touch handling (Routes to Player 1 if they exist)
+        // Touch / Mouse handling
         let touchStartX = 0, touchStartY = 0;
-        
+        let mouseStartX = 0, mouseStartY = 0;
+
+        function getSwipeTarget() {
+            return bugs.find(b => b.controlScheme === 'TouchMouse' && b.isLocal)
+                || bugs.find(b => {
+                    const isActuallyLocal = (room && room.sessionId) ? (b.sessionId === room.sessionId) : b.isLocal;
+                    return b.isPlayer && isActuallyLocal;
+                });
+        }
+
+        function applySwipe(dx, dy, threshold) {
+            if (Math.abs(dx) < threshold && Math.abs(dy) < threshold) return;
+            const target = getSwipeTarget();
+            if (!target) return;
+            let intentDx = 0, intentDy = 0;
+            if (Math.abs(dx) > Math.abs(dy)) intentDx = dx > 0 ? 1 : -1;
+            else intentDy = dy > 0 ? 1 : -1;
+            target.swipeIntent = { dx: intentDx, dy: intentDy, time: performance.now() };
+        }
+
         canvas.addEventListener('touchstart', (e) => {
-            touchStartX = e.changedTouches[0].screenX; touchStartY = e.changedTouches[0].screenY;
+            touchStartX = e.changedTouches[0].screenX;
+            touchStartY = e.changedTouches[0].screenY;
         }, {passive: true});
 
         canvas.addEventListener('touchend', (e) => {
-            // Tap to skip countdown on mobile (local only — networked uses round_reset)
-            if (!room && gameState === 'ROUND_OVER_COUNTDOWN') {
-                roundCountdown = 0;
-                return;
-            }
-
+            if (!room && gameState === 'ROUND_OVER_COUNTDOWN') { roundCountdown = 0; return; }
             if (gameState !== 'PLAYING') return;
-            const p1 = bugs.find(b => {
-                const isActuallyLocal = (room && room.sessionId) ? (b.sessionId === room.sessionId) : b.isLocal;
-                return b.isPlayer && isActuallyLocal;
-            });
-            if (!p1) return;
-            
-            let dx = e.changedTouches[0].screenX - touchStartX;
-            let dy = e.changedTouches[0].screenY - touchStartY;
-            
-            if (Math.abs(dx) > 30 || Math.abs(dy) > 30) {
-                let intentDx = 0, intentDy = 0;
-                if (Math.abs(dx) > Math.abs(dy)) intentDx = dx > 0 ? 1 : -1;
-                else intentDy = dy > 0 ? 1 : -1;
-                p1.swipeIntent = { dx: intentDx, dy: intentDy, time: performance.now() };
-            }
+            applySwipe(
+                e.changedTouches[0].screenX - touchStartX,
+                e.changedTouches[0].screenY - touchStartY,
+                30
+            );
         }, {passive: true});
+
+        canvas.addEventListener('mousedown', (e) => {
+            mouseStartX = e.clientX;
+            mouseStartY = e.clientY;
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (gameState !== 'PLAYING') return;
+            applySwipe(e.clientX - mouseStartX, e.clientY - mouseStartY, 15);
+        });
+
+        // D-pad
+        const dpadEl = document.getElementById('dpad');
+
+        function dpadPress(dir) {
+            const bug = bugs.find(b => b.controlScheme === 'TouchMouse' && b.isLocal);
+            if (!bug) return;
+            if (!bug.heldDirections.includes(dir)) {
+                bug.heldDirections.push(dir);
+                bug.turnIntent = { dir, time: performance.now() };
+            }
+        }
+
+        function dpadRelease(dir) {
+            const bug = bugs.find(b => b.controlScheme === 'TouchMouse' && b.isLocal);
+            if (!bug) return;
+            const idx = bug.heldDirections.indexOf(dir);
+            if (idx > -1) bug.heldDirections.splice(idx, 1);
+            if (bug.turnIntent?.dir === dir) bug.turnIntent = null;
+        }
+
+        dpadEl.addEventListener('pointerdown', (e) => {
+            const btn = e.target.closest('.dpad-btn');
+            if (!btn) return;
+            e.preventDefault();
+            btn.setPointerCapture(e.pointerId);
+            btn.classList.add('pressed');
+            if (gameState === 'PLAYING') dpadPress(btn.dataset.dir);
+        });
+
+        dpadEl.addEventListener('pointerup', (e) => {
+            const btn = e.target.closest('.dpad-btn');
+            if (!btn) return;
+            btn.classList.remove('pressed');
+            dpadRelease(btn.dataset.dir);
+        });
+
+        dpadEl.addEventListener('pointercancel', (e) => {
+            const btn = e.target.closest('.dpad-btn');
+            if (!btn) return;
+            btn.classList.remove('pressed');
+            dpadRelease(btn.dataset.dir);
+        });
+
+        function updateDpad() {
+            const show = bugs.some(b => b.controlScheme === 'TouchMouse' && b.isLocal);
+            dpadEl.classList.toggle('hidden', !show);
+        }
 
         // --- MENU BUTTON BINDINGS ---
         
@@ -1909,19 +2080,10 @@
             returnToMenu();
         });
 
-        // In-game Restart Button — only valid for local play; networked rounds are server-controlled
-        inGameRestartBtn.addEventListener('click', () => {
-            if (document.activeElement) document.activeElement.blur();
-            if (!room) initRound();
-        });
-
-        // In-game Mute Button
-        inGameMuteBtn.addEventListener('click', () => {
-            if (document.activeElement) document.activeElement.blur(); // Drop focus
-            const isMuted = Synth.toggleMute();
-            inGameMuteBtn.innerText = isMuted ? "Unmute" : "Mute";
-            if (isMuted) inGameMuteBtn.classList.add('muted');
-            else inGameMuteBtn.classList.remove('muted');
+        // Audio toggle buttons (delegated — handles all instances)
+        document.addEventListener('click', e => {
+            if (e.target.closest('.music-btn')) { e.target.closest('.music-btn').blur(); Synth.toggleMusic(); }
+            else if (e.target.closest('.sfx-btn')) { e.target.closest('.sfx-btn').blur(); Synth.toggleSfx(); }
         });
 
         // Menu Navigation
@@ -2003,11 +2165,10 @@
                             y: playerState.y,
                             isPlayer: !playerState.isAI,
                             isLocal: isLocal,
-                            // Online players each use WASD on their own machine.
-                            // Slot controlScheme only applies to split-screen local play.
-                            controlScheme: isLocal ? 'WASD' : (state.slots[playerState.slotIndex]?.controlScheme || 'WASD')
+                            controlScheme: isLocal ? localControlScheme : 'WASD'
                         });
                         bugs.push(bug);
+                        updateDpad();
                     } else {
                         // Ensure isLocal and isPlayer status is always correct
                         bug.isLocal = isLocal;
@@ -2037,14 +2198,14 @@
                     }
                 });
 
+                // Remove players who left
+                bugs = bugs.filter(b => state.players.has(b.sessionId));
+
                 // Sync server scores into local scores map (keeps scoreboard accurate for all clients)
                 state.players.forEach((playerState, sessionId) => {
                     scores[playerState.id] = playerState.score;
                 });
                 updateScoreboard();
-
-                // Remove players who left
-                bugs = bugs.filter(b => state.players.has(b.sessionId));
             });
 
             room.onMessage("round_won", ({ winnerId, winnerColor, winnerScore, isMatchWon }) => {
@@ -2153,8 +2314,11 @@
                     }))
                 };
 
+                const localSlot = lobbySlots.find(s => s.typeSelect.value === 'local');
+                localControlScheme = localSlot ? localSlot.controlSelect.value : 'WASD';
+
                 const newRoom = await client.joinOrCreate("game", settings);
-                
+
                 // Wait a tiny bit to ensure sessionId is ready
                 if (!newRoom.sessionId) {
                     await new Promise(resolve => setTimeout(resolve, 50));
@@ -2175,6 +2339,9 @@
 
             bugs = [];
             try {
+                const localSlot = lobbySlots.find(s => s.typeSelect.value === 'local');
+                localControlScheme = localSlot ? localSlot.controlSelect.value : 'WASD';
+
                 const newRoom = await client.joinById(joinCodeInput.value, { joinedViaCode: true });
                 setupRoom(newRoom);
             } catch (e) {
@@ -2212,8 +2379,11 @@
                         controlScheme: s.controlSelect.value
                     })),
                     collisions: document.getElementById('collisions-toggle').checked,
-                    isPrivate: document.getElementById('private-toggle').checked
+                    isPrivate: false
                 };
+
+                const localSlot = lobbySlots.find(s => s.typeSelect.value === 'local');
+                localControlScheme = localSlot ? localSlot.controlSelect.value : 'WASD';
 
                 const newRoom = await client.create("game", settings);
                 setupRoom(newRoom);
