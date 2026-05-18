@@ -34,8 +34,8 @@ export class GameRoom extends Room<{ state: GameState }> {
         for (let i = 0; i < 9; i++) customId += chars.charAt(Math.floor(Math.random() * chars.length));
         this.roomId = customId;
 
-        this.cols = Number(options.cols) || 20;
-        this.rows = Number(options.rows) || 20;
+        this.cols = Math.max(5, Number(options.cols) || 20);
+        this.rows = Math.max(5, Number(options.rows) || 20);
         this.collisions = options.collisions !== false; // default true
 
         const state = new GameState();
@@ -650,7 +650,7 @@ export class GameRoom extends Room<{ state: GameState }> {
             (x === startX && y === startY) ||
             this.isReservedCell(x, y) ||
             this.state.powerUps.some((pu: PowerUp) => pu.x === x && pu.y === y) ||
-            this.state.players.some((p: Player) => p.x === x && p.y === y)
+            [...this.state.players.values()].some((p: Player) => p.x === x && p.y === y)
         );
         player.x = x;
         player.y = y;
