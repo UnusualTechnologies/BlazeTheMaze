@@ -614,7 +614,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.16</div>
+    <div id="version-number">v1.5.17</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1822,6 +1822,9 @@
                 room.leave();
                 room = null;
             }
+            setButtonLoading(quickStartBtn, false);
+            setButtonLoading(startBtn, false);
+            setButtonLoading(joinFriendBtn, false);
             gameState = 'MENU';
             postMatchLayer.classList.add('hidden');
             postMatchLayer.classList.remove('winner-pulse');
