@@ -113,6 +113,7 @@
             min-width: 0;
         }
 
+
         .score-col + .score-col {
             border-left: 1px solid rgba(255,255,255,0.2);
         }
@@ -586,11 +587,34 @@
             }
         }
 
+        #menu-title {
+            color: #fff; font-size: 3.5em; font-style: italic; font-weight: 900;
+            letter-spacing: 4px; text-transform: uppercase;
+            transform: skewX(-20deg);
+            transform-origin: left center;
+            text-shadow:
+                -5px   0px  0px rgba(255,120,120,0.60),
+                -11px -1px  0px rgba(255, 70, 70,0.50),
+                -18px -2px  0px rgba(240, 40, 40,0.40),
+                -27px -3px  0px rgba(210, 20, 20,0.30),
+                -38px -4px  0px rgba(180, 10, 10,0.22),
+                -51px -5px  0px rgba(150,  5,  5,0.15),
+                -67px -7px  0px rgba(120,  2,  2,0.10),
+                -90px  -9px 25px rgba(200,  0,  0,0.12),
+               -150px -15px 45px rgba(100,  0,  0,0.08);
+            margin: 0; padding: 0 30px; flex-shrink: 0; align-self: flex-start;
+        }
+        #menu-mini-canvas {
+            width: 100%;
+            height: auto;
+            display: block;
+            flex-shrink: 0;
+        }
     </style>
 </head>
 <body>
 
-    <div id="version-number">v1.5.11</div>
+    <div id="version-number">v1.5.12</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -645,9 +669,8 @@
                         <svg class="slash" viewBox="0 0 40 40"><line x1="31" y1="7" x2="9" y2="33" stroke="#ff4444" stroke-width="2.5" stroke-linecap="round"/></svg>
                     </button>
                 </div>
-                <h1>Blaze the Maze</h1>
-                <p class="subtitle">First to 3 wins. Orbs teleport opponents, black holes teleport you.</p>
-
+                <h1 id="menu-title">BLAZE THE MAZE</h1>
+                <canvas id="menu-mini-canvas" width="550" height="150"></canvas>
                 <button class="action-btn" id="quick-start-btn">Race!</button>
 
                 <button class="action-btn tertiary-btn" id="custom-settings-btn">Custom</button>
@@ -761,6 +784,7 @@
 
         const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
+
         // Populate all .ver-text spans from the hidden #version-number source element
         const _verText = document.getElementById('version-number').textContent;
         document.querySelectorAll('.ver-text').forEach(el => el.textContent = _verText);
@@ -826,6 +850,7 @@
         let roundCountdown = 0;
         let currentWinner = null;
         let roundTimes = [];
+        let gameStartLabelTime = null; // set once per game, drives player-number fade-in labels
         let lastRoomCode = null;
 
         let roundFlashStart = null; // performance.now() timestamp when white flash begins
@@ -1625,7 +1650,7 @@
                 const num = b.id.replace(/\D/g, '');
                 groups[w].push(`<span style="color:${b.color}">P${num}</span>`);
             });
-            const GOAL = `<svg width="13" height="13" viewBox="0 0 100 100" style="vertical-align:-1px"><polygon points="30,4 70,4 96,30 96,70 70,96 30,96 4,70 4,30" fill="none" stroke="#00ffff" stroke-width="9"/><circle cx="50" cy="50" r="10" fill="#ffffff"/></svg>`;
+            const GOAL = `<svg width="13" height="13" viewBox="0 0 100 100" style="vertical-align:-1px"><polygon class="goal-star-poly" points="50,4 61,36 94,36 67,56 77,87 50,68 23,87 33,56 6,36 39,36" fill="none" stroke="#00ffff" stroke-width="9"/><circle cx="50" cy="50" r="10" fill="#ffffff"/></svg>`;
             const headers = ['', GOAL, GOAL + GOAL];
             scoreboardElement.innerHTML = headers.map((h, i) =>
                 `<div class="score-col">` +
@@ -1686,6 +1711,7 @@
             postMatchLayer.classList.add('hidden');
             lastTime = performance.now();
             roundStartTime = performance.now();
+            if (roundTimes.length === 0) gameStartLabelTime = performance.now();
             Synth.muffle(false);
         }
 
@@ -1770,46 +1796,42 @@
             ctx.save();
             ctx.translate(gx, gy);
 
-            // Outer rotating aura
-            ctx.rotate(time * 0.5);
-            for(let i=0; i<8; i++) {
-                ctx.rotate(Math.PI / 4);
+            // 5 rainbow rays
+            ctx.rotate(time * 0.4);
+            for (let i = 0; i < 5; i++) {
+                ctx.rotate(Math.PI * 2 / 5);
                 ctx.beginPath();
                 ctx.moveTo(0, 0);
-                ctx.lineTo(cellSize * 0.15, cellSize * 0.45);
-                ctx.lineTo(-cellSize * 0.15, cellSize * 0.45);
-                
-                // Multi-coloured rays
-                const rayHue = (i * 45 + time * 100) % 360;
+                ctx.lineTo(cellSize * 0.16, cellSize * 0.72);
+                ctx.lineTo(-cellSize * 0.16, cellSize * 0.72);
+                const rayHue = (i * 72 + time * 100) % 360;
                 const alpha = 0.15 + Math.sin(time * 2) * 0.1;
                 ctx.fillStyle = `hsla(${rayHue}, 100%, 50%, ${alpha})`;
                 ctx.fill();
             }
 
-            // Counter-rotating inner complex
-            ctx.rotate(-time); 
+            // Counter-rotating star body
+            ctx.rotate(-time * 0.3);
             const pulse = (Math.sin(time * 3) + 1) / 2;
-            
-            // Draw an octagon portal core
+            const outerR = cellSize * 0.54 + pulse * cellSize * 0.04;
+            const innerR = cellSize * 0.22;
             ctx.beginPath();
-            for (let i = 0; i < 8; i++) {
-                const angle = i * Math.PI / 4;
-                const radius = cellSize * 0.3 + (i % 2 === 0 ? pulse * cellSize * 0.05 : 0);
-                const px = Math.cos(angle) * radius;
-                const py = Math.sin(angle) * radius;
+            for (let i = 0; i < 10; i++) {
+                const angle = i * Math.PI / 5 - Math.PI / 2;
+                const r = i % 2 === 0 ? outerR : innerR;
+                const px = Math.cos(angle) * r;
+                const py = Math.sin(angle) * r;
                 if (i === 0) ctx.moveTo(px, py);
                 else ctx.lineTo(px, py);
             }
             ctx.closePath();
-            
             ctx.fillStyle = '#050510';
             ctx.fill();
-            
-            const coreHue = (time * 150) % 360; // Rainbow shifting border
+            const starHue = (time * 150) % 360;
             ctx.lineWidth = 2;
-            ctx.strokeStyle = `hsl(${coreHue}, 100%, 50%)`;
-            ctx.shadowBlur = 15 + (pulse * 10);
-            ctx.shadowColor = `hsl(${coreHue}, 100%, 50%)`;
+            ctx.strokeStyle = `hsl(${starHue}, 100%, 60%)`;
+            ctx.shadowBlur = 18 + pulse * 10;
+            ctx.shadowColor = `hsl(${starHue}, 100%, 60%)`;
             ctx.stroke();
 
             // Central bright spark
@@ -1817,7 +1839,6 @@
             ctx.arc(0, 0, cellSize * 0.08, 0, Math.PI * 2);
             ctx.fillStyle = '#ffffff';
             ctx.shadowBlur = 20;
-            // Fast rainbow shadow for the core
             const sparkHue = (time * 300) % 360;
             ctx.shadowColor = `hsl(${sparkHue}, 100%, 50%)`;
             ctx.fill();
@@ -2006,6 +2027,40 @@
 
             blazers.sort((a, b) => (a.isPlayer === b.isPlayer) ? 0 : a.isPlayer ? 1 : -1);
             blazers.forEach(blazer => { blazer.update(dt); blazer.draw(); });
+
+            // Player identification labels — first game only, fade over 2 s
+            if (gameStartLabelTime !== null) {
+                const labelElapsed = now - gameStartLabelTime;
+                if (labelElapsed < 2000) {
+                    const alpha = 1 - labelElapsed / 2000;
+                    const fontSize = Math.round(cellSize * 0.55);
+                    ctx.save();
+                    ctx.font = `bold ${fontSize}px monospace`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    blazers.forEach(b => {
+                        if (b.slotIndex < 0) return;
+                        const label = `P${b.slotIndex + 1}`;
+                        const lx = b.pixelX;
+                        const ly = b.pixelY - cellSize * 0.72;
+                        ctx.globalAlpha = alpha * 0.85;
+                        ctx.lineWidth = fontSize * 0.25;
+                        ctx.strokeStyle = '#000';
+                        ctx.shadowBlur = 0;
+                        ctx.strokeText(label, lx, ly);
+                        ctx.globalAlpha = alpha;
+                        ctx.fillStyle = b.color;
+                        ctx.shadowBlur = 14;
+                        ctx.shadowColor = b.color;
+                        ctx.fillText(label, lx, ly);
+                    });
+                    ctx.globalAlpha = 1;
+                    ctx.shadowBlur = 0;
+                    ctx.restore();
+                } else {
+                    gameStartLabelTime = null;
+                }
+            }
 
             drawSmokePuffs();
 
@@ -2410,7 +2465,8 @@
         });
 
         // Start actions
-        const client = new Colyseus.Client("wss://gb-lhr-5b4d543b.colyseus.cloud");
+        let client;
+        try { client = new Colyseus.Client("wss://gb-lhr-5b4d543b.colyseus.cloud"); } catch(e) { console.warn('Colyseus unavailable (offline?):', e); }
         let room;
 
         async function setupRoom(newRoom) {
@@ -2800,6 +2856,476 @@
         });
 
         window.addEventListener('resize', resizeCanvas);
+
+        // ===== MENU MINI-GAME =====
+        (function initMenuMini() {
+            const COLS = 11, ROWS = 3;
+            let CELL = 50;
+            const canvas = document.getElementById('menu-mini-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+
+            function resizeMini() {
+                const w = (canvas.parentElement || document.body).clientWidth || window.innerWidth;
+                CELL = Math.max(30, Math.floor(w / COLS));
+                canvas.width  = COLS * CELL;
+                canvas.height = ROWS * CELL;
+            }
+            resizeMini();
+            window.addEventListener('resize', resizeMini);
+
+            const MOVE = 280; // ms per cell
+
+            // ── Maze structure ────────────────────────────────────────────────
+            class MiniCell {
+                constructor(x, y) {
+                    this.x = x; this.y = y;
+                    this.walls = { N: true, S: true, E: true, W: true };
+                }
+            }
+            let grid = [];
+
+            function openWall(x1, y1, x2, y2) {
+                const a = grid[x1][y1], b = grid[x2][y2];
+                if      (x2 > x1) { a.walls.E = false; b.walls.W = false; }
+                else if (x2 < x1) { a.walls.W = false; b.walls.E = false; }
+                else if (y2 > y1) { a.walls.S = false; b.walls.N = false; }
+                else               { a.walls.N = false; b.walls.S = false; }
+            }
+
+            function buildMaze() {
+                grid = [];
+                for (let x = 0; x < COLS; x++) {
+                    grid[x] = [];
+                    for (let y = 0; y < ROWS; y++) grid[x][y] = new MiniCell(x, y);
+                }
+                [
+                    // Main horizontal corridor (middle row)
+                    [0,1,1,1],[1,1,2,1],[2,1,3,1],[3,1,4,1],[4,1,5,1],
+                    [5,1,6,1],[6,1,7,1],[7,1,8,1],[8,1,9,1],[9,1,10,1],
+                    // Vertical branches upward
+                    [0,1,0,0],[2,1,2,0],[6,0,6,1],[7,1,7,0],[10,1,10,0],
+                    // Vertical branches downward
+                    [3,1,3,2],[6,1,6,2],[8,1,8,2],[10,1,10,2],
+                    // Top row connections
+                    [0,0,1,0],[2,0,3,0],[4,0,5,0],[5,0,6,0],[7,0,8,0],
+                    // Bottom row connections
+                    [0,2,1,2],[1,2,2,2],[3,2,4,2],[6,2,7,2],[8,2,9,2],
+                ].forEach(([x1,y1,x2,y2]) => openWall(x1,y1,x2,y2));
+            }
+
+            // Draw inner walls only — no outer border so blazers appear to enter
+            // from a larger unseen maze beyond the canvas edges.
+            function drawMiniMaze() {
+                ctx.strokeStyle = colors.wall;
+                ctx.lineWidth = 4;
+                ctx.lineCap = 'square';
+                ctx.beginPath();
+                for (let x = 0; x < COLS; x++) {
+                    for (let y = 0; y < ROWS; y++) {
+                        const c = grid[x][y];
+                        const px = x * CELL, py = y * CELL;
+                        // N wall — skip top edge (y=0)
+                        if (c.walls.N && y > 0) {
+                            ctx.moveTo(px, py); ctx.lineTo(px + CELL, py);
+                        }
+                        // W wall — skip left edge (x=0)
+                        if (c.walls.W && x > 0) {
+                            ctx.moveTo(px, py); ctx.lineTo(px, py + CELL);
+                        }
+                    }
+                }
+                ctx.stroke();
+            }
+
+            // ── Timeline constants ────────────────────────────────────────────
+            const T_PU0_PURPLE = 3 * MOVE;              // 840  — purple hits teleport-other
+            const T_PU0        = 4 * MOVE;              // 1120 — cyan gets teleported
+            const T_BACK_UP    = T_PU0_PURPLE + MOVE;   // 1120 — purple bounces back (= T_PU0)
+            const T_LEFT1      = T_BACK_UP + MOVE;      // 1400
+            const T_PU1        = T_LEFT1 + MOVE;        // 1680
+            const T_CYAN_RIGHT = T_PU1 + 400;           // 2080 — brief gap then cyan re-enters
+            const T_COLLISION  = T_CYAN_RIGHT + 5 * MOVE; // 3480
+            const T_PURPLE_TOP = T_COLLISION  - 2 * MOVE; // 2920
+            const LOOP_END     = T_COLLISION  + 500;    // 3980
+
+            // ── Keyframes ─────────────────────────────────────────────────────
+            const CYAN_KF = [
+                { t:              0, gx:  0, gy: 1, vis: true  }, // enters from left
+                { t: T_PU0_PURPLE, gx:  3, gy: 1, vis: false }, // teleported when purple hits power-up
+                { t:  T_CYAN_RIGHT, gx: 11, gy: 1, vis: true  }, // re-enters from right
+                { t:  T_COLLISION,  gx:  6, gy: 1, vis: false }, // collision two cells before star
+            ];
+
+            const PURPLE_KF = [
+                { t:            0, gx: 10, gy: 1, vis: true  }, // enters from right
+                { t:      2*MOVE, gx:  8, gy: 1, vis: true  }, // col 8 — turns down
+                { t: T_PU0_PURPLE, gx:  8, gy: 2, vis: true  }, // hits teleport-other at t=840
+                { t:    T_BACK_UP, gx:  8, gy: 1, vis: true  }, // back up at t=1120
+                { t:      T_LEFT1, gx:  7, gy: 1, vis: true  }, // left at t=1400
+                { t:        T_PU1, gx:  6, gy: 1, vis: false }, // hits teleport-self at t=1680
+                { t: T_PURPLE_TOP, gx:  6, gy: -1, vis: true }, // re-enters from top at t=2920
+                { t: T_COLLISION,  gx:  6, gy:  1, vis: false}, // collision at t=3480
+            ];
+
+            // ── State ─────────────────────────────────────────────────────────
+            let powerUps, puffs, bursts, eventsFired;
+            let cyanTrail = [], purpleTrail = [];
+            let prevCV = false, prevPV = false;
+
+            function resetLoop() {
+                powerUps = [
+                    { x: 8, y: 2, type: 'opponents', alive: true },
+                    { x: 6, y: 1, type: 'self',      alive: true },
+                ];
+                puffs = [];
+                bursts = [];
+                eventsFired = new Set();
+                cyanTrail.length = 0;
+                purpleTrail.length = 0;
+                prevCV = false;
+                prevPV = false;
+            }
+
+            // color: blazer colour; drift in grid units (optional)
+            function spawnPuff(gx, gy, color, driftX, driftY) {
+                puffs.push({
+                    fromX: gx, fromY: gy,
+                    toX: gx + (driftX || 0), toY: gy + (driftY || 0),
+                    startTime: performance.now(),
+                    color,
+                });
+            }
+
+            function checkEvents(elapsed) {
+                if (!eventsFired.has('pu0') && elapsed >= T_PU0_PURPLE) {
+                    eventsFired.add('pu0');
+                    powerUps[0].alive = false;
+                    spawnPuff(3, 1, '#00ffff');  // cyan teleported — smoke at its position
+                    bursts.push({
+                        gx: 8, gy: 2,
+                        hitColor: '#ff00ff',
+                        otherPlayers: [{ color: '#00ffff', angle: Math.atan2(1 - 2, 3 - 8) }],
+                        startTime: performance.now(),
+                    });
+                }
+                if (!eventsFired.has('pu1') && elapsed >= T_PU1) {
+                    eventsFired.add('pu1');
+                    powerUps[1].alive = false;
+                    spawnPuff(6, 1, '#ff00ff');  // purple disappears
+                }
+                if (!eventsFired.has('col') && elapsed >= T_COLLISION) {
+                    eventsFired.add('col');
+                    spawnPuff(6, 1, '#00ffff');  // cyan collision
+                    spawnPuff(6, 1, '#ff00ff');  // purple collision
+                }
+            }
+
+            // ── Position interpolation ────────────────────────────────────────
+            function interp(kf, elapsed) {
+                if (elapsed < kf[0].t) {
+                    return { px: kf[0].gx * CELL + CELL / 2, py: kf[0].gy * CELL + CELL / 2, vis: false };
+                }
+                for (let i = 0; i < kf.length - 1; i++) {
+                    const a = kf[i], b = kf[i + 1];
+                    if (elapsed >= a.t && elapsed < b.t) {
+                        const f = (elapsed - a.t) / (b.t - a.t);
+                        return {
+                            px: (a.gx + (b.gx - a.gx) * f) * CELL + CELL / 2,
+                            py: (a.gy + (b.gy - a.gy) * f) * CELL + CELL / 2,
+                            vis: a.vis,
+                        };
+                    }
+                }
+                const last = kf[kf.length - 1];
+                return { px: last.gx * CELL + CELL / 2, py: last.gy * CELL + CELL / 2, vis: last.vis };
+            }
+
+            function updateTrail(trail, pos, wasVis) {
+                if (!pos.vis) { trail.length = 0; return; }
+                if (!wasVis) trail.length = 0;
+                trail.push({ x: pos.px, y: pos.py });
+                if (trail.length > 14) trail.shift();
+            }
+
+            // ── Draw: blazer — matches main game Blazer.draw() ────────────────
+            function drawBlazer(pos, color, trail) {
+                if (!pos.vis) return;
+                const size = CELL * 0.216;
+
+                // Trail — same approach as main game
+                if (trail.length > 1) {
+                    ctx.save();
+                    ctx.lineWidth = size * 0.8;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    for (let i = 1; i < trail.length; i++) {
+                        const alpha = i / trail.length;
+                        ctx.strokeStyle = color;
+                        ctx.globalAlpha = alpha * 0.5;
+                        ctx.beginPath();
+                        ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
+                        ctx.lineTo(trail[i].x, trail[i].y);
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+                }
+
+                // Body — 3-pass bloom matching main game
+                ctx.save();
+                ctx.translate(pos.px, pos.py);
+                ctx.fillStyle = color;
+                ctx.globalAlpha = 0.75;
+                for (const blur of [80, 40, 15]) {
+                    ctx.shadowBlur = blur;
+                    ctx.shadowColor = color;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.shadowBlur = 0;
+                ctx.globalAlpha = 1;
+                ctx.restore();
+            }
+
+            // ── Draw: star goal ───────────────────────────────────────────────
+            function drawStar(elapsed) {
+                const time = elapsed / 500;
+                const pulse = (Math.sin(time * 3) + 1) / 2;
+                ctx.save();
+                ctx.translate(4 * CELL + CELL / 2, 1 * CELL + CELL / 2);
+                ctx.save();
+                ctx.rotate(time * 0.4);
+                for (let i = 0; i < 5; i++) {
+                    ctx.rotate(Math.PI * 2 / 5);
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(CELL * 0.16, CELL * 0.72);
+                    ctx.lineTo(-CELL * 0.16, CELL * 0.72);
+                    const rayHue = (i * 72 + time * 100) % 360;
+                    ctx.fillStyle = `hsla(${rayHue},100%,50%,${0.15 + Math.sin(time * 2) * 0.1})`;
+                    ctx.fill();
+                }
+                ctx.restore();
+                ctx.save();
+                ctx.rotate(-time * 0.3);
+                const outerR = CELL * 0.54 + pulse * CELL * 0.04;
+                const innerR = CELL * 0.22;
+                ctx.beginPath();
+                for (let i = 0; i < 10; i++) {
+                    const angle = i * Math.PI / 5 - Math.PI / 2;
+                    const r = i % 2 === 0 ? outerR : innerR;
+                    if (i === 0) ctx.moveTo(Math.cos(angle) * r, Math.sin(angle) * r);
+                    else ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
+                }
+                ctx.closePath();
+                ctx.fillStyle = colors.bg;
+                ctx.fill();
+                const starHue = (time * 150) % 360;
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = `hsl(${starHue},100%,60%)`;
+                ctx.shadowBlur = 18 + pulse * 10;
+                ctx.shadowColor = `hsl(${starHue},100%,60%)`;
+                ctx.stroke();
+                ctx.restore();
+                ctx.beginPath();
+                ctx.arc(0, 0, CELL * 0.07, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#ffffff';
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // ── Draw: power-ups — matches main game drawPowerUps() ────────────
+            function drawPowerUps(elapsed) {
+                const time = elapsed / 200;
+                for (const pu of powerUps) {
+                    if (!pu.alive) continue;
+                    const px = pu.x * CELL + CELL / 2;
+                    const py = pu.y * CELL + CELL / 2;
+                    ctx.save();
+                    ctx.translate(px, py);
+                    if (pu.type === 'opponents') {
+                        const segColors = ['#ff0055','#ff8800','#ffee00','#00ff22','#00ffff','#4466ff','#aa00ff','#ff00ff'];
+                        const n = segColors.length;
+                        const r = CELL * 0.3;
+                        const gapAngle = 5 / r;
+                        const sliceAngle = (Math.PI * 2) / n;
+                        const arcAngle = Math.max(0, sliceAngle - gapAngle);
+                        ctx.rotate(time);
+                        segColors.forEach((col, i) => {
+                            const startA = i * sliceAngle + gapAngle / 2;
+                            for (let pass = 0; pass < 3; pass++) {
+                                ctx.beginPath();
+                                ctx.arc(0, 0, r, startA, startA + arcAngle);
+                                ctx.lineWidth = 2;
+                                ctx.strokeStyle = col;
+                                ctx.shadowBlur = [60, 30, 12][pass];
+                                ctx.shadowColor = col;
+                                ctx.stroke();
+                            }
+                            ctx.shadowBlur = 0;
+                        });
+                    } else {
+                        // Dashed white circle — matches main game self power-up
+                        ctx.rotate(-time);
+                        ctx.beginPath();
+                        ctx.arc(0, 0, CELL * 0.3, 0, Math.PI * 2);
+                        ctx.fillStyle = colors.bg;
+                        ctx.fill();
+                        ctx.lineWidth = 2;
+                        ctx.strokeStyle = colors.powerupSelf;
+                        ctx.setLineDash([5, 5]);
+                        ctx.shadowBlur = 10;
+                        ctx.shadowColor = colors.powerupSelf;
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+                    }
+                    ctx.restore();
+                }
+            }
+
+            // ── Draw: smoke puffs — matches main game drawSmokePuffs() ────────
+            const CLOUD_OFFSETS = [
+                { dx:  0.00, dy:  0.00, rs: 1.00 },
+                { dx:  0.45, dy: -0.30, rs: 0.72 },
+                { dx: -0.40, dy: -0.25, rs: 0.68 },
+                { dx:  0.20, dy:  0.42, rs: 0.65 },
+                { dx: -0.30, dy:  0.38, rs: 0.60 },
+                { dx:  0.05, dy: -0.50, rs: 0.55 },
+            ];
+
+            function drawPuffs(now) {
+                const PUFF_MS = 1000;
+                puffs = puffs.filter(puff => {
+                    const progress = Math.min((now - puff.startTime) / PUFF_MS, 1);
+                    if (progress >= 1) return false;
+                    const fromPx = puff.fromX * CELL + CELL / 2;
+                    const fromPy = puff.fromY * CELL + CELL / 2;
+                    const toPx   = puff.toX   * CELL + CELL / 2;
+                    const toPy   = puff.toY   * CELL + CELL / 2;
+                    const cx = fromPx + (toPx - fromPx) * progress * 0.28;
+                    const cy = fromPy + (toPy - fromPy) * progress * 0.28;
+                    const puffR = CELL * (0.22 + progress * 0.38);
+                    const alpha = (1 - progress) * 0.38;
+                    CLOUD_OFFSETS.forEach(o => {
+                        ctx.beginPath();
+                        ctx.arc(cx + o.dx * puffR * 1.3, cy + o.dy * puffR * 1.3, puffR * o.rs, 0, Math.PI * 2);
+                        ctx.fillStyle = puff.color;
+                        ctx.globalAlpha = alpha;
+                        ctx.shadowBlur = 18;
+                        ctx.shadowColor = puff.color;
+                        ctx.fill();
+                        ctx.shadowBlur = 0;
+                    });
+                    ctx.globalAlpha = 1;
+                    return true;
+                });
+            }
+
+            // ── Draw: power-up burst — matches main game powerUpBursts ───────────
+            function drawBursts(now) {
+                const BURST_MS = 600;
+                bursts = bursts.filter(burst => {
+                    const progress = Math.min((now - burst.startTime) / BURST_MS, 1);
+                    if (progress >= 1) return false;
+                    const px = burst.gx * CELL + CELL / 2;
+                    const py = burst.gy * CELL + CELL / 2;
+                    const radius = CELL * 0.32;
+                    ctx.save();
+                    ctx.translate(px, py);
+                    // Collector colour: flashes instantly then fades
+                    const fillAlpha = progress < 0.1 ? 1 : Math.max(0, 1 - (progress - 0.1) / 0.9);
+                    ctx.globalAlpha = fillAlpha;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                    ctx.fillStyle = burst.hitColor;
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = burst.hitColor;
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                    // Wedge pieces fly toward each affected player
+                    const maxDist = CELL * 2.8;
+                    burst.otherPlayers.forEach(p => {
+                        const dist = progress * maxDist;
+                        ctx.globalAlpha = Math.max(0, 1 - progress);
+                        ctx.save();
+                        ctx.translate(Math.cos(p.angle) * dist, Math.sin(p.angle) * dist);
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0);
+                        const spread = Math.PI / 6;
+                        ctx.arc(0, 0, radius, p.angle - spread, p.angle + spread);
+                        ctx.closePath();
+                        ctx.fillStyle = p.color;
+                        ctx.shadowBlur = 20;
+                        ctx.shadowColor = p.color;
+                        ctx.fill();
+                        ctx.shadowBlur = 0;
+                        ctx.restore();
+                    });
+                    ctx.globalAlpha = 1;
+                    ctx.restore();
+                    return true;
+                });
+            }
+
+            // ── Main loop ─────────────────────────────────────────────────────
+            let startTime = null;
+
+            function miniLoop(now) {
+                requestAnimationFrame(miniLoop);
+
+                const menuEl = document.getElementById('initial-menu');
+                if (!menuEl || menuEl.classList.contains('hidden')) {
+                    startTime = null;
+                    return;
+                }
+
+                if (startTime === null) { startTime = now; resetLoop(); }
+                const elapsed = now - startTime;
+
+                if (elapsed >= LOOP_END) { startTime = null; return; }
+
+                checkEvents(elapsed);
+
+                const cPos = interp(CYAN_KF,   elapsed);
+                const pPos = interp(PURPLE_KF, elapsed);
+
+                updateTrail(cyanTrail,   cPos, prevCV);
+                updateTrail(purpleTrail, pPos, prevPV);
+                prevCV = cPos.vis;
+                prevPV = pPos.vis;
+
+                ctx.fillStyle = colors.bg;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                drawMiniMaze();
+                drawPowerUps(elapsed);
+                drawStar(elapsed);
+                drawBlazer(cPos, '#00ffff', cyanTrail);
+                drawBlazer(pPos, '#ff00ff', purpleTrail);
+                drawPuffs(now);
+                drawBursts(now);
+            }
+
+            buildMaze();
+            requestAnimationFrame(miniLoop);
+        })();
+        // ===== END MENU MINI-GAME =====
+
+        // Animate scoreboard win-column star icons to match the in-game star colour cycling
+        (function animateGoalStars() {
+            function tick() {
+                const hue = (performance.now() * 150 / 500) % 360;
+                const col = `hsl(${hue},100%,60%)`;
+                document.querySelectorAll('.goal-star-poly').forEach(el => {
+                    el.style.stroke = col;
+                });
+                requestAnimationFrame(tick);
+            }
+            requestAnimationFrame(tick);
+        })();
 
         window.onload = () => {
             buildLobby();
