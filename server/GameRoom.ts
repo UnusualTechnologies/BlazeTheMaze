@@ -480,22 +480,27 @@ export class GameRoom extends Room<{ state: GameState }> {
         const puSelf   = options.puSelf   !== undefined ? Number(options.puSelf)   : 10;
         const puRocket = options.puRocket !== undefined ? Number(options.puRocket) : 0;
 
+        const totalCells = this.cols * this.rows;
         const spawn = (count: number, type: string) => {
             if (isNaN(count) || count <= 0) return;
-            for (let i = 0; i < count; i++) {
-                const pu = new PowerUp();
-                let x: number, y: number;
-                do {
-                    x = Math.floor(Math.random() * this.cols);
-                    y = Math.floor(Math.random() * this.rows);
-                } while (
-                    this.isReservedCell(x, y) ||
-                    this.state.powerUps.some((pu: PowerUp) => pu.x === x && pu.y === y)
-                );
-                pu.x = x;
-                pu.y = y;
-                pu.type = type;
-                this.state.powerUps.push(pu);
+            const maxAttempts = totalCells * 4;
+            let placed = 0;
+            let attempts = 0;
+            while (placed < count && attempts < maxAttempts) {
+                attempts++;
+                const x = Math.floor(Math.random() * this.cols);
+                const y = Math.floor(Math.random() * this.rows);
+                if (
+                    !this.isReservedCell(x, y) &&
+                    !this.state.powerUps.some((pu: PowerUp) => pu.x === x && pu.y === y)
+                ) {
+                    const pu = new PowerUp();
+                    pu.x = x;
+                    pu.y = y;
+                    pu.type = type;
+                    this.state.powerUps.push(pu);
+                    placed++;
+                }
             }
         };
 
@@ -642,15 +647,21 @@ export class GameRoom extends Room<{ state: GameState }> {
 
     teleportPlayer(player: Player) {
         const startX = player.x, startY = player.y;
-        let x: number, y: number;
+        let x = startX, y = startY;
+        const maxAttempts = this.cols * this.rows * 4;
+        let attempts = 0;
         do {
             x = Math.floor(Math.random() * this.cols);
             y = Math.floor(Math.random() * this.rows);
+            attempts++;
         } while (
-            (x === startX && y === startY) ||
-            this.isReservedCell(x, y) ||
-            this.state.powerUps.some((pu: PowerUp) => pu.x === x && pu.y === y) ||
-            [...this.state.players.values()].some((p: Player) => p.x === x && p.y === y)
+            attempts < maxAttempts &&
+            (
+                (x === startX && y === startY) ||
+                this.isReservedCell(x, y) ||
+                this.state.powerUps.some((pu: PowerUp) => pu.x === x && pu.y === y) ||
+                [...this.state.players.values()].some((p: Player) => p.x === x && p.y === y)
+            )
         );
         player.x = x;
         player.y = y;
