@@ -614,7 +614,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.12</div>
+    <div id="version-number">v1.5.13</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -690,9 +690,10 @@
                 
                 <!-- Match Settings Toggle -->
                 <div class="lobby-settings-panel">
-                    <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                         <label for="grid-size-input" style="font-size: 1.2rem;">Grid Size:</label>
                         <input type="number" id="grid-size-input" value="20" min="5" max="100" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
+                        <span id="grid-size-hint" style="font-size: 0.85rem; color: #ff6666; display: none;"></span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <label for="pu-opp-input" style="font-size: 1.2rem;">Orbs (Teleport Others):</label>
@@ -804,6 +805,7 @@
         // Buttons & Text
         const inGameMenuBtn = document.getElementById('in-game-menu-btn');
         const gridSizeInput = document.getElementById('grid-size-input');
+        const gridSizeHint = document.getElementById('grid-size-hint');
         const totalEntitiesInput = document.getElementById('total-entities-input');
         
         const quickStartBtn = document.getElementById('quick-start-btn');
@@ -837,6 +839,7 @@
         let localControlScheme = 'WASD'; // captured from lobby before connecting
         let localSlotSchemes = {}; // slotIndex → controlScheme for secondary local (co-op) slots
         let gameState = 'MENU'; // MENU, PLAYING, ROUND_OVER_COUNTDOWN, MATCH_OVER, INITIALIZING
+        let joiningViaCode = false; // true when joining via friend code — triggers maze compat check
         let animationId;
         let lastTime = 0;
         let screenShake = 0;
@@ -1488,6 +1491,28 @@
             }
         }
 
+        const MIN_CELL_SIZE = 8;  // px — below this cells are too small to navigate
+        const MAX_CELL_SIZE = 80; // px — above this cells are too large / wasteful
+
+        function getMazeLimits() {
+            const size = Math.min(gameContainer.clientWidth, gameContainer.clientHeight);
+            if (size <= 0) return { min: 3, max: 999 }; // container not laid out yet — allow anything
+            return {
+                min: Math.max(3, Math.ceil(size / MAX_CELL_SIZE)),
+                max: Math.floor(size / MIN_CELL_SIZE)
+            };
+        }
+
+        function updateGridSizeInputLimits() {
+            const { min, max } = getMazeLimits();
+            gridSizeInput.min = min;
+            gridSizeInput.max = max;
+            const current = parseInt(gridSizeInput.value, 10);
+            if (current < min) gridSizeInput.value = min;
+            else if (current > max) gridSizeInput.value = max;
+            gridSizeHint.style.display = 'none';
+        }
+
         function resizeCanvas() {
             let size = Math.min(gameContainer.clientWidth, gameContainer.clientHeight);
             width = size;
@@ -2038,21 +2063,38 @@
                     ctx.font = `bold ${fontSize}px monospace`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
+                    const schemeNames = { WASD: 'WASD', TFGH: 'TFGH', IJKL: 'IJKL', Arrows: 'Arrow Keys', Numpad: 'Numpad (8456)', TouchMouse: 'Touch / Mouse' };
                     blazers.forEach(b => {
-                        if (b.slotIndex < 0) return;
-                        const label = `P${b.slotIndex + 1}`;
+                        if (!b.isLocal) return;
+                        const rawLabel = schemeNames[b.controlScheme] ||
+                            (b.controlScheme || '?').replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
+                        // Split by spaces; "/" merges onto the preceding word's line
+                        const tokens = rawLabel.split(' ');
+                        const lines = [];
+                        for (const tok of tokens) {
+                            if (tok === '/' && lines.length > 0) lines[lines.length - 1] += ' /';
+                            else lines.push(tok);
+                        }
+                        const lineH = fontSize * 1.3;
                         const lx = b.pixelX;
-                        const ly = b.pixelY - cellSize * 0.72;
-                        ctx.globalAlpha = alpha * 0.85;
-                        ctx.lineWidth = fontSize * 0.25;
-                        ctx.strokeStyle = '#000';
-                        ctx.shadowBlur = 0;
-                        ctx.strokeText(label, lx, ly);
-                        ctx.globalAlpha = alpha;
-                        ctx.fillStyle = b.color;
-                        ctx.shadowBlur = 14;
-                        ctx.shadowColor = b.color;
-                        ctx.fillText(label, lx, ly);
+                        const goBelow = (b.pixelY - cellSize * 0.72) < fontSize;
+                        const blockCenter = goBelow ? b.pixelY + cellSize * 0.72 : b.pixelY - cellSize * 0.72;
+                        const ly0 = blockCenter - (lines.length - 1) * lineH / 2;
+                        lines.forEach((line, i) => {
+                            const ly = ly0 + i * lineH;
+                            const tw = ctx.measureText(line).width;
+                            const clampedLx = Math.max(tw / 2, Math.min(width - tw / 2, lx));
+                            ctx.globalAlpha = alpha * 0.85;
+                            ctx.lineWidth = fontSize * 0.25;
+                            ctx.strokeStyle = '#000';
+                            ctx.shadowBlur = 0;
+                            ctx.strokeText(line, clampedLx, ly);
+                            ctx.globalAlpha = alpha;
+                            ctx.fillStyle = b.color;
+                            ctx.shadowBlur = 14;
+                            ctx.shadowColor = b.color;
+                            ctx.fillText(line, clampedLx, ly);
+                        });
                     });
                     ctx.globalAlpha = 1;
                     ctx.shadowBlur = 0;
@@ -2473,6 +2515,10 @@
             room = newRoom;
             console.log("Joined room:", room.roomId, "SessionID:", room.sessionId);
 
+            const isCodeJoin = joiningViaCode;
+            joiningViaCode = false;
+            let gridCompatChecked = false;
+
             // Update HUD to show the actual room code
             document.querySelectorAll('.display-friend-code').forEach(el => el.innerText = room.roomId);
 
@@ -2485,13 +2531,23 @@
             room.onStateChange((state) => {
                 // Update timer from server
                 timerElement.innerText = formatTime(state.timer * 1000);
-                
+
                 // Update goal
                 goal.x = state.goalX;
                 goal.y = state.goalY;
 
                 // Sync Maze Grid
                 if (state.grid && state.grid.length > 0) {
+                    if (isCodeJoin && !gridCompatChecked) {
+                        gridCompatChecked = true;
+                        const { min, max } = getMazeLimits();
+                        if (state.cols < min || state.cols > max) {
+                            const reason = state.cols < min ? 'too small' : 'too big';
+                            returnToMenu();
+                            alert(`This game's maze is ${reason} for your screen to handle.`);
+                            return;
+                        }
+                    }
                     cols = state.cols;
                     rows = state.rows;
                     grid = [];
@@ -2709,16 +2765,37 @@
             });
         }
 
+        function withTimeout(promise, ms) {
+            return Promise.race([
+                promise,
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timed out')), ms))
+            ]);
+        }
+
+        function setButtonLoading(btn, loading) {
+            if (loading) {
+                btn.dataset.origText = btn.textContent;
+                btn.textContent = 'Connecting...';
+                btn.disabled = true;
+            } else {
+                btn.textContent = btn.dataset.origText || btn.textContent;
+                btn.disabled = false;
+            }
+        }
+
         quickStartBtn.addEventListener('click', async () => {
             Synth.init();
             Synth.startMusic();
             if (Synth.ctx.state === 'suspended') Synth.ctx.resume();
 
             blazers = [];
+            setButtonLoading(quickStartBtn, true);
             try {
+                if (!client) throw new Error('Colyseus client not initialised — check your connection.');
                 // Build settings from the lobby UI so Quick Start respects the player's configured slots
                 const settings = {
                     cols: parseInt(document.getElementById('grid-size-input').value, 10) || 20,
+                    rows: parseInt(document.getElementById('grid-size-input').value, 10) || 20,
                     puOpp: parseInt(document.getElementById('pu-opp-input').value, 10) || 10,
                     puSelf: parseInt(document.getElementById('pu-self-input').value, 10) || 10,
                     slots: lobbySlots.map(s => ({
@@ -2737,7 +2814,7 @@
                 localSlotSchemes = {};
                 lobbySlots.forEach((s, i) => { if (s.typeSelect.value === 'local') localSlotSchemes[i] = s.controlSelect.value; });
 
-                const newRoom = await client.joinOrCreate("game", settings);
+                const newRoom = await withTimeout(client.joinOrCreate("game", settings), 10000);
 
                 // Wait a tiny bit to ensure sessionId is ready
                 if (!newRoom.sessionId) {
@@ -2747,27 +2824,33 @@
                 setupRoom(newRoom);
             } catch (e) {
                 console.error("Could not join/create room", e);
-                alert("Could not connect to server. Is it running?");
+                setButtonLoading(quickStartBtn, false);
+                alert("Could not connect to server: " + e.message);
             }
         });
 
         joinFriendBtn.addEventListener('click', async () => {
             if (joinCodeInput.value.length < 3) return;
-            Synth.init(); 
+            Synth.init();
             Synth.startMusic();
             if (Synth.ctx.state === 'suspended') Synth.ctx.resume();
 
             blazers = [];
+            setButtonLoading(joinFriendBtn, true);
             try {
+                if (!client) throw new Error('Colyseus client not initialised — check your connection.');
                 const localSlot = lobbySlots.find(s => s.typeSelect.value === 'local');
                 localControlScheme = localSlot ? localSlot.controlSelect.value : 'WASD';
                 localSlotSchemes = {}; // joining someone else's room — no secondary locals
 
-                const newRoom = await client.joinById(joinCodeInput.value, { joinedViaCode: true });
+                joiningViaCode = true;
+                const newRoom = await withTimeout(client.joinById(joinCodeInput.value, { joinedViaCode: true }), 10000);
                 setupRoom(newRoom);
             } catch (e) {
+                joiningViaCode = false;
+                setButtonLoading(joinFriendBtn, false);
                 console.error("Could not join room", e);
-                if (e.message.toLowerCase().includes("not found")) {
+                if (e.message?.toLowerCase().includes("not found")) {
                     alert("Room not found. Please check the code and ensure it matches exactly (Case Sensitive).");
                 } else if (e.message === "ROOM_FULL") {
                     alert("This room is currently full.");
@@ -2776,19 +2859,21 @@
                 } else {
                     alert("An error occurred while joining the room: " + e.message);
                 }
-                // Stop initialization on failure
             }
         });
 
         startBtn.addEventListener('click', async () => {
-            Synth.init(); 
+            Synth.init();
             Synth.startMusic();
             if (Synth.ctx.state === 'suspended') Synth.ctx.resume();
-            
+
             blazers = [];
+            setButtonLoading(startBtn, true);
             try {
+                if (!client) throw new Error('Colyseus client not initialised — check your connection.');
                 const settings = {
                     cols: parseInt(document.getElementById('grid-size-input').value, 10),
+                    rows: parseInt(document.getElementById('grid-size-input').value, 10),
                     puOpp: parseInt(document.getElementById('pu-opp-input').value, 10),
                     puSelf: parseInt(document.getElementById('pu-self-input').value, 10),
                     slots: lobbySlots.map(s => ({
@@ -2809,11 +2894,12 @@
                 localSlotSchemes = {};
                 lobbySlots.forEach((s, i) => { if (s.typeSelect.value === 'local') localSlotSchemes[i] = s.controlSelect.value; });
 
-                const newRoom = await client.create("game", settings);
+                const newRoom = await withTimeout(client.create("game", settings), 10000);
                 setupRoom(newRoom);
             } catch (e) {
                 console.error("Could not create custom room", e);
-                alert("Could not connect to server. Is it running?");
+                setButtonLoading(startBtn, false);
+                alert("Could not connect to server: " + e.message);
             }
         });
 
@@ -2837,9 +2923,11 @@
                 const localSlot = lobbySlots.find(s => s.typeSelect.value === 'local');
                 localControlScheme = localSlot ? localSlot.controlSelect.value : 'WASD';
                 localSlotSchemes = {}; // rejoining — no secondary locals
+                joiningViaCode = true;
                 const newRoom = await client.joinById(code, { joinedViaCode: true });
                 setupRoom(newRoom);
             } catch (e) {
+                joiningViaCode = false;
                 console.error("Play Again failed:", e);
                 if (e.message?.toLowerCase().includes("not found")) {
                     alert("That room is no longer active. Start a new game from the main menu.");
@@ -2855,7 +2943,7 @@
             returnToMenu();
         });
 
-        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('resize', () => { resizeCanvas(); updateGridSizeInputLimits(); });
 
         // ===== MENU MINI-GAME =====
         (function initMenuMini() {
@@ -3331,10 +3419,24 @@
             buildLobby();
             generateMaze();
             resizeCanvas();
+            updateGridSizeInputLimits();
+
+            gridSizeInput.addEventListener('change', () => {
+                const { min, max } = getMazeLimits();
+                const val = parseInt(gridSizeInput.value, 10);
+                if (isNaN(val) || val < min) {
+                    gridSizeInput.value = min;
+                    gridSizeHint.textContent = `Min for your screen: ${min}`;
+                    gridSizeHint.style.display = 'inline';
+                } else if (val > max) {
+                    gridSizeInput.value = max;
+                    gridSizeHint.textContent = `Max for your screen: ${max}`;
+                    gridSizeHint.style.display = 'inline';
+                } else {
+                    gridSizeHint.style.display = 'none';
+                }
+            });
         };
-    </script>
-</body>
-</html>
     </script>
 </body>
 </html>
