@@ -391,74 +391,223 @@
             pointer-events: none;
         }
 
+        #audio-controls {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            z-index: 200;
+            display: flex;
+            gap: 8px;
+        }
+
+        .audio-btn {
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            border: 1px solid rgba(0, 255, 255, 0.4);
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.65);
+            color: #00ffff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            transition: color 0.2s, border-color 0.2s, box-shadow 0.2s;
+            box-shadow: 0 0 8px rgba(0, 255, 255, 0.2);
+        }
+
+        .audio-btn:hover {
+            box-shadow: 0 0 16px rgba(0, 255, 255, 0.5);
+        }
+
+        .audio-btn svg.icon {
+            width: 22px;
+            height: 22px;
+            fill: currentColor;
+        }
+
+        .audio-btn .slash {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .audio-btn.muted {
+            color: #555;
+            border-color: rgba(80, 80, 80, 0.4);
+            box-shadow: none;
+        }
+
+        .audio-btn.muted .slash {
+            display: block;
+        }
+
+        /* D-pad (mobile only) */
+        #mobile-dpad {
+            display: none;
+        }
+
+        .dpad-btn {
+            background: rgba(0, 255, 255, 0.08);
+            border: 1px solid rgba(0, 255, 255, 0.35);
+            border-radius: 8px;
+            color: #0ff;
+            font-size: 1rem;
+            cursor: pointer;
+            touch-action: none;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .dpad-btn:active {
+            background: rgba(0, 255, 255, 0.25);
+            border-color: rgba(0, 255, 255, 0.7);
+        }
+
+        .dpad-center {
+            /* empty center cell in the cross */
+        }
+
+        /* Mobile-only elements (hidden on desktop) */
+        #mobile-friend-code {
+            display: none;
+        }
+
         /* Mobile / Portrait Viewport adjustments */
         @media (max-width: 900px), (max-aspect-ratio: 1/1) {
             h1 { font-size: 2rem; }
             #slots-container { grid-template-columns: 1fr; }
-            
+
+            /* Switch to CSS grid so we can span canvas across both cols
+               and place audio/dpad/hud independently without nesting issues */
             #main-wrapper {
-                flex-direction: column;
-                gap: 15px;
+                display: grid;
+                grid-template-areas:
+                    "canvas  canvas"
+                    "audio   hud   "
+                    "fcode   hud   "
+                    "dpad    hud   ";
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: auto auto auto auto;
+                align-content: start;   /* start from top — fixes vertical clip */
+                justify-items: stretch;
+                gap: 8px;
+                padding: 10px;
+                /* keep width/height from desktop */
             }
 
-            #hud {
-                flex-direction: row;
-                flex-wrap: wrap; /* allow natural wrapping on small screens */
+            /* Canvas row — centred square spanning both columns */
+            #game-container {
+                grid-area: canvas;
+                justify-self: center;
                 width: 100%;
                 max-width: 85vmin;
-                justify-content: space-between;
-                align-items: center;
+                max-height: 85vmin;
                 height: auto;
+            }
+
+            /* Left col — audio controls (always visible, not inside .hidden hud) */
+            #audio-controls {
+                grid-area: audio;
+                position: static;   /* override position:fixed on desktop */
+                display: flex;
+                gap: 8px;
+                align-self: start;
+            }
+
+            /* Left col — friend code (mobile copy, synced via querySelectorAll) */
+            #mobile-friend-code {
+                display: block;
+                grid-area: fcode;
+                font-family: monospace;
+                font-size: 0.85rem;
+                background: rgba(0,0,0,0.5);
+                padding: 8px;
+                border-radius: 8px;
+                border: 1px solid rgba(255,255,255,0.1);
+                color: rgba(255,255,255,0.7);
+                align-self: start;
+            }
+
+            /* Left col — d-pad */
+            #mobile-dpad {
+                display: grid;
+                grid-area: dpad;
+                grid-template-columns: repeat(3, 46px);
+                grid-template-rows: repeat(3, 46px);
+                gap: 4px;
+                align-self: start;
+            }
+
+            #dpad-up    { grid-column: 2; grid-row: 1; }
+            #dpad-left  { grid-column: 1; grid-row: 2; }
+            .dpad-center { grid-column: 2; grid-row: 2; }
+            #dpad-right { grid-column: 3; grid-row: 2; }
+            #dpad-down  { grid-column: 2; grid-row: 3; }
+
+            /* Right col — HUD spans all three right rows */
+            #hud {
+                grid-area: hud;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                width: 100%;
+                height: auto;
+                max-width: unset;
                 padding: 0;
-                gap: 10px;
+                align-items: stretch;
+                align-self: start;
+            }
+
+            /* Hide the desktop friend-code inside #hud on mobile
+               (shown via #mobile-friend-code in left col instead) */
+            #friend-code-hud {
+                display: none;
             }
 
             .hud-buttons {
-                width: auto !important;
+                width: 100% !important;
                 margin-bottom: 0 !important;
+                display: flex !important;
             }
 
-            #in-game-menu-btn, #in-game-restart-btn, #in-game-mute-btn {
-                width: auto !important;
+            #in-game-menu-btn {
+                width: 100% !important;
                 padding: 8px 15px !important;
                 font-size: 0.9rem !important;
                 margin: 0 !important;
-                flex: none !important;
+                flex: 1 !important;
             }
 
-            #timer { 
-                font-size: 1.8rem; 
+            #timer {
+                font-size: 1.8rem;
             }
 
-            #scoreboard, #friend-code-hud { 
-                text-align: right; 
-                width: 48%; /* Split space half and half to sit nicely together */
-                padding: 10px;
-                font-size: 0.9rem;
-            }
-            #friend-code-hud {
-                text-align: left; /* Keep left alignment for text inside */
-            }
-
-            #game-container {
+            #scoreboard {
                 width: 100%;
-                height: auto;
-                max-width: 85vmin;
-                max-height: 85vmin;
+                font-size: 0.85rem;
+                padding: 8px;
+                flex: 1;
             }
         }
     </style>
 </head>
 <body>
 
-    <div id="version-number">v1.1.1</div>
+    <div id="version-number">v1.1.2</div>
 
     <div id="main-wrapper">
         <div id="hud" class="hidden">
             <div class="hud-buttons">
                 <button class="action-btn secondary-btn" id="in-game-menu-btn" style="padding: 10px; font-size: 0.9rem; flex: 1; margin: 0;">Menu</button>
-                <button class="action-btn tertiary-btn" id="in-game-restart-btn" style="padding: 10px; font-size: 0.9rem; flex: 1; margin: 0;">Restart</button>
-                <button class="action-btn" id="in-game-mute-btn" style="padding: 10px; font-size: 0.9rem; flex: 1; margin: 0; background: #ff9900; box-shadow: 0 0 20px #ff9900; color: #000;">Mute</button>
             </div>
             <div id="timer">00:00.000</div>
             <div id="scoreboard"></div>
@@ -537,35 +686,56 @@
                 </div>
             </div>
         </div>
+
+        <!-- These three are siblings of #hud and #game-container so they are never
+             affected by the opacity:0 .hidden class applied to #hud. -->
+        <div id="audio-controls">
+            <button class="audio-btn muted" id="music-btn" title="Toggle Music">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg>
+                <svg class="slash" viewBox="0 0 40 40"><line x1="31" y1="7" x2="9" y2="33" stroke="#ff4444" stroke-width="2.5" stroke-linecap="round"/></svg>
+            </button>
+            <button class="audio-btn muted" id="sfx-btn" title="Toggle Sound Effects">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+                <svg class="slash" viewBox="0 0 40 40"><line x1="31" y1="7" x2="9" y2="33" stroke="#ff4444" stroke-width="2.5" stroke-linecap="round"/></svg>
+            </button>
+        </div>
+        <div id="mobile-friend-code">Code: <span class="display-friend-code" style="color: #00ffff; font-weight: bold;"></span></div>
+        <div id="mobile-dpad">
+            <button class="dpad-btn" id="dpad-up">▲</button>
+            <button class="dpad-btn" id="dpad-left">◄</button>
+            <div class="dpad-center"></div>
+            <button class="dpad-btn" id="dpad-right">►</button>
+            <button class="dpad-btn" id="dpad-down">▼</button>
+        </div>
     </div>
-    
+
     <div id="controls-hint">Desktop: Assigned Keys | Mobile: Swipe</div>
 
     <script>
         // --- BULLETPROOF AUDIO SYSTEM ---
         const Synth = {
             ctx: { state: 'running', resume: () => {} }, // Keep dummy for legacy UI code
-            isMuted: true,
+            isMusicMuted: true,
+            isSfxMuted: true,
             bgMusic: new Audio('./assets/audio/music.ogg'),
             init() {
                 this.bgMusic.loop = true;
                 this.bgMusic.volume = 0.4;
-                // Silently catch missing music files so the game doesn't crash on load
                 this.bgMusic.onerror = () => { console.log('Music file missing or failed to load. Running silently.'); };
-                
-                // Initialize UI state
-                const muteBtn = document.getElementById('in-game-mute-btn');
-                if (muteBtn) {
-                    muteBtn.innerText = "Unmute";
-                    muteBtn.classList.add('muted');
-                }
+                this._syncButtons();
+            },
+            _syncButtons() {
+                const musicBtn = document.getElementById('music-btn');
+                const sfxBtn = document.getElementById('sfx-btn');
+                if (musicBtn) musicBtn.classList.toggle('muted', this.isMusicMuted);
+                if (sfxBtn) sfxBtn.classList.toggle('muted', this.isSfxMuted);
             },
             playSound(filename) {
-                if (this.isMuted) return;
+                if (this.isSfxMuted) return;
                 const audio = new Audio('./assets/audio/' + filename);
                 audio.volume = 0.6;
-                audio.onerror = () => {}; // Silently catch missing SFX files
-                audio.play().catch(() => {}); // Catch missing file promise rejections
+                audio.onerror = () => {};
+                audio.play().catch(() => {});
             },
             turn(isPlayer) { if (isPlayer) this.playSound('turn.ogg'); },
             bonk(isPlayer) { if (isPlayer) this.playSound('bonk.ogg'); },
@@ -574,21 +744,25 @@
             glitch() { this.playSound('glitch.ogg'); },
             win() { this.playSound('win.ogg'); },
             startMusic() {
-                if (!this.isMuted) {
+                if (!this.isMusicMuted) {
                     this.bgMusic.play().catch(() => {});
                 }
             },
             muffle(isMuffled) {
                 this.bgMusic.volume = isMuffled ? 0.15 : 0.4;
             },
-            toggleMute() {
-                this.isMuted = !this.isMuted;
-                if (this.isMuted) {
+            toggleMusic() {
+                this.isMusicMuted = !this.isMusicMuted;
+                if (this.isMusicMuted) {
                     this.bgMusic.pause();
                 } else {
                     this.bgMusic.play().catch(() => {});
                 }
-                return this.isMuted;
+                this._syncButtons();
+            },
+            toggleSfx() {
+                this.isSfxMuted = !this.isSfxMuted;
+                this._syncButtons();
             }
         };
         // --- END AUDIO SYSTEM ---
@@ -606,8 +780,8 @@
         
         // Buttons & Text
         const inGameMenuBtn = document.getElementById('in-game-menu-btn');
-        const inGameRestartBtn = document.getElementById('in-game-restart-btn');
-        const inGameMuteBtn = document.getElementById('in-game-mute-btn');
+        const musicBtn = document.getElementById('music-btn');
+        const sfxBtn = document.getElementById('sfx-btn');
         const gridSizeInput = document.getElementById('grid-size-input');
         const totalEntitiesInput = document.getElementById('total-entities-input');
         
@@ -927,6 +1101,36 @@
             }
         }
         
+        class TrailParticle {
+            constructor(x, y, color, bugSize) {
+                this.x = x + (Math.random() - 0.5) * bugSize * 0.8;
+                this.y = y + (Math.random() - 0.5) * bugSize * 0.8;
+                this.color = color;
+                this.life = 0.6 + Math.random() * 0.4;
+                this.decay = 0.05 + Math.random() * 0.04;
+                this.size = bugSize * (0.08 + Math.random() * 0.18);
+                this.vx = (Math.random() - 0.5) * 0.4;
+                this.vy = (Math.random() - 0.5) * 0.4;
+            }
+            update(dt) {
+                this.x += this.vx * (dt * 0.05);
+                this.y += this.vy * (dt * 0.05);
+                this.life -= this.decay * (dt * 0.05);
+                return this.life > 0;
+            }
+            draw() {
+                ctx.globalAlpha = Math.max(0, this.life * 0.85);
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+                ctx.shadowBlur = 0;
+            }
+        }
+
         class Rocket {
             constructor(x, y, color, ownerBug) {
                 this.gridX = x;
@@ -1041,6 +1245,17 @@
                 this.trail = [];
                 this.maxTrail = 25;
                 this.moveTimer = 0;
+                this.lastTrailParticleX = 0;
+                this.lastTrailParticleY = 0;
+
+                // Stable per-bug particle dot offsets for body rendering
+                this.particleOffsets = [];
+                for (let i = 0; i < 9; i++) {
+                    const a = (i / 9) * Math.PI * 2 + (Math.random() - 0.5) * 0.6;
+                    const r = 0.45 + Math.random() * 0.55;
+                    const s = 0.12 + Math.random() * 0.18;
+                    this.particleOffsets.push({ a, r, s, phase: Math.random() * Math.PI * 2 });
+                }
                 
                 // Parse AI settings
                 if (!this.isPlayer) {
@@ -1296,6 +1511,17 @@
                 this.trail.push({ x: this.pixelX, y: this.pixelY });
                 if (this.trail.length > this.maxTrail) this.trail.shift();
 
+                // Spawn trail particles spaced by movement distance
+                const tdx = this.pixelX - this.lastTrailParticleX;
+                const tdy = this.pixelY - this.lastTrailParticleY;
+                const bugSize = cellSize * 0.30;
+                if (tdx * tdx + tdy * tdy > (cellSize * 0.07) * (cellSize * 0.07)) {
+                    particles.push(new TrailParticle(this.pixelX, this.pixelY, this.color, bugSize));
+                    if (Math.random() < 0.6) particles.push(new TrailParticle(this.pixelX, this.pixelY, this.color, bugSize));
+                    this.lastTrailParticleX = this.pixelX;
+                    this.lastTrailParticleY = this.pixelY;
+                }
+
                 if (!this.isPlayer && gameState === 'PLAYING' && this.state === 'normal') {
                     this.moveTimer += dt;
                     if (this.moveTimer >= this.moveCooldown) {
@@ -1396,30 +1622,13 @@
             }
 
             draw() {
-                const size = cellSize * 0.4;
-                
-                // Trail
-                ctx.lineWidth = size * 0.8;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                
-                if (this.trail.length > 1) {
-                    ctx.save();
-                    for (let i = 1; i < this.trail.length; i++) {
-                        const alpha = i / this.trail.length;
-                        ctx.strokeStyle = this.color;
-                        ctx.globalAlpha = alpha * 0.5;
-                        ctx.beginPath();
-                        ctx.moveTo(this.trail[i-1].x, this.trail[i-1].y);
-                        ctx.lineTo(this.trail[i].x, this.trail[i].y);
-                        ctx.stroke();
-                    }
-                    ctx.restore();
-                }
+                const size = cellSize * 0.30;
+                const now = performance.now() * 0.001;
+                const bodyColor = this.flashTimer > 0 ? '#ffffff' : this.color;
 
                 ctx.save();
                 ctx.translate(this.pixelX, this.pixelY);
-                
+
                 // Teleport effect
                 if (this.state === 'teleport_out' || this.state === 'teleport_in') {
                     const scale = this.state === 'teleport_out' ? this.stateTimer : (1 - this.stateTimer);
@@ -1433,32 +1642,44 @@
                     ctx.translate(this.bonkDx * offset, this.bonkDy * offset);
                 }
 
-                // Glow
-                ctx.shadowBlur = 15;
+                ctx.fillStyle = bodyColor;
+
+                // Outer halo — wide, soft
+                ctx.shadowBlur = 50;
                 ctx.shadowColor = this.color;
-                
-                // Body
-                ctx.fillStyle = this.color;
-                if (this.flashTimer > 0) {
-                    ctx.fillStyle = '#ffffff';
-                }
-                
+                ctx.globalAlpha = 0.18;
                 ctx.beginPath();
-                ctx.arc(0, 0, size, 0, Math.PI * 2);
+                ctx.arc(0, 0, size * 1.7, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Direction indicator
-                if (this.lastDx !== 0 || this.lastDy !== 0) {
-                    const angle = Math.atan2(this.lastDy, this.lastDx);
-                    ctx.rotate(angle);
-                    ctx.fillStyle = '#ffffff';
+                // Mid glow ring
+                ctx.shadowBlur = 30;
+                ctx.globalAlpha = 0.4;
+                ctx.beginPath();
+                ctx.arc(0, 0, size * 1.1, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Bright core
+                ctx.shadowBlur = 20;
+                ctx.globalAlpha = 1.0;
+                ctx.beginPath();
+                ctx.arc(0, 0, size * 0.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Particle dots scattered around body
+                for (const p of this.particleOffsets) {
+                    const twinkle = 0.55 + Math.sin(now * 3.5 + p.phase) * 0.45;
+                    ctx.globalAlpha = twinkle * 0.9;
+                    ctx.shadowBlur = 10;
+                    const px = Math.cos(p.a) * size * p.r;
+                    const py = Math.sin(p.a) * size * p.r;
                     ctx.beginPath();
-                    ctx.moveTo(size * 0.5, -size * 0.3);
-                    ctx.lineTo(size * 0.8, 0);
-                    ctx.lineTo(size * 0.5, size * 0.3);
+                    ctx.arc(px, py, size * p.s, 0, Math.PI * 2);
                     ctx.fill();
                 }
 
+                ctx.globalAlpha = 1.0;
+                ctx.shadowBlur = 0;
                 ctx.restore();
             }
         }
@@ -2208,6 +2429,25 @@
             }
         }, {passive: true});
 
+        // D-pad button controls
+        const dpadDirs = { 'dpad-up': [0,-1], 'dpad-down': [0,1], 'dpad-left': [-1,0], 'dpad-right': [1,0] };
+        Object.keys(dpadDirs).forEach(id => {
+            const btn = document.getElementById(id);
+            if (!btn) return;
+            const [dx, dy] = dpadDirs[id];
+            const fireIntent = () => {
+                if (gameState !== 'PLAYING') return;
+                const p1 = bugs.find(b => {
+                    const isActuallyLocal = (room && room.sessionId) ? (b.sessionId === room.sessionId) : b.isLocal;
+                    return b.isPlayer && isActuallyLocal;
+                });
+                if (!p1) return;
+                p1.swipeIntent = { dx, dy, time: performance.now() };
+            };
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); fireIntent(); }, { passive: false });
+            btn.addEventListener('mousedown', fireIntent);
+        });
+
         // --- MENU BUTTON BINDINGS ---
         
         // Generate once on load and inject everywhere
@@ -2219,19 +2459,15 @@
             returnToMenu();
         });
 
-        // In-game Restart Button
-        inGameRestartBtn.addEventListener('click', () => {
-            if (document.activeElement) document.activeElement.blur(); // Drop focus
-            initRound(); 
+        // Persistent audio toggle buttons
+        musicBtn.addEventListener('click', () => {
+            if (document.activeElement) document.activeElement.blur();
+            Synth.toggleMusic();
         });
 
-        // In-game Mute Button
-        inGameMuteBtn.addEventListener('click', () => {
-            if (document.activeElement) document.activeElement.blur(); // Drop focus
-            const isMuted = Synth.toggleMute();
-            inGameMuteBtn.innerText = isMuted ? "Unmute" : "Mute";
-            if (isMuted) inGameMuteBtn.classList.add('muted');
-            else inGameMuteBtn.classList.remove('muted');
+        sfxBtn.addEventListener('click', () => {
+            if (document.activeElement) document.activeElement.blur();
+            Synth.toggleSfx();
         });
 
         // Menu Navigation
