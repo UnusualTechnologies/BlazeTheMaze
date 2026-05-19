@@ -614,7 +614,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.14</div>
+    <div id="version-number">v1.5.15</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2789,14 +2789,26 @@
         }
 
         function setButtonLoading(btn, loading) {
-            if (loading) {
-                btn.dataset.origText = btn.textContent;
-                btn.textContent = 'Connecting...';
-                btn.disabled = true;
-            } else {
-                btn.textContent = btn.dataset.origText || btn.textContent;
-                btn.disabled = false;
-            }
+            btn.disabled = loading;
+        }
+
+        let _slowToast = null;
+        function showSlowConnectionToast() {
+            if (_slowToast) return;
+            _slowToast = document.createElement('div');
+            _slowToast.textContent = 'Still connecting… the server may be slow or down.';
+            Object.assign(_slowToast.style, {
+                position: 'fixed', bottom: '24px', left: '50%',
+                transform: 'translateX(-50%)',
+                background: 'rgba(30,10,10,0.92)', color: '#ff9966',
+                padding: '12px 22px', borderRadius: '8px',
+                fontSize: '0.95rem', zIndex: '9999',
+                border: '1px solid #ff6633', pointerEvents: 'none',
+            });
+            document.body.appendChild(_slowToast);
+        }
+        function hideSlowConnectionToast() {
+            if (_slowToast) { _slowToast.remove(); _slowToast = null; }
         }
 
         quickStartBtn.addEventListener('click', async () => {
@@ -2807,6 +2819,7 @@
             blazers = [];
             clampGridSizeInput();
             setButtonLoading(quickStartBtn, true);
+            const _slowTimer1 = setTimeout(showSlowConnectionToast, 5000);
             try {
                 if (!client) throw new Error('Colyseus client not initialised — check your connection.');
                 // Build settings from the lobby UI so Quick Start respects the player's configured slots
@@ -2832,6 +2845,7 @@
                 lobbySlots.forEach((s, i) => { if (s.typeSelect.value === 'local') localSlotSchemes[i] = s.controlSelect.value; });
 
                 const newRoom = await withTimeout(client.joinOrCreate("game", settings), 10000);
+                clearTimeout(_slowTimer1); hideSlowConnectionToast();
 
                 // Wait a tiny bit to ensure sessionId is ready
                 if (!newRoom.sessionId) {
@@ -2840,6 +2854,7 @@
 
                 setupRoom(newRoom);
             } catch (e) {
+                clearTimeout(_slowTimer1); hideSlowConnectionToast();
                 console.error("Could not join/create room", e);
                 setButtonLoading(quickStartBtn, false);
                 alert("Could not connect to server: " + e.message);
@@ -2887,6 +2902,7 @@
             blazers = [];
             clampGridSizeInput();
             setButtonLoading(startBtn, true);
+            const _slowTimer2 = setTimeout(showSlowConnectionToast, 5000);
             try {
                 if (!client) throw new Error('Colyseus client not initialised — check your connection.');
                 const settings = {
@@ -2913,8 +2929,10 @@
                 lobbySlots.forEach((s, i) => { if (s.typeSelect.value === 'local') localSlotSchemes[i] = s.controlSelect.value; });
 
                 const newRoom = await withTimeout(client.create("game", settings), 10000);
+                clearTimeout(_slowTimer2); hideSlowConnectionToast();
                 setupRoom(newRoom);
             } catch (e) {
+                clearTimeout(_slowTimer2); hideSlowConnectionToast();
                 console.error("Could not create custom room", e);
                 setButtonLoading(startBtn, false);
                 alert("Could not connect to server: " + e.message);
