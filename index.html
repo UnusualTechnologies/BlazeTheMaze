@@ -614,7 +614,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.13</div>
+    <div id="version-number">v1.5.14</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1511,6 +1511,22 @@
             if (current < min) gridSizeInput.value = min;
             else if (current > max) gridSizeInput.value = max;
             gridSizeHint.style.display = 'none';
+        }
+
+        function clampGridSizeInput() {
+            const { min, max } = getMazeLimits();
+            const val = parseInt(gridSizeInput.value, 10);
+            if (isNaN(val) || val < min) {
+                gridSizeInput.value = min;
+                gridSizeHint.textContent = `Min for your screen: ${min}`;
+                gridSizeHint.style.display = 'inline';
+            } else if (val > max) {
+                gridSizeInput.value = max;
+                gridSizeHint.textContent = `Max for your screen: ${max}`;
+                gridSizeHint.style.display = 'inline';
+            } else {
+                gridSizeHint.style.display = 'none';
+            }
         }
 
         function resizeCanvas() {
@@ -2789,6 +2805,7 @@
             if (Synth.ctx.state === 'suspended') Synth.ctx.resume();
 
             blazers = [];
+            clampGridSizeInput();
             setButtonLoading(quickStartBtn, true);
             try {
                 if (!client) throw new Error('Colyseus client not initialised — check your connection.');
@@ -2868,6 +2885,7 @@
             if (Synth.ctx.state === 'suspended') Synth.ctx.resume();
 
             blazers = [];
+            clampGridSizeInput();
             setButtonLoading(startBtn, true);
             try {
                 if (!client) throw new Error('Colyseus client not initialised — check your connection.');
@@ -3421,21 +3439,7 @@
             resizeCanvas();
             updateGridSizeInputLimits();
 
-            gridSizeInput.addEventListener('change', () => {
-                const { min, max } = getMazeLimits();
-                const val = parseInt(gridSizeInput.value, 10);
-                if (isNaN(val) || val < min) {
-                    gridSizeInput.value = min;
-                    gridSizeHint.textContent = `Min for your screen: ${min}`;
-                    gridSizeHint.style.display = 'inline';
-                } else if (val > max) {
-                    gridSizeInput.value = max;
-                    gridSizeHint.textContent = `Max for your screen: ${max}`;
-                    gridSizeHint.style.display = 'inline';
-                } else {
-                    gridSizeHint.style.display = 'none';
-                }
-            });
+            gridSizeInput.addEventListener('input', clampGridSizeInput);
         };
     </script>
 </body>
