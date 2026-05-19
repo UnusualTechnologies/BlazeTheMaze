@@ -1899,7 +1899,7 @@
             ctx.translate(gx, gy);
 
             // 5 rainbow rays
-            ctx.rotate(time * 0.4);
+            ctx.rotate(time * 2.0);
             for (let i = 0; i < 5; i++) {
                 ctx.rotate(Math.PI * 2 / 5);
                 ctx.beginPath();
@@ -1913,7 +1913,7 @@
             }
 
             // Counter-rotating star body
-            ctx.rotate(-time * 0.3);
+            ctx.rotate(-time * 1.5);
             const pulse = (Math.sin(time * 3) + 1) / 2;
             const outerR = cellSize * 0.54 + pulse * cellSize * 0.04;
             const innerR = cellSize * 0.22;
@@ -1993,7 +1993,7 @@
         }
 
         function drawPowerUps() {
-            const time = performance.now() / 200;
+            const time = performance.now() / 600;
             powerUps.forEach(p => {
                 const px = p.x * cellSize + cellSize / 2, py = p.y * cellSize + cellSize / 2;
                 ctx.save();
@@ -3281,7 +3281,7 @@
                 ctx.save();
                 ctx.translate(4 * CELL + CELL / 2, 1 * CELL + CELL / 2);
                 ctx.save();
-                ctx.rotate(time * 0.4);
+                ctx.rotate(time * 2.0);
                 for (let i = 0; i < 5; i++) {
                     ctx.rotate(Math.PI * 2 / 5);
                     ctx.beginPath();
@@ -3294,7 +3294,7 @@
                 }
                 ctx.restore();
                 ctx.save();
-                ctx.rotate(-time * 0.3);
+                ctx.rotate(-time * 1.5);
                 const outerR = CELL * 0.54 + pulse * CELL * 0.04;
                 const innerR = CELL * 0.22;
                 ctx.beginPath();
@@ -3325,7 +3325,7 @@
 
             // ── Draw: power-ups — matches main game drawPowerUps() ────────────
             function drawPowerUps(elapsed) {
-                const time = elapsed / 200;
+                const time = elapsed / 600;
                 for (const pu of powerUps) {
                     if (!pu.alive) continue;
                     const px = pu.x * CELL + CELL / 2;
