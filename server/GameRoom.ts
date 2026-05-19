@@ -94,6 +94,13 @@ export class GameRoom extends Room<{ state: GameState }> {
             }
         }
 
+        // Cap power-ups so they can always fit: leave room for all spawn points + goal + players
+        const reservedCells = 1 + 8; // goal + 8 spawn corners/edges
+        const availableCells = this.cols * this.rows - reservedCells;
+        const maxPuPerType = Math.max(0, Math.floor(availableCells * 0.35));
+        options.puOpp  = Math.min(isNaN(Number(options.puOpp))  ? 10 : Number(options.puOpp),  maxPuPerType);
+        options.puSelf = Math.min(isNaN(Number(options.puSelf)) ? 10 : Number(options.puSelf), maxPuPerType);
+
         this.spawnOptions = options;
         this.setState(state);
         this.generateMaze();
@@ -109,6 +116,7 @@ export class GameRoom extends Room<{ state: GameState }> {
 
         if (options.isPrivate) this.setPrivate(true);
 
+        // 100 ms tick — AI moves every 300–600 ms so 60 fps server ticks are pointless overhead
         this.setSimulationInterval((dt) => {
             if (this.roundOver) return; // Freeze everything during round-over countdown
             this.state.timer += dt / 1000;
@@ -136,7 +144,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                     }
                 }
             });
-        });
+        }, 100);
 
         this.onMessage("move", (client, message) => {
             if (this.roundOver) return; // Reject moves during round-over countdown
