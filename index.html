@@ -613,7 +613,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.27</div>
+    <div id="version-number">v1.5.30</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1757,6 +1757,7 @@
             resizeCanvas(); // Safe to resize and draw now that the new maze grid is generated!
             
             gameState = 'PLAYING';
+            window.electronAPI?.setRichPresence('Racing');
             postMatchLayer.classList.add('hidden');
             lastTime = performance.now();
             roundStartTime = performance.now();
@@ -1765,6 +1766,8 @@
         }
 
         function returnToMenu() {
+            window.electronAPI?.closeSteamLobby();
+            window.electronAPI?.setRichPresence('In Menu');
             if (typeof room !== 'undefined' && room) {
                 room.leave();
                 room = null;
@@ -2585,12 +2588,57 @@
         try { client = new Colyseus.Client("wss://gb-lhr-5b4d543b.colyseus.cloud"); } catch(e) { console.warn('Colyseus unavailable (offline?):', e); }
         let room;
 
+        // When a friend clicks "Join Game" or accepts a Steam invite, Steam fires this
+        // with the room code stored in the lobby metadata, feeding the same joinById path
+        // used by the manual code input.
+        window.electronAPI?.onSteamJoinRequest((roomCode) => {
+            joiningViaCode = true;
+            client.joinById(roomCode, { joinedViaCode: true })
+                .then(newRoom => setupRoom(newRoom))
+                .catch(e => {
+                    joiningViaCode = false;
+                    console.error('Steam join request failed:', e);
+                    if (e.message?.toLowerCase().includes("not found")) {
+                        alert("Room not found. The host may have returned to the menu.");
+                    } else if (e.message === "ROOM_FULL") {
+                        alert("This room is currently full.");
+                    } else if (e.message === "MATCH_OVER") {
+                        alert("That match has already ended. Wait for someone to start a new game with that code.");
+                    } else {
+                        alert("Could not join your friend's room: " + e.message);
+                    }
+                });
+        });
+
         async function setupRoom(newRoom) {
             room = newRoom;
             console.log("Joined room:", room.roomId, "SessionID:", room.sessionId);
 
             const isCodeJoin = joiningViaCode;
             joiningViaCode = false;
+
+            if (!isCodeJoin) {
+                // We created this room — create the Steam lobby then broadcast its ID
+                // so every player in the Colyseus room can join it and become visible
+                // to their own friends via Steam's "Join Game" button.
+                (async () => {
+                    const lobbyId = await window.electronAPI?.createSteamLobby(room.roomId);
+                    if (lobbyId && room) room.send('set_steam_lobby', { lobbyId });
+                })();
+            } else if (window.electronAPI) {
+                // We joined someone else's room — join their Steam lobby when we see the ID.
+                // It may already be in the initial state sync, or arrive shortly after.
+                let steamLobbyJoined = false;
+                const tryJoinLobby = (state) => {
+                    if (!steamLobbyJoined && state.steamLobbyId) {
+                        steamLobbyJoined = true;
+                        window.electronAPI.joinSteamLobby(state.steamLobbyId);
+                    }
+                };
+                tryJoinLobby(room.state);
+                room.onStateChange(tryJoinLobby);
+            }
+            window.electronAPI?.setRichPresence('In Lobby');
             let gridCompatChecked = false;
 
             // Update HUD to show the actual room code

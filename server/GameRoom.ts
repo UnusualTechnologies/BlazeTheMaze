@@ -174,6 +174,15 @@ export class GameRoom extends Room<{ state: GameState }> {
             this.checkCollisions(player, aiId);
         });
 
+        // Host broadcasts the Steam lobby ID so all players can join it and
+        // become visible to their own friends via Steam's "Join Game" button.
+        this.onMessage("set_steam_lobby", (client, message) => {
+            if (client.sessionId !== this.ownerSessionId) return;
+            if (typeof message?.lobbyId === 'string' && message.lobbyId) {
+                this.state.steamLobbyId = message.lobbyId;
+            }
+        });
+
         console.log(`Room created: ${this.roomId}`);
     }
 

@@ -4,3 +4,12 @@ server/lib/
 *.js.map
 .DS_Store
 Thumbs.db
+
+# Electron build output
+dist/
+
+# Colyseus Cloud credentials
+server/.colyseus-cloud.json
+
+# Claude Code internals
+.claude/

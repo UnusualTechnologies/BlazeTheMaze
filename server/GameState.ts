@@ -40,4 +40,5 @@ export class GameState extends Schema {
     @type("number") goalX: number = 10;
     @type("number") goalY: number = 10;
     @type([ PowerUp ]) powerUps = new ArraySchema<PowerUp>();
+    @type("string") steamLobbyId: string = "";
 }

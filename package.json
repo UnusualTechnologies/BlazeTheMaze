@@ -1,0 +1,33 @@
+{
+  "name": "blaze-the-maze",
+  "version": "1.0.0",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win"
+  },
+  "dependencies": {
+    "steamworks.js": "^0.3.0"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "build": {
+    "appId": "com.yourstudio.blazethemaze",
+    "productName": "Blaze The Maze",
+    "asar": false,
+    "win": {
+      "target": "portable",
+      "sign": null
+    },
+    "files": [
+      "electron/**/*",
+      "index.html",
+      "steam_appid.txt"
+    ],
+    "extraResources": [
+      { "from": "steam_appid.txt", "to": "steam_appid.txt" }
+    ]
+  }
+}
