@@ -1,0 +1,12 @@
+"AppBuild"
+{
+    "AppID" "4734010"
+    "Desc" "Automated build"
+    "BuildOutput" ".\build_output\"
+    "ContentRoot" ".\"
+    "SetLive" "default"
+    "Depots"
+    {
+        "4734011" "depot_build.vdf"
+    }
+}
