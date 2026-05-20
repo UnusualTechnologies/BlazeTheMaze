@@ -605,8 +605,6 @@
             margin: 0; padding: 0 30px; flex-shrink: 0; align-self: flex-start;
         }
         #menu-mini-canvas {
-            width: 100%;
-            height: auto;
             display: block;
             flex-shrink: 0;
         }
@@ -614,7 +612,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.17</div>
+    <div id="version-number">v1.5.18</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3055,10 +3053,14 @@
             const ctx = canvas.getContext('2d');
 
             function resizeMini() {
-                const w = (canvas.parentElement || document.body).clientWidth || window.innerWidth;
-                CELL = Math.max(30, Math.floor(w / COLS));
+                const vmin = Math.min(window.innerWidth, window.innerHeight);
+                const expectedSize = Math.min(0.85 * vmin, window.innerHeight - 280);
+                const safeSize = Math.max(160, expectedSize);
+                CELL = Math.floor(safeSize / 20);
                 canvas.width  = COLS * CELL;
                 canvas.height = ROWS * CELL;
+                canvas.style.width  = canvas.width + 'px';
+                canvas.style.height = canvas.height + 'px';
             }
             resizeMini();
             window.addEventListener('resize', resizeMini);
