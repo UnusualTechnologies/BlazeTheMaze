@@ -612,7 +612,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.23</div>
+    <div id="version-number">v1.5.24</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3105,7 +3105,8 @@
             // ── State ─────────────────────────────────────────────────────────
             let powerUps, puffs, bursts, eventsFired;
             let cyanTrail = [], purpleTrail = [];
-            let prevCV = false, prevPV = false;
+            const cState = { bx: null, by: null };
+            const pState = { bx: null, by: null };
 
             function resetLoop() {
                 powerUps = [
@@ -3117,8 +3118,8 @@
                 eventsFired = new Set();
                 cyanTrail.length = 0;
                 purpleTrail.length = 0;
-                prevCV = false;
-                prevPV = false;
+                cState.bx = null; cState.by = null;
+                pState.bx = null; pState.by = null;
             }
 
             // color: blazer colour; drift in grid units (optional)
@@ -3155,31 +3156,39 @@
                 }
             }
 
-            // ── Position interpolation ────────────────────────────────────────
-            function interp(kf, elapsed) {
-                if (elapsed < kf[0].t) {
-                    return { px: kf[0].gx * CELL + CELL / 2, py: kf[0].gy * CELL + CELL / 2, vis: false };
-                }
+            // ── Position: discrete target cell + pixel lerp (mirrors in-game Blazer) ──
+            function getTargetCell(kf, elapsed) {
+                if (elapsed < kf[0].t) return { gx: kf[0].gx, gy: kf[0].gy, vis: false };
                 for (let i = 0; i < kf.length - 1; i++) {
                     const a = kf[i], b = kf[i + 1];
                     if (elapsed >= a.t && elapsed < b.t) {
-                        const f = (elapsed - a.t) / (b.t - a.t);
-                        return {
-                            px: (a.gx + (b.gx - a.gx) * f) * CELL + CELL / 2,
-                            py: (a.gy + (b.gy - a.gy) * f) * CELL + CELL / 2,
-                            vis: a.vis,
-                        };
+                        if (!a.vis) return { gx: a.gx, gy: a.gy, vis: false };
+                        const steps = Math.floor((elapsed - a.t) / MOVE);
+                        const dx = Math.sign(b.gx - a.gx);
+                        const dy = Math.sign(b.gy - a.gy);
+                        const maxSteps = Math.abs(b.gx - a.gx) + Math.abs(b.gy - a.gy);
+                        return { gx: a.gx + dx * Math.min(steps, maxSteps), gy: a.gy + dy * Math.min(steps, maxSteps), vis: true };
                     }
                 }
                 const last = kf[kf.length - 1];
-                return { px: last.gx * CELL + CELL / 2, py: last.gy * CELL + CELL / 2, vis: last.vis };
+                return { gx: last.gx, gy: last.gy, vis: last.vis };
             }
 
-            function updateTrail(trail, pos, wasVis) {
-                if (!pos.vis) { trail.length = 0; return; }
-                if (!wasVis) trail.length = 0;
-                trail.push({ x: pos.px, y: pos.py });
+            function lerpBlazer(state, kf, elapsed, trail) {
+                const cell = getTargetCell(kf, elapsed);
+                if (!cell.vis) {
+                    trail.length = 0;
+                    state.bx = null; state.by = null;
+                    return { px: 0, py: 0, vis: false };
+                }
+                const tx = cell.gx * CELL + CELL / 2;
+                const ty = cell.gy * CELL + CELL / 2;
+                if (state.bx === null) { state.bx = tx; state.by = ty; trail.length = 0; }
+                state.bx += (tx - state.bx) * 0.4;
+                state.by += (ty - state.by) * 0.4;
+                trail.push({ x: state.bx, y: state.by });
                 if (trail.length > 25) trail.shift();
+                return { px: state.bx, py: state.by, vis: true };
             }
 
             // ── Draw: blazer — matches main game Blazer.draw() ────────────────
@@ -3187,27 +3196,20 @@
                 if (!pos.vis) return;
                 const size = CELL * 0.216;
 
-                // Trail — spaced filled circles matching the dot-trail look of in-game
+                // Trail — line strokes matching in-game Blazer.draw()
                 if (trail.length > 1) {
                     ctx.save();
-                    ctx.fillStyle = color;
-                    const minDist = size * 1.2;
-                    const minDist2 = minDist * minDist;
-                    let lastX = trail[0].x, lastY = trail[0].y;
-                    const pts = [0];
+                    ctx.lineWidth = size * 0.8;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
                     for (let i = 1; i < trail.length; i++) {
-                        const dx = trail[i].x - lastX, dy = trail[i].y - lastY;
-                        if (dx * dx + dy * dy >= minDist2) {
-                            pts.push(i);
-                            lastX = trail[i].x;
-                            lastY = trail[i].y;
-                        }
-                    }
-                    for (const i of pts) {
-                        ctx.globalAlpha = (i + 1) / trail.length * 0.5;
+                        const alpha = i / trail.length;
+                        ctx.strokeStyle = color;
+                        ctx.globalAlpha = alpha * 0.5;
                         ctx.beginPath();
-                        ctx.arc(trail[i].x, trail[i].y, size * 0.4, 0, Math.PI * 2);
-                        ctx.fill();
+                        ctx.moveTo(trail[i-1].x, trail[i-1].y);
+                        ctx.lineTo(trail[i].x, trail[i].y);
+                        ctx.stroke();
                     }
                     ctx.restore();
                 }
@@ -3431,13 +3433,8 @@
 
                 checkEvents(elapsed);
 
-                const cPos = interp(CYAN_KF,   elapsed);
-                const pPos = interp(PURPLE_KF, elapsed);
-
-                updateTrail(cyanTrail,   cPos, prevCV);
-                updateTrail(purpleTrail, pPos, prevPV);
-                prevCV = cPos.vis;
-                prevPV = pPos.vis;
+                const cPos = lerpBlazer(cState, CYAN_KF,   elapsed, cyanTrail);
+                const pPos = lerpBlazer(pState, PURPLE_KF, elapsed, purpleTrail);
 
                 ctx.fillStyle = colors.bg;
                 ctx.fillRect(0, 0, COLS * CELL, ROWS * CELL);
