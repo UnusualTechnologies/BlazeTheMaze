@@ -34,6 +34,7 @@ We use a strict `x.y.z` versioning system tracked in `version.json` and displaye
 - Always verify that `index.html` reflects the updated version string.
 
 ## Version Control
+- Use the main branch for all commits and pushes unless explicitly asked not to.
 - Commit locally after each prompt with a code change.
 - Ask before pushing to the main repo. Proactively suggest a commit and push when either of these conditions are met:
 1.We have completed a major feature or resolved a major bug.
