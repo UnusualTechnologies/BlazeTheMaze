@@ -612,7 +612,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.21</div>
+    <div id="version-number">v1.5.22</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2988,6 +2988,7 @@
         (function initMenuMini() {
             const COLS = 11, ROWS = 3;
             let CELL = 50;
+            let DPR = window.devicePixelRatio || 1;
             const canvas = document.getElementById('menu-mini-canvas');
             if (!canvas) return;
             const ctx = canvas.getContext('2d');
@@ -2997,10 +2998,12 @@
                 const expectedSize = Math.min(0.85 * vmin, window.innerHeight - 280);
                 const safeSize = Math.max(160, expectedSize);
                 CELL = Math.floor(safeSize / 20);
-                canvas.width  = COLS * CELL;
-                canvas.height = ROWS * CELL;
-                canvas.style.width  = canvas.width + 'px';
-                canvas.style.height = canvas.height + 'px';
+                DPR = window.devicePixelRatio || 1;
+                canvas.width  = COLS * CELL * DPR;
+                canvas.height = ROWS * CELL * DPR;
+                canvas.style.width  = (COLS * CELL) + 'px';
+                canvas.style.height = (ROWS * CELL) + 'px';
+                ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
             }
             resizeMini();
             window.addEventListener('resize', resizeMini);
@@ -3430,7 +3433,7 @@
                 prevPV = pPos.vis;
 
                 ctx.fillStyle = colors.bg;
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillRect(0, 0, COLS * CELL, ROWS * CELL);
 
                 drawMiniMaze();
                 drawPowerUps(elapsed);
