@@ -4,7 +4,7 @@ const path = require('path')
 let mainWindow
 let steamworks = null
 let steamClient = null
-let currentLobbyId = null
+let currentLobby = null  // Lobby object (has .setData, .getData, .leave, .id)
 
 try {
   steamworks = require('steamworks.js')
@@ -19,20 +19,19 @@ if (steamworks) {
     // Replace with your real Steam App ID before shipping.
     steamClient = steamworks.init(480)
     console.log('Steam initialised. SteamID:', steamClient.localplayer.getSteamId().steamId64)
-
-    // Steamworks requires manual callback polling
-    setInterval(() => steamClient.runCallbacks(), 100)
   } catch (e) {
     console.warn('Steam not available — running without Steam features:', e.message)
   }
 }
 
 // Register the lobby-join callback separately so a failure here doesn't kill Steam entirely.
-// Fires when the user accepts a Steam invite or clicks "Join Game" on a friend's profile.
+// GameLobbyJoinRequested fires when the user accepts a Steam invite or clicks "Join Game".
 if (steamClient) {
   try {
     steamClient.callback.register(steamworks.SteamCallback.GameLobbyJoinRequested, (data) => {
-      const roomCode = steamClient.matchmaking.getLobbyData(data.steamIDLobby, 'roomCode')
+      // Construct a Lobby object from the ID to read its metadata
+      const lobby = new steamClient.matchmaking.Lobby(data.steamIDLobby)
+      const roomCode = lobby.getData('roomCode')
       if (roomCode && mainWindow) {
         mainWindow.webContents.send('steam:join-requested', roomCode)
       }
@@ -66,8 +65,8 @@ function createWindow() {
 app.whenReady().then(createWindow)
 
 app.on('window-all-closed', () => {
-  if (currentLobbyId && steamClient) {
-    steamClient.matchmaking.leaveLobby(currentLobbyId)
+  if (currentLobby) {
+    try { currentLobby.leave() } catch (_) {}
   }
   app.quit()
 })
@@ -77,11 +76,12 @@ app.on('window-all-closed', () => {
 ipcMain.handle('steam:create-lobby', async (_event, roomCode) => {
   if (!steamClient) return null
   try {
-    // 1 = FriendsOnly lobby type
-    const lobby = await steamClient.matchmaking.createLobby(1, 8)
-    steamClient.matchmaking.setLobbyData(lobby, 'roomCode', roomCode)
-    currentLobbyId = lobby
-    const lobbyIdStr = String(lobby)
+    const lobby = await steamClient.matchmaking.createLobby(
+      steamClient.matchmaking.LobbyType.FriendsOnly, 8
+    )
+    lobby.setData('roomCode', roomCode)
+    currentLobby = lobby
+    const lobbyIdStr = String(lobby.id)
     console.log('Steam lobby created:', lobbyIdStr, 'roomCode:', roomCode)
     return lobbyIdStr
   } catch (e) {
@@ -93,8 +93,9 @@ ipcMain.handle('steam:create-lobby', async (_event, roomCode) => {
 ipcMain.handle('steam:join-lobby', async (_event, lobbyId) => {
   if (!steamClient) return
   try {
-    await steamClient.matchmaking.joinLobby(lobbyId)
-    currentLobbyId = lobbyId
+    const lobby = new steamClient.matchmaking.Lobby(BigInt(lobbyId))
+    await lobby.join()
+    currentLobby = lobby
     console.log('Joined Steam lobby:', lobbyId)
   } catch (e) {
     console.warn('Failed to join Steam lobby:', e.message)
@@ -102,21 +103,22 @@ ipcMain.handle('steam:join-lobby', async (_event, lobbyId) => {
 })
 
 ipcMain.handle('steam:close-lobby', () => {
-  if (!steamClient || !currentLobbyId) return
+  if (!steamClient || !currentLobby) return
   try {
-    steamClient.matchmaking.leaveLobby(currentLobbyId)
-    console.log('Steam lobby closed:', currentLobbyId)
+    currentLobby.leave()
+    console.log('Steam lobby left:', String(currentLobby.id))
   } catch (e) {
-    console.warn('Failed to close Steam lobby:', e.message)
+    console.warn('Failed to leave Steam lobby:', e.message)
   }
-  currentLobbyId = null
+  currentLobby = null
 })
 
 ipcMain.handle('steam:set-rich-presence', (_event, status) => {
   if (!steamClient) return
   try {
-    steamClient.friends.setRichPresence('steam_display', status)
-    steamClient.friends.setRichPresence('status', status)
+    // Rich presence lives on localplayer in this version of steamworks.js
+    steamClient.localplayer.setRichPresence('steam_display', status)
+    steamClient.localplayer.setRichPresence('status', status)
   } catch (e) {
     console.warn('Failed to set rich presence:', e.message)
   }
