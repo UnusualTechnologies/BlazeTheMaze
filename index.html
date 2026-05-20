@@ -612,7 +612,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.24</div>
+    <div id="version-number">v1.5.25</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -836,6 +836,7 @@
         
         let localControlScheme = 'WASD'; // captured from lobby before connecting
         let localSlotSchemes = {}; // slotIndex → controlScheme for secondary local (co-op) slots
+        let pendingOwnerSlotSchemes = {}; // held until server confirms we are the room owner
         let gameState = 'MENU'; // MENU, PLAYING, ROUND_OVER_COUNTDOWN, MATCH_OVER, INITIALIZING
         let joiningViaCode = false; // true when joining via friend code — triggers maze compat check
         let animationId;
@@ -2071,6 +2072,46 @@
             blazers.sort((a, b) => (a.isPlayer === b.isPlayer) ? 0 : a.isPlayer ? 1 : -1);
             blazers.forEach(blazer => { blazer.update(dt); blazer.draw(); });
 
+            // Expand/contract ring — first game only, synced to label timing
+            if (gameStartLabelTime !== null) {
+                const ringElapsed = now - gameStartLabelTime;
+                const ringDuration = 2000;
+                const halfDuration = ringDuration / 2;
+                if (ringElapsed < ringDuration) {
+                    const goalPx = goal.x * cellSize + cellSize / 2;
+                    const goalPy = goal.y * cellSize + cellSize / 2;
+                    ctx.save();
+                    blazers.forEach(b => {
+                        if (!b.isLocal) return;
+                        const dx = goalPx - b.pixelX;
+                        const dy = goalPy - b.pixelY;
+                        const maxRadius = Math.sqrt(dx * dx + dy * dy);
+                        let radius, alpha;
+                        if (ringElapsed < halfDuration) {
+                            const t = ringElapsed / halfDuration;
+                            radius = maxRadius * (1 - Math.pow(1 - t, 2));
+                            alpha = 1;
+                        } else {
+                            const t = (ringElapsed - halfDuration) / halfDuration;
+                            radius = maxRadius * Math.pow(1 - t, 2);
+                            alpha = 1 - t * 0.5;
+                        }
+                        if (radius < 2) return;
+                        ctx.beginPath();
+                        ctx.arc(b.pixelX, b.pixelY, radius, 0, Math.PI * 2);
+                        ctx.strokeStyle = b.color;
+                        ctx.globalAlpha = alpha * 0.75;
+                        ctx.lineWidth = Math.max(1.5, cellSize * 0.07);
+                        ctx.shadowBlur = 20;
+                        ctx.shadowColor = b.color;
+                        ctx.stroke();
+                    });
+                    ctx.globalAlpha = 1;
+                    ctx.shadowBlur = 0;
+                    ctx.restore();
+                }
+            }
+
             // Player identification labels — first game only, fade over 2 s
             if (gameStartLabelTime !== null) {
                 const labelElapsed = now - gameStartLabelTime;
@@ -2209,6 +2250,25 @@
             'Numpad': { up: ['8', 'Numpad8'], right: ['6', 'Numpad6'], down: ['5', 'Numpad5'], left: ['4', 'Numpad4'] },
             'TouchMouse': { up: [], right: [], down: [], left: [] }
         };
+
+        // When there is only one local player, merge all keyboard schemes so any keys work.
+        function effectiveControlMap(blazer) {
+            const localCount = blazers.filter(b => {
+                if (!b.isPlayer) return false;
+                return (room && room.sessionId)
+                    ? (b.sessionId === room.sessionId || b.isSecondaryLocal)
+                    : b.isLocal;
+            }).length;
+            if (localCount === 1) {
+                return {
+                    up:    Object.values(controlsMap).flatMap(m => m.up),
+                    right: Object.values(controlsMap).flatMap(m => m.right),
+                    down:  Object.values(controlsMap).flatMap(m => m.down),
+                    left:  Object.values(controlsMap).flatMap(m => m.left),
+                };
+            }
+            return controlsMap[blazer.controlScheme];
+        }
 
         // --- GAMEPAD SUPPORT ---
         const gamepadPrevState = {};
@@ -2350,7 +2410,7 @@
                     : blazer.isLocal;
                 if (!isActuallyLocal) return;
 
-                const map = controlsMap[blazer.controlScheme];
+                const map = effectiveControlMap(blazer);
                 if (!map) return;
 
                 let dir = null;
@@ -2382,7 +2442,7 @@
                     : blazer.isLocal;
                 if (!isActuallyLocal) return;
 
-                const map = controlsMap[blazer.controlScheme];
+                const map = effectiveControlMap(blazer);
                 if (!map) return;
 
                 let dir = null;
@@ -2694,6 +2754,11 @@
                 updateScoreboard();
             });
 
+            room.onMessage("owner_confirm", () => {
+                localSlotSchemes = pendingOwnerSlotSchemes;
+                pendingOwnerSlotSchemes = {};
+            });
+
             room.onMessage("round_won", ({ winnerId, winnerColor, winnerScore, isMatchWon }) => {
                 if (gameState === 'ROUND_OVER_COUNTDOWN' || gameState === 'MATCH_OVER') return;
 
@@ -2844,8 +2909,9 @@
 
                 const localSlot = lobbySlots.find(s => s.typeSelect.value === 'local');
                 localControlScheme = localSlot ? localSlot.controlSelect.value : 'WASD';
-                localSlotSchemes = {};
-                lobbySlots.forEach((s, i) => { if (s.typeSelect.value === 'local') localSlotSchemes[i] = s.controlSelect.value; });
+                localSlotSchemes = {}; // restored by owner_confirm if we created the room
+                pendingOwnerSlotSchemes = {};
+                lobbySlots.forEach((s, i) => { if (s.typeSelect.value === 'local') pendingOwnerSlotSchemes[i] = s.controlSelect.value; });
 
                 const newRoom = await withTimeout(client.joinOrCreate("game", settings), 10000);
                 clearTimeout(_slowTimer1); hideSlowConnectionToast();
@@ -2928,8 +2994,9 @@
 
                 const localSlot = lobbySlots.find(s => s.typeSelect.value === 'local');
                 localControlScheme = localSlot ? localSlot.controlSelect.value : 'WASD';
-                localSlotSchemes = {};
-                lobbySlots.forEach((s, i) => { if (s.typeSelect.value === 'local') localSlotSchemes[i] = s.controlSelect.value; });
+                localSlotSchemes = {}; // restored by owner_confirm
+                pendingOwnerSlotSchemes = {};
+                lobbySlots.forEach((s, i) => { if (s.typeSelect.value === 'local') pendingOwnerSlotSchemes[i] = s.controlSelect.value; });
 
                 const newRoom = await withTimeout(client.create("game", settings), 10000);
                 clearTimeout(_slowTimer2); hideSlowConnectionToast();

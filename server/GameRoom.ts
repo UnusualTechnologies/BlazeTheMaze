@@ -24,6 +24,8 @@ export class GameRoom extends Room<{ state: GameState }> {
     // Last input timestamp per human sessionId — used for idle kick
     lastInputTime = new Map<string, number>();
     static readonly IDLE_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
+    // Session ID of the room creator — only they may drive secondary local slots
+    ownerSessionId: string = '';
 
     // --- Lifecycle ---
 
@@ -159,6 +161,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         // Allows the host to drive unclaimed 'local' slots from the same machine (co-op)
         this.onMessage("move_secondary", (client, message) => {
             if (this.roundOver) return;
+            if (client.sessionId !== this.ownerSessionId) return;
             const { slotIndex, x, y } = message;
             const slot = this.state.slots[slotIndex];
             if (!slot || slot.mode !== 'local' || slot.sessionId !== '') return;
@@ -179,6 +182,11 @@ export class GameRoom extends Room<{ state: GameState }> {
 
         const joinedViaCode = !!options.joinedViaCode;
         const isHost = this.clients.length === 1;
+
+        if (isHost) {
+            this.ownerSessionId = client.sessionId;
+            client.send("owner_confirm", {});
+        }
 
         if (this.matchComplete) {
             if (!joinedViaCode) throw new Error("MATCH_OVER");
@@ -292,6 +300,17 @@ export class GameRoom extends Room<{ state: GameState }> {
                 slot.sessionId = "";
                 this.state.players.delete(client.sessionId);
             }
+        }
+
+        // When the owner leaves, promote all unclaimed local slots to ai_online so AI
+        // resumes and other players can fill them.
+        if (client.sessionId === this.ownerSessionId) {
+            this.ownerSessionId = '';
+            this.state.slots.forEach((slot) => {
+                if (slot.mode === 'local' && slot.sessionId === '') {
+                    slot.mode = 'ai_online';
+                }
+            });
         }
 
         // Shut down if no human players remain (excluding this departing client)
