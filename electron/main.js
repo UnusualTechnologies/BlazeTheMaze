@@ -15,9 +15,7 @@ try {
 // Try to init Steam; silently degrade if Steam isn't running
 if (steamworks) {
   try {
-    // Use 480 (Valve's Spacewar test app) during development.
-    // Replace with your real Steam App ID before shipping.
-    steamClient = steamworks.init(480)
+    steamClient = steamworks.init(4734010)
     console.log('Steam initialised. SteamID:', steamClient.localplayer.getSteamId().steamId64)
   } catch (e) {
     console.warn('Steam not available — running without Steam features:', e.message)
