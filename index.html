@@ -613,7 +613,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.26</div>
+    <div id="version-number">v1.5.27</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -805,8 +805,7 @@
         const inGameMenuBtn = document.getElementById('in-game-menu-btn');
         const gridSizeInput = document.getElementById('grid-size-input');
         const gridSizeHint = document.getElementById('grid-size-hint');
-        const totalEntitiesInput = document.getElementById('total-entities-input');
-        
+
         const quickStartBtn = document.getElementById('quick-start-btn');
         const customSettingsBtn = document.getElementById('custom-settings-btn');
         const joinFriendBtn = document.getElementById('join-friend-btn');
@@ -831,6 +830,16 @@
         let powerUps = [];
         let powerUpBursts = []; // burst animations for collected opponents power-ups
         let smokePuffs = [];    // smoke trails left at teleport departure points
+
+        // Offsets for the overlapping cloud circles used in smoke puff rendering
+        const cloudOffsets = [
+            { dx:  0.00, dy:  0.00, rs: 1.00 },
+            { dx:  0.45, dy: -0.30, rs: 0.72 },
+            { dx: -0.40, dy: -0.25, rs: 0.68 },
+            { dx:  0.20, dy:  0.42, rs: 0.65 },
+            { dx: -0.30, dy:  0.38, rs: 0.60 },
+            { dx:  0.05, dy: -0.50, rs: 0.55 },
+        ];
         let shockwaves = []; 
         let particles = [];
         let rockets = []; // Store active homing rockets
@@ -845,7 +854,6 @@
         let screenShake = 0;
 
         // Game Loop & Match Structure Variables
-        const WINS_NEEDED = 3;
         let activePlayersData = [];
         let scores = {};
         let matchTime = 0;
@@ -1031,7 +1039,6 @@
                         aiBehavior: slot.aiBehaviorSelect.value,
                         startIndex: slot.index
                     });
-                    if (!(slot.id in scores)) scores[slot.id] = 0;
                 }
             });
         }
@@ -1894,15 +1901,6 @@
         function drawSmokePuffs() {
             const SMOKE_MS = 1000;
             const now = performance.now();
-            // Offsets for the overlapping cloud circles (relative to puff radius)
-            const cloudOffsets = [
-                { dx:  0.00, dy:  0.00, rs: 1.00 },
-                { dx:  0.45, dy: -0.30, rs: 0.72 },
-                { dx: -0.40, dy: -0.25, rs: 0.68 },
-                { dx:  0.20, dy:  0.42, rs: 0.65 },
-                { dx: -0.30, dy:  0.38, rs: 0.60 },
-                { dx:  0.05, dy: -0.50, rs: 0.55 },
-            ];
             smokePuffs = smokePuffs.filter(puff => {
                 const progress = Math.min((now - puff.startTime) / SMOKE_MS, 1);
                 if (progress >= 1) return false;
@@ -1942,14 +1940,13 @@
                 ctx.save();
                 ctx.translate(px, py);
                 if (p.type === 'opponents') {
-                    const segColors = ['#ff0055','#ff8800','#ffee00','#00ff22','#00ffff','#4466ff','#aa00ff','#ff00ff'];
-                    const n = segColors.length;
+                    const n = playerColors.length;
                     const r = cellSize * 0.3;
                     const gapAngle = 5 / r;
                     const sliceAngle = (Math.PI * 2) / n;
                     const arcAngle = Math.max(0, sliceAngle - gapAngle);
                     ctx.rotate(time);
-                    segColors.forEach((col, i) => {
+                    playerColors.forEach((col, i) => {
                         const startA = i * sliceAngle + gapAngle / 2;
                         for (let pass = 0; pass < 3; pass++) {
                             ctx.beginPath();
@@ -2044,8 +2041,6 @@
             });
         }
 
-        let currentMazeData = [];
-        
         function draw(force = false) {
             if (gameState === 'MENU' && !force) return;
             pollGamepads();
@@ -2123,7 +2118,6 @@
                     ctx.font = `bold ${fontSize}px monospace`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    const schemeNames = { WASD: 'WASD', TFGH: 'TFGH', IJKL: 'IJKL', Arrows: 'Arrow Keys', Numpad: 'Numpad (8456)', TouchMouse: 'Touch / Mouse' };
                     blazers.forEach(b => {
                         if (!b.isLocal) return;
                         const rawLabel = schemeNames[b.controlScheme] ||
@@ -2243,6 +2237,8 @@
         }
 
         // --- INPUT HANDLING ---
+        const schemeNames = { WASD: 'WASD', TFGH: 'TFGH', IJKL: 'IJKL', Arrows: 'Arrow Keys', Numpad: 'Numpad (8456)', TouchMouse: 'Touch / Mouse' };
+
         const controlsMap = {
             'WASD': { up: ['w', 'W'], right: ['d', 'D'], down: ['s', 'S'], left: ['a', 'A'] },
             'TFGH': { up: ['t', 'T'], right: ['h', 'H'], down: ['g', 'G'], left: ['f', 'F'] },
@@ -2565,9 +2561,7 @@
         });
 
         // In-game Menu Button
-        inGameMenuBtn.addEventListener('click', () => {
-            returnToMenu();
-        });
+        inGameMenuBtn.addEventListener('click', returnToMenu);
 
         // Audio toggle buttons (delegated — handles all instances)
         document.addEventListener('click', e => {
@@ -2883,8 +2877,6 @@
         quickStartBtn.addEventListener('click', async () => {
             Synth.init();
             Synth.startMusic();
-            if (Synth.ctx.state === 'suspended') Synth.ctx.resume();
-
             blazers = [];
             clampGridSizeInput();
             setButtonLoading(quickStartBtn, true);
@@ -2893,8 +2885,8 @@
                 if (!client) throw new Error('Colyseus client not initialised — check your connection.');
                 // Build settings from the lobby UI so Quick Start respects the player's configured slots
                 const settings = {
-                    cols: parseInt(document.getElementById('grid-size-input').value, 10) || 20,
-                    rows: parseInt(document.getElementById('grid-size-input').value, 10) || 20,
+                    cols: parseInt(gridSizeInput.value, 10) || 20,
+                    rows: parseInt(gridSizeInput.value, 10) || 20,
                     puOpp: parseInt(document.getElementById('pu-opp-input').value, 10) || 10,
                     puSelf: parseInt(document.getElementById('pu-self-input').value, 10) || 10,
                     slots: lobbySlots.map(s => ({
@@ -2935,8 +2927,6 @@
             if (joinCodeInput.value.length < 3) return;
             Synth.init();
             Synth.startMusic();
-            if (Synth.ctx.state === 'suspended') Synth.ctx.resume();
-
             blazers = [];
             setButtonLoading(joinFriendBtn, true);
             try {
@@ -2967,8 +2957,6 @@
         startBtn.addEventListener('click', async () => {
             Synth.init();
             Synth.startMusic();
-            if (Synth.ctx.state === 'suspended') Synth.ctx.resume();
-
             blazers = [];
             clampGridSizeInput();
             setButtonLoading(startBtn, true);
@@ -2976,8 +2964,8 @@
             try {
                 if (!client) throw new Error('Colyseus client not initialised — check your connection.');
                 const settings = {
-                    cols: parseInt(document.getElementById('grid-size-input').value, 10),
-                    rows: parseInt(document.getElementById('grid-size-input').value, 10),
+                    cols: parseInt(gridSizeInput.value, 10),
+                    rows: parseInt(gridSizeInput.value, 10),
                     puOpp: parseInt(document.getElementById('pu-opp-input').value, 10),
                     puSelf: parseInt(document.getElementById('pu-self-input').value, 10),
                     slots: lobbySlots.map(s => ({
@@ -3016,7 +3004,6 @@
             if (!code) return;
 
             Synth.init();
-            if (Synth.ctx.state === 'suspended') Synth.ctx.resume();
 
             // Leave old room if still connected (e.g. no one has restarted yet)
             if (room) {
@@ -3046,9 +3033,7 @@
             }
         });
 
-        menuBtn.addEventListener('click', () => {
-            returnToMenu();
-        });
+        menuBtn.addEventListener('click', returnToMenu);
 
         window.addEventListener('resize', () => { resizeCanvas(); updateGridSizeInputLimits(); });
 
@@ -3359,14 +3344,13 @@
                     ctx.save();
                     ctx.translate(px, py);
                     if (pu.type === 'opponents') {
-                        const segColors = ['#ff0055','#ff8800','#ffee00','#00ff22','#00ffff','#4466ff','#aa00ff','#ff00ff'];
-                        const n = segColors.length;
+                        const n = playerColors.length;
                         const r = CELL * 0.3;
                         const gapAngle = 5 / r;
                         const sliceAngle = (Math.PI * 2) / n;
                         const arcAngle = Math.max(0, sliceAngle - gapAngle);
                         ctx.rotate(time);
-                        segColors.forEach((col, i) => {
+                        playerColors.forEach((col, i) => {
                             const startA = i * sliceAngle + gapAngle / 2;
                             for (let pass = 0; pass < 3; pass++) {
                                 ctx.beginPath();
