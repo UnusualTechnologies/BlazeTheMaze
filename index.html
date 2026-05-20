@@ -612,7 +612,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.19</div>
+    <div id="version-number">v1.5.20</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3260,10 +3260,11 @@
                 ctx.stroke();
                 ctx.restore();
                 ctx.beginPath();
-                ctx.arc(0, 0, CELL * 0.07, 0, Math.PI * 2);
+                ctx.arc(0, 0, CELL * 0.08, 0, Math.PI * 2);
                 ctx.fillStyle = '#ffffff';
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = '#ffffff';
+                ctx.shadowBlur = 20;
+                const sparkHue = (time * 300) % 360;
+                ctx.shadowColor = `hsl(${sparkHue}, 100%, 50%)`;
                 ctx.fill();
                 ctx.restore();
             }
