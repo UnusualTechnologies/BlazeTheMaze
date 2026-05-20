@@ -4,7 +4,7 @@
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win"
+    "build": "set CSC_IDENTITY_AUTO_DISCOVERY=false && electron-builder --win"
   },
   "dependencies": {
     "steamworks.js": "^0.3.0"
