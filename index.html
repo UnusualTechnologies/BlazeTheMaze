@@ -612,7 +612,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.22</div>
+    <div id="version-number">v1.5.23</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3187,20 +3187,27 @@
                 if (!pos.vis) return;
                 const size = CELL * 0.216;
 
-                // Trail — same approach as main game
+                // Trail — spaced filled circles matching the dot-trail look of in-game
                 if (trail.length > 1) {
                     ctx.save();
-                    ctx.lineWidth = size * 0.8;
-                    ctx.lineCap = 'round';
-                    ctx.lineJoin = 'round';
+                    ctx.fillStyle = color;
+                    const minDist = size * 1.2;
+                    const minDist2 = minDist * minDist;
+                    let lastX = trail[0].x, lastY = trail[0].y;
+                    const pts = [0];
                     for (let i = 1; i < trail.length; i++) {
-                        const alpha = i / trail.length;
-                        ctx.strokeStyle = color;
-                        ctx.globalAlpha = alpha * 0.5;
+                        const dx = trail[i].x - lastX, dy = trail[i].y - lastY;
+                        if (dx * dx + dy * dy >= minDist2) {
+                            pts.push(i);
+                            lastX = trail[i].x;
+                            lastY = trail[i].y;
+                        }
+                    }
+                    for (const i of pts) {
+                        ctx.globalAlpha = (i + 1) / trail.length * 0.5;
                         ctx.beginPath();
-                        ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
-                        ctx.lineTo(trail[i].x, trail[i].y);
-                        ctx.stroke();
+                        ctx.arc(trail[i].x, trail[i].y, size * 0.4, 0, Math.PI * 2);
+                        ctx.fill();
                     }
                     ctx.restore();
                 }
