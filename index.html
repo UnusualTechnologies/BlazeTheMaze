@@ -612,7 +612,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.18</div>
+    <div id="version-number">v1.5.19</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1109,36 +1109,6 @@
             }
         }
         
-        class TrailParticle {
-            constructor(x, y, color, bugSize) {
-                this.x = x + (Math.random() - 0.5) * bugSize * 0.8;
-                this.y = y + (Math.random() - 0.5) * bugSize * 0.8;
-                this.color = color;
-                this.life = 0.6 + Math.random() * 0.4;
-                this.decay = 0.05 + Math.random() * 0.04;
-                this.size = bugSize * (0.08 + Math.random() * 0.18);
-                this.vx = (Math.random() - 0.5) * 0.4;
-                this.vy = (Math.random() - 0.5) * 0.4;
-            }
-            update(dt) {
-                this.x += this.vx * (dt * 0.05);
-                this.y += this.vy * (dt * 0.05);
-                this.life -= this.decay * (dt * 0.05);
-                return this.life > 0;
-            }
-            draw() {
-                ctx.globalAlpha = Math.max(0, this.life * 0.85);
-                ctx.fillStyle = this.color;
-                ctx.shadowBlur = 8;
-                ctx.shadowColor = this.color;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.globalAlpha = 1.0;
-                ctx.shadowBlur = 0;
-            }
-        }
-
         class Rocket {
             constructor(x, y, color, ownerBlazer) {
                 this.gridX = x;
@@ -1255,17 +1225,6 @@
                 this.trail = [];
                 this.maxTrail = 25;
                 this.moveTimer = 0;
-                this.lastTrailParticleX = 0;
-                this.lastTrailParticleY = 0;
-
-                this.particleOffsets = [];
-                for (let i = 0; i < 9; i++) {
-                    const a = (i / 9) * Math.PI * 2 + (Math.random() - 0.5) * 0.6;
-                    const r = 0.45 + Math.random() * 0.55;
-                    const s = 0.12 + Math.random() * 0.18;
-                    this.particleOffsets.push({ a, r, s, phase: Math.random() * Math.PI * 2 });
-                }
-
                 this.moveCooldown = 70;
 
                 this.lastMoveTime = 0;
@@ -1473,22 +1432,29 @@
                 this.trail.push({ x: this.pixelX, y: this.pixelY });
                 if (this.trail.length > this.maxTrail) this.trail.shift();
 
-                // Spawn trail particles spaced by movement distance
-                const tdx = this.pixelX - this.lastTrailParticleX;
-                const tdy = this.pixelY - this.lastTrailParticleY;
-                const bugSize = cellSize * 0.30;
-                if (tdx * tdx + tdy * tdy > (cellSize * 0.07) * (cellSize * 0.07)) {
-                    particles.push(new TrailParticle(this.pixelX, this.pixelY, this.color, bugSize));
-                    if (Math.random() < 0.6) particles.push(new TrailParticle(this.pixelX, this.pixelY, this.color, bugSize));
-                    this.lastTrailParticleX = this.pixelX;
-                    this.lastTrailParticleY = this.pixelY;
-                }
             }
 
             draw() {
-                const size = cellSize * 0.30;
-                const now = performance.now() * 0.001;
-                const bodyColor = this.flashTimer > 0 ? '#ffffff' : this.color;
+                const size = cellSize * 0.216;
+
+                // Trail
+                ctx.lineWidth = size * 0.8;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                if (this.trail.length > 1) {
+                    ctx.save();
+                    for (let i = 1; i < this.trail.length; i++) {
+                        const alpha = i / this.trail.length;
+                        ctx.strokeStyle = this.color;
+                        ctx.globalAlpha = alpha * 0.5;
+                        ctx.beginPath();
+                        ctx.moveTo(this.trail[i-1].x, this.trail[i-1].y);
+                        ctx.lineTo(this.trail[i].x, this.trail[i].y);
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+                }
 
                 ctx.save();
                 ctx.translate(this.pixelX, this.pixelY);
@@ -1506,46 +1472,20 @@
                     ctx.translate(this.bonkDx * offset, this.bonkDy * offset);
                 }
 
+                // Body — drawn three times with decreasing shadowBlur for maximum bloom
+                const bodyColor = this.flashTimer > 0 ? '#ffffff' : this.color;
                 ctx.fillStyle = bodyColor;
-
-                // Outer halo — wide, soft
-                ctx.shadowBlur = 50;
-                ctx.shadowColor = this.color;
-                ctx.globalAlpha = 0.18;
-                ctx.beginPath();
-                ctx.arc(0, 0, size * 1.7, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Mid glow ring
-                ctx.shadowBlur = 30;
-                ctx.globalAlpha = 0.4;
-                ctx.beginPath();
-                ctx.arc(0, 0, size * 1.1, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Bright core
-                ctx.shadowBlur = 20;
-                ctx.globalAlpha = 1.0;
-                ctx.beginPath();
-                ctx.arc(0, 0, size * 0.5, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Particle dots scattered around body
-                for (const p of this.particleOffsets) {
-                    const twinkle = 0.55 + Math.sin(now * 3.5 + p.phase) * 0.45;
-                    ctx.globalAlpha = twinkle * 0.9;
-                    ctx.shadowBlur = 10;
-                    const px = Math.cos(p.a) * size * p.r;
-                    const py = Math.sin(p.a) * size * p.r;
+                ctx.globalAlpha = 0.75;
+                for (const blur of [80, 40, 15]) {
+                    ctx.shadowBlur = blur;
+                    ctx.shadowColor = bodyColor;
                     ctx.beginPath();
-                    ctx.arc(px, py, size * p.s, 0, Math.PI * 2);
+                    ctx.arc(0, 0, size, 0, Math.PI * 2);
                     ctx.fill();
                 }
                 ctx.shadowBlur = 0;
                 ctx.globalAlpha = 1;
 
-                ctx.globalAlpha = 1.0;
-                ctx.shadowBlur = 0;
                 ctx.restore();
             }
         }
