@@ -612,7 +612,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.20</div>
+    <div id="version-number">v1.5.21</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3176,7 +3176,7 @@
                 if (!pos.vis) { trail.length = 0; return; }
                 if (!wasVis) trail.length = 0;
                 trail.push({ x: pos.px, y: pos.py });
-                if (trail.length > 14) trail.shift();
+                if (trail.length > 25) trail.shift();
             }
 
             // ── Draw: blazer — matches main game Blazer.draw() ────────────────
