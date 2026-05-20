@@ -612,7 +612,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.18</div>
+    <div id="version-number">v1.5.19</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3161,8 +3161,8 @@
 
             // ── State ─────────────────────────────────────────────────────────
             let powerUps, puffs, bursts, eventsFired;
-            let cyanTrail = [], purpleTrail = [];
-            let prevCV = false, prevPV = false;
+            let cyanParticles = [], purpleParticles = [];
+            let prevMiniNow = 0;
 
             function resetLoop() {
                 powerUps = [
@@ -3172,10 +3172,8 @@
                 puffs = [];
                 bursts = [];
                 eventsFired = new Set();
-                cyanTrail.length = 0;
-                purpleTrail.length = 0;
-                prevCV = false;
-                prevPV = false;
+                cyanParticles.length = 0;
+                purpleParticles.length = 0;
             }
 
             // color: blazer colour; drift in grid units (optional)
@@ -3232,35 +3230,51 @@
                 return { px: last.gx * CELL + CELL / 2, py: last.gy * CELL + CELL / 2, vis: last.vis };
             }
 
-            function updateTrail(trail, pos, wasVis) {
-                if (!pos.vis) { trail.length = 0; return; }
-                if (!wasVis) trail.length = 0;
-                trail.push({ x: pos.px, y: pos.py });
-                if (trail.length > 14) trail.shift();
+            function spawnTrailParticles(particles, px, py, color) {
+                const bugSize = CELL * 0.30;
+                particles.push({
+                    x: px + (Math.random() - 0.5) * bugSize * 0.8,
+                    y: py + (Math.random() - 0.5) * bugSize * 0.8,
+                    color,
+                    life: 0.6 + Math.random() * 0.4,
+                    decay: 0.05 + Math.random() * 0.04,
+                    size: bugSize * (0.08 + Math.random() * 0.18),
+                    vx: (Math.random() - 0.5) * 0.4,
+                    vy: (Math.random() - 0.5) * 0.4,
+                });
+            }
+
+            function updateParticles(particles, dt) {
+                const t = dt * 0.05;
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    const p = particles[i];
+                    p.x += p.vx * t;
+                    p.y += p.vy * t;
+                    p.life -= p.decay * t;
+                    if (p.life <= 0) particles.splice(i, 1);
+                }
+            }
+
+            function drawTrailParticles(particles) {
+                ctx.save();
+                ctx.shadowBlur = 8;
+                for (const p of particles) {
+                    ctx.shadowColor = p.color;
+                    ctx.fillStyle = p.color;
+                    ctx.globalAlpha = Math.max(0, p.life * 0.85);
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.globalAlpha = 1;
+                ctx.shadowBlur = 0;
+                ctx.restore();
             }
 
             // ── Draw: blazer — matches main game Blazer.draw() ────────────────
-            function drawBlazer(pos, color, trail) {
+            function drawBlazer(pos, color) {
                 if (!pos.vis) return;
                 const size = CELL * 0.216;
-
-                // Trail — same approach as main game
-                if (trail.length > 1) {
-                    ctx.save();
-                    ctx.lineWidth = size * 0.8;
-                    ctx.lineCap = 'round';
-                    ctx.lineJoin = 'round';
-                    for (let i = 1; i < trail.length; i++) {
-                        const alpha = i / trail.length;
-                        ctx.strokeStyle = color;
-                        ctx.globalAlpha = alpha * 0.5;
-                        ctx.beginPath();
-                        ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
-                        ctx.lineTo(trail[i].x, trail[i].y);
-                        ctx.stroke();
-                    }
-                    ctx.restore();
-                }
 
                 // Body — 3-pass bloom matching main game
                 ctx.save();
@@ -3470,8 +3484,12 @@
                 const menuEl = document.getElementById('initial-menu');
                 if (!menuEl || menuEl.classList.contains('hidden')) {
                     startTime = null;
+                    prevMiniNow = 0;
                     return;
                 }
+
+                const dt = prevMiniNow ? Math.min(now - prevMiniNow, 50) : 16;
+                prevMiniNow = now;
 
                 if (startTime === null) { startTime = now; resetLoop(); }
                 const elapsed = now - startTime;
@@ -3483,10 +3501,11 @@
                 const cPos = interp(CYAN_KF,   elapsed);
                 const pPos = interp(PURPLE_KF, elapsed);
 
-                updateTrail(cyanTrail,   cPos, prevCV);
-                updateTrail(purpleTrail, pPos, prevPV);
-                prevCV = cPos.vis;
-                prevPV = pPos.vis;
+                if (cPos.vis) spawnTrailParticles(cyanParticles,   cPos.px, cPos.py, '#00ffff');
+                if (pPos.vis) spawnTrailParticles(purpleParticles, pPos.px, pPos.py, '#ff00ff');
+
+                updateParticles(cyanParticles,   dt);
+                updateParticles(purpleParticles, dt);
 
                 ctx.fillStyle = colors.bg;
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -3494,8 +3513,10 @@
                 drawMiniMaze();
                 drawPowerUps(elapsed);
                 drawStar(elapsed);
-                drawBlazer(cPos, '#00ffff', cyanTrail);
-                drawBlazer(pPos, '#ff00ff', purpleTrail);
+                drawTrailParticles(cyanParticles);
+                drawTrailParticles(purpleParticles);
+                drawBlazer(cPos, '#00ffff');
+                drawBlazer(pPos, '#ff00ff');
                 drawPuffs(now);
                 drawBursts(now);
             }
