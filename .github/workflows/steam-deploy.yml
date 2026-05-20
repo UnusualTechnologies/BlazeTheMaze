@@ -6,7 +6,7 @@ on:
       - 'v*'
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,6 +22,22 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: game-build
+          path: dist/win-unpacked
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: game-build
+          path: game-build
+
       - name: Deploy to Steam
         uses: game-ci/steam-deploy@v3
         with:
@@ -30,6 +46,6 @@ jobs:
           configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
           appId: 4734010
           buildDescription: ${{ github.ref_name }}
-          rootPath: dist
-          depot1Path: win-unpacked
+          rootPath: .
+          depot1Path: game-build
           releaseBranch: default
