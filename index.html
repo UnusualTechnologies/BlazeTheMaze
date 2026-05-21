@@ -613,7 +613,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.34</div>
+    <div id="version-number">v1.5.35</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2866,14 +2866,12 @@
 
             room.onLeave(async (code) => {
                 if (code === 4001) {
-                    alert("You were removed from the room to make space for a friend-code player.");
-                    location.reload();
+                    showNetworkNotification('Removed from Room', 'You were removed to make space for a friend-code player.', () => location.reload());
                 } else if (code === 4002) {
                     // A new game was started — stay on the win screen, null out the stale room reference
                     room = null;
                 } else if (code === 4003) {
-                    alert("You were disconnected due to 3 minutes of inactivity.");
-                    location.reload();
+                    showNetworkNotification('Disconnected', 'You were removed due to 3 minutes of inactivity.', () => location.reload());
                 } else if (code === 1000 || code === 1001) {
                     // Normal close: player clicked menu / Play Again called room.leave() / Electron window closed
                     // Don't show reconnect UI — the leave was intentional
@@ -2894,16 +2892,14 @@
                     }
                     if (!rejoined) {
                         hideReconnectingOverlay();
-                        alert("Could not reconnect to the server. Returning to the menu.");
-                        location.reload();
+                        showNetworkNotification('Connection Lost', 'Could not reconnect to the server.', () => location.reload());
                     }
                 }
             });
 
             room.onError((code, message) => {
                 console.error("Room error:", code, message);
-                alert("A server error occurred (" + code + "): " + (message || "unknown error") + ". Returning to the menu.");
-                location.reload();
+                showNetworkNotification('Server Error', (message || 'An unexpected server error occurred.') + ' (code ' + code + ')', () => location.reload());
             });
 
             room.onMessage("round_reset", () => {
@@ -2952,6 +2948,60 @@
         }
         function hideSlowConnectionToast() {
             if (_slowToast) { _slowToast.remove(); _slowToast = null; }
+        }
+
+        function showNetworkNotification(title, message, onDismiss) {
+            const overlay = document.createElement('div');
+            Object.assign(overlay.style, {
+                position: 'fixed', inset: '0',
+                background: 'rgba(0,0,0,0.85)',
+                backdropFilter: 'blur(8px)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                zIndex: '10001',
+            });
+            const panel = document.createElement('div');
+            Object.assign(panel.style, {
+                background: 'rgba(0,0,0,0.95)',
+                border: '1px solid rgba(255,100,50,0.4)',
+                borderRadius: '12px',
+                padding: '32px 40px',
+                maxWidth: '420px',
+                width: '90%',
+                textAlign: 'center',
+                boxShadow: '0 0 40px rgba(255,100,50,0.2)',
+                fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+                color: '#fff',
+            });
+            const heading = document.createElement('div');
+            heading.textContent = title;
+            Object.assign(heading.style, {
+                fontSize: '1.3rem', fontWeight: 'bold',
+                color: '#ff6633',
+                textShadow: '0 0 10px rgba(255,100,50,0.8)',
+                marginBottom: '12px',
+            });
+            const body = document.createElement('div');
+            body.textContent = message;
+            Object.assign(body.style, {
+                color: '#aaa', fontSize: '0.95rem',
+                lineHeight: '1.5', marginBottom: '24px',
+            });
+            const btn = document.createElement('button');
+            btn.textContent = 'Return to Menu';
+            Object.assign(btn.style, {
+                background: '#00ffff', color: '#050510',
+                border: 'none', borderRadius: '50px',
+                padding: '12px 32px', fontSize: '1rem',
+                fontWeight: 'bold', cursor: 'pointer',
+                boxShadow: '0 0 20px #00ffff',
+                transition: 'box-shadow 0.2s',
+            });
+            btn.addEventListener('mouseenter', () => { btn.style.boxShadow = '0 0 30px #00ffff, 0 0 60px #00ffff'; });
+            btn.addEventListener('mouseleave', () => { btn.style.boxShadow = '0 0 20px #00ffff'; });
+            btn.addEventListener('click', () => { overlay.remove(); onDismiss(); });
+            panel.append(heading, body, btn);
+            overlay.appendChild(panel);
+            document.body.appendChild(overlay);
         }
 
         let _reconnectOverlay = null;
