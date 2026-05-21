@@ -613,7 +613,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.38</div>
+    <div id="version-number">v1.5.40</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2803,6 +2803,32 @@
                     scores[playerState.id] = playerState.score;
                 });
                 updateScoreboard();
+
+                // Late-joiner catch-up: server is in round-over but we haven't transitioned yet
+                // (the round_won message was sent before our onMessage handler was registered)
+                if (state.roundOver && gameState === 'PLAYING') {
+                    const wId = state.lastWinnerId;
+                    const wColor = state.lastWinnerColor;
+                    scores[wId] = state.lastWinnerScore;
+                    updateScoreboard();
+                    if (state.matchOver) {
+                        gameState = 'MATCH_OVER';
+                        Synth.muffle(true);
+                        postMatchLayer.style.setProperty('--winner-color', wColor);
+                        postMatchLayer.classList.add('winner-pulse');
+                        postMatchLayer.classList.remove('hidden');
+                        pmTitle.innerText = `${wId} Wins the Match!`;
+                        pmTitle.style.textShadow = `0 0 20px ${wColor}, 0 0 40px ${wColor}`;
+                        pmSubtitle.innerHTML = `${wId} won the Best-of-3!`;
+                        lastRoomCode = room.roomId;
+                        playAgainBtn.innerText = `Play Again with Friend Code ${room.roomId}`;
+                        document.getElementById('pm-round-times').innerHTML = '';
+                    } else {
+                        gameState = 'ROUND_OVER_COUNTDOWN';
+                        currentWinner = blazers.find(b => b.id === wId) || { id: wId, color: wColor };
+                        roundCountdown = 3000;
+                    }
+                }
             });
 
             room.onMessage("owner_confirm", () => {

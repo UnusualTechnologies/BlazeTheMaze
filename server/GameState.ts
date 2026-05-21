@@ -41,4 +41,10 @@ export class GameState extends Schema {
     @type("number") goalY: number = 10;
     @type([ PowerUp ]) powerUps = new ArraySchema<PowerUp>();
     @type("string") steamLobbyId: string = "";
+    // Round-over state — lets late joiners sync to the correct screen via onStateChange
+    @type("boolean") roundOver: boolean = false;
+    @type("boolean") matchOver: boolean = false;
+    @type("string") lastWinnerId: string = "";
+    @type("string") lastWinnerColor: string = "";
+    @type("number") lastWinnerScore: number = 0;
 }

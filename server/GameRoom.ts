@@ -638,6 +638,12 @@ export class GameRoom extends Room<{ state: GameState }> {
             this.roundOver = true; // Freeze the game immediately
             player.score++;
             const isMatchWon = player.score >= 3;
+            // Persist winner info in synced state so late joiners catch up via onStateChange
+            this.state.roundOver = true;
+            this.state.matchOver = isMatchWon;
+            this.state.lastWinnerId = player.id;
+            this.state.lastWinnerColor = player.color;
+            this.state.lastWinnerScore = player.score;
             this.lastRoundWon = { winnerId: player.id, winnerColor: player.color, winnerScore: player.score, isMatchWon };
             this.broadcast("round_won", this.lastRoundWon);
             if (isMatchWon) {
@@ -693,6 +699,11 @@ export class GameRoom extends Room<{ state: GameState }> {
     resetRound() {
         this.roundOver = false;
         this.lastRoundWon = null;
+        this.state.roundOver = false;
+        this.state.matchOver = false;
+        this.state.lastWinnerId = "";
+        this.state.lastWinnerColor = "";
+        this.state.lastWinnerScore = 0;
         // New maze
         this.state.grid.clear();
         this.generateMaze();
