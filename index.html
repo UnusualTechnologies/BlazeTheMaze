@@ -613,7 +613,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.35</div>
+    <div id="version-number">v1.5.36</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1769,6 +1769,7 @@
             window.electronAPI?.closeSteamLobby();
             window.electronAPI?.setRichPresence('In Menu');
             if (typeof room !== 'undefined' && room) {
+                leavingIntentionally = true;
                 room.leave();
                 room = null;
             }
@@ -2611,6 +2612,7 @@
         });
 
         let reconnectionToken = null;
+        let leavingIntentionally = false;
 
         async function setupRoom(newRoom) {
             room = newRoom;
@@ -2872,9 +2874,9 @@
                     room = null;
                 } else if (code === 4003) {
                     showNetworkNotification('Disconnected', 'You were removed due to 3 minutes of inactivity.', () => location.reload());
-                } else if (code === 1000 || code === 1001) {
-                    // Normal close: player clicked menu / Play Again called room.leave() / Electron window closed
-                    // Don't show reconnect UI — the leave was intentional
+                } else if (leavingIntentionally) {
+                    // Player clicked menu / Play Again / closed the window — no reconnect
+                    leavingIntentionally = false;
                 } else {
                     // Unexpected disconnect (network drop, server restart, etc.)
                     // Try to reconnect up to 4 times over 8 seconds to match the server's hold window
@@ -3164,6 +3166,7 @@
 
             // Leave old room if still connected (e.g. no one has restarted yet)
             if (room) {
+                leavingIntentionally = true;
                 try { room.leave(); } catch (_) {}
                 room = null;
             }
