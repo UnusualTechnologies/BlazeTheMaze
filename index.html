@@ -621,7 +621,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.57</div>
+    <div id="version-number">v1.5.58</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -872,6 +872,8 @@
         let roundTimes = [];
         let gameStartLabelTime = null; // set once per game, drives player-number fade-in labels
         let lastRoomCode = null;
+        let lastPuOpp = 10;
+        let lastPuSelf = 10;
 
         let roundFlashStart = null; // performance.now() timestamp when white flash begins
         let bestTime = parseFloat(localStorage.getItem('neonBlazerBestTime')) || null;
@@ -2922,6 +2924,8 @@
             // the Play Again button or the friend-code input.
             room.onMessage("play_again_started", ({ playerName, roomCode }) => {
                 lastRoomCode = roomCode || lastRoomCode;
+                lastPuOpp  = room.state?.puOpp  ?? lastPuOpp;
+                lastPuSelf = room.state?.puSelf ?? lastPuSelf;
                 playAgainBtn.innerText = `Join with Friend Code ${lastRoomCode}`;
                 const notif = document.getElementById('pm-started-notification');
                 notif.innerText = `⚡ ${playerName} has started a new game!`;
@@ -2932,6 +2936,8 @@
             // then re-trigger the Play Again button (room is now null, so it does join/create)
             room.onMessage("play_again_confirm", ({ roomCode }) => {
                 lastRoomCode = roomCode || lastRoomCode;
+                lastPuOpp  = room.state?.puOpp  ?? lastPuOpp;
+                lastPuSelf = room.state?.puSelf ?? lastPuSelf;
                 leavingIntentionally = true;
                 try { room.leave(); } catch (_) {}
                 room = null;
@@ -3362,8 +3368,8 @@
                         newRoom = await withTimeout(client.create("game", {
                             cols: parseInt(gridSizeInput.value, 10) || 20,
                             rows: parseInt(gridSizeInput.value, 10) || 20,
-                            puOpp: parseInt(document.getElementById('pu-opp-input').value, 10) || 10,
-                            puSelf: parseInt(document.getElementById('pu-self-input').value, 10) || 10,
+                            puOpp: lastPuOpp,
+                            puSelf: lastPuSelf,
                             slots: lobbySlots.map(s => ({
                                 mode: s.typeSelect.value, id: s.id,
                                 color: s.color, aiSpeed: s.aiSpeedSelect.value,

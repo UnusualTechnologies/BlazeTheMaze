@@ -55,6 +55,8 @@ export class GameRoom extends Room<{ state: GameState }> {
         const state = new GameState();
         state.cols = this.cols;
         state.rows = this.rows;
+        state.puOpp = options.puOpp !== undefined ? Math.min(Number(options.puOpp), 100) : 10;
+        state.puSelf = options.puSelf !== undefined ? Math.min(Number(options.puSelf), 100) : 10;
         state.goalX = Math.floor(this.cols / 2);
         state.goalY = Math.floor(this.rows / 2);
 

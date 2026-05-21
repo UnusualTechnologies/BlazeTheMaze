@@ -37,6 +37,8 @@ export class GameState extends Schema {
     @type([ Cell ]) grid = new ArraySchema<Cell>();
     @type("number") cols: number = 20;
     @type("number") rows: number = 20;
+    @type("number") puOpp: number = 10;
+    @type("number") puSelf: number = 10;
     @type("number") goalX: number = 10;
     @type("number") goalY: number = 10;
     @type([ PowerUp ]) powerUps = new ArraySchema<PowerUp>();
