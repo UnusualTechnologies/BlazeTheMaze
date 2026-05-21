@@ -21,6 +21,8 @@ export class GameRoom extends Room<{ state: GameState }> {
     roundOver: boolean = false;
     // True once a match is won; blocks new joins until someone with the code restarts
     matchComplete: boolean = false;
+    // Last round_won payload — sent to clients who join during the round-over countdown
+    lastRoundWon: { winnerId: string; winnerColor: string; winnerScore: number; isMatchWon: boolean } | null = null;
     // Last input timestamp per human sessionId — used for idle kick
     lastInputTime = new Map<string, number>();
     static readonly IDLE_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
@@ -311,6 +313,10 @@ export class GameRoom extends Room<{ state: GameState }> {
             this.state.players.set(client.sessionId, player);
         }
         this.lastInputTime.set(client.sessionId, Date.now()); // start idle clock from join time
+        // Catch up a late joiner who missed the round_won broadcast during the countdown
+        if (this.roundOver && this.lastRoundWon) {
+            client.send("round_won", this.lastRoundWon);
+        }
         console.log(`Client ${client.sessionId} assigned to slot ${assignedSlotIndex}`);
     }
 
@@ -632,12 +638,8 @@ export class GameRoom extends Room<{ state: GameState }> {
             this.roundOver = true; // Freeze the game immediately
             player.score++;
             const isMatchWon = player.score >= 3;
-            this.broadcast("round_won", {
-                winnerId: player.id,
-                winnerColor: player.color,
-                winnerScore: player.score,
-                isMatchWon,
-            });
+            this.lastRoundWon = { winnerId: player.id, winnerColor: player.color, winnerScore: player.score, isMatchWon };
+            this.broadcast("round_won", this.lastRoundWon);
             if (isMatchWon) {
                 this.matchComplete = true;
                 this.lock();
@@ -689,7 +691,8 @@ export class GameRoom extends Room<{ state: GameState }> {
     }
 
     resetRound() {
-        this.roundOver = false; // Unfreeze before applying new state
+        this.roundOver = false;
+        this.lastRoundWon = null;
         // New maze
         this.state.grid.clear();
         this.generateMaze();
