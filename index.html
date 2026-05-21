@@ -613,7 +613,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.41</div>
+    <div id="version-number">v1.5.42</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2601,7 +2601,7 @@
                     console.error('Steam join request failed:', e);
                     const msg = colyseusErrorText(e);
                     let body;
-                    if (msg.toLowerCase().includes("not found")) {
+                    if (isNotFoundError(e, msg)) {
                         body = "Room not found. The host may have returned to the menu.";
                     } else if (msg === "ROOM_FULL") {
                         body = "This room is currently full.";
@@ -3020,12 +3020,33 @@
         }
 
         function colyseusErrorText(e) {
-            // Colyseus errors sometimes wrap the message as an object {code, error}
-            if (typeof e?.message === 'string') return e.message;
-            if (typeof e?.message?.error === 'string') return e.message.error;
+            if (e == null) return 'Unknown error';
+            const msg = e?.message;
+            // Colyseus sometimes does new Error(obj) producing the string "[object Object]" — skip it
+            if (typeof msg === 'string' && msg && msg !== '[object Object]') {
+                // Message might be a JSON-stringified error from the SDK
+                try { const p = JSON.parse(msg); if (typeof p?.error === 'string') return p.error; } catch (_) {}
+                return msg;
+            }
+            // Colyseus wraps HTTP errors as { message: { code, error } }
+            if (msg && typeof msg === 'object') {
+                if (typeof msg.error === 'string') return msg.error;
+                if (typeof msg.message === 'string') return msg.message;
+            }
             if (typeof e?.error === 'string') return e.error;
-            if (typeof e === 'string') return e;
+            if (typeof e === 'string' && e !== '[object Object]') return e;
+            try { const s = JSON.stringify(e); if (s && s.length > 2 && s !== '{}') return s; } catch (_) {}
             return 'Unknown error';
+        }
+
+        function isNotFoundError(e, msg) {
+            // Text-based checks (handles various Colyseus / SDK phrasings)
+            const lc = (msg || '').toLowerCase();
+            if (lc.includes('not found') || lc.includes('not_found')) return true;
+            // HTTP 404 or Colyseus matchmaker code 4212 mean "room does not exist"
+            if (e?.status === 404 || e?.code === 4212) return true;
+            if (e?.message?.code === 4212) return true;
+            return false;
         }
 
         function showNetworkNotification(title, message, onDismiss, btnText = 'Return to Menu', secondBtn = null) {
@@ -3194,7 +3215,7 @@
                 console.error("Could not join room", e);
                 const msg = colyseusErrorText(e);
                 const enteredCode = joinCodeInput.value;
-                if (msg.toLowerCase().includes("not found")) {
+                if (isNotFoundError(e, msg)) {
                     showNetworkNotification(
                         'Room Not Found',
                         `No room with code "${enteredCode}" exists. You can start a new game with this code so your friend can join you.`,
@@ -3288,7 +3309,7 @@
                 console.error("Play Again failed:", e);
                 const msg = colyseusErrorText(e);
                 let body;
-                if (msg.toLowerCase().includes("not found")) {
+                if (isNotFoundError(e, msg)) {
                     body = "That room is no longer active. Start a new game from the main menu.";
                 } else if (msg === "ROOM_FULL") {
                     body = "The room is currently full. Try again in a moment.";
