@@ -44,8 +44,6 @@ export class GameRoom extends Room<{ state: GameState }> {
             for (let i = 0; i < 9; i++) customId += chars.charAt(Math.floor(Math.random() * chars.length));
             this.roomId = customId;
         }
-        this.state.roomCode = this.roomId;
-
         this.cols = Math.max(5, Number(options.cols) || 20);
         this.rows = Math.max(5, Number(options.rows) || 20);
         this.collisions = options.collisions !== false; // default true
@@ -115,6 +113,7 @@ export class GameRoom extends Room<{ state: GameState }> {
 
         this.spawnOptions = options;
         this.setState(state);
+        state.roomCode = this.roomId;
         this.generateMaze();
         this.spawnPowerUps(options);
 
