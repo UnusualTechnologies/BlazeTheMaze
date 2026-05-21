@@ -45,7 +45,8 @@ When suggesting a push, provide a brief bulleted summary of what we've done so I
 - The live Colyseus server runs on Colyseus Cloud at `wss://gb-lhr-5b4d543b.colyseus.cloud`.
 - **Deploying the server = pushing to GitHub (main branch).** Colyseus Cloud auto-deploys on push.
 - Any changes to `server/GameRoom.ts`, `server/GameState.ts`, or other server files are NOT live until pushed.
-- When server files are changed, always remind the user to push so the cloud server picks up the changes.
+- **Whenever a session includes server-side changes, always push to GitHub at the end** so the changes can be tested immediately. Do not wait to be asked.
+- After pushing a session that includes server changes, always tell the user: "The server is deploying — please wait a few minutes before testing."
 - Server credentials are in `server/.colyseus-cloud.json` (applicationId: `1505-maze`).
 
 ## Steam Build Pipeline (IN PROGRESS — pick up here next session)
