@@ -34,11 +34,16 @@ export class GameRoom extends Room<{ state: GameState }> {
     // --- Lifecycle ---
 
     onCreate(options: any) {
-        // Use an unambiguous uppercase-only room ID
+        // Use an unambiguous uppercase-only room ID; accept a desired ID from the client
         const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-        let customId = '';
-        for (let i = 0; i < 9; i++) customId += chars.charAt(Math.floor(Math.random() * chars.length));
-        this.roomId = customId;
+        const desired = options.desiredRoomId;
+        if (typeof desired === 'string' && /^[A-Z0-9]{3,9}$/.test(desired)) {
+            this.roomId = desired;
+        } else {
+            let customId = '';
+            for (let i = 0; i < 9; i++) customId += chars.charAt(Math.floor(Math.random() * chars.length));
+            this.roomId = customId;
+        }
 
         this.cols = Math.max(5, Number(options.cols) || 20);
         this.rows = Math.max(5, Number(options.rows) || 20);
