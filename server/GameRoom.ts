@@ -24,6 +24,8 @@ export class GameRoom extends Room<{ state: GameState }> {
     // Last input timestamp per human sessionId — used for idle kick
     lastInputTime = new Map<string, number>();
     static readonly IDLE_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
+    // Last accepted move timestamp per sessionId — for rate limiting (max 20 moves/sec)
+    lastMoveTime = new Map<string, number>();
     // Session ID of the room creator — only they may drive secondary local slots
     ownerSessionId: string = '';
 
@@ -149,37 +151,67 @@ export class GameRoom extends Room<{ state: GameState }> {
         }, 100);
 
         this.onMessage("move", (client, message) => {
-            if (this.roundOver) return; // Reject moves during round-over countdown
-            const player = this.state.players.get(client.sessionId);
-            if (!player || player.isAI) return;
-            this.lastInputTime.set(client.sessionId, Date.now());
-            player.x = message.x;
-            player.y = message.y;
-            this.checkCollisions(player, client.sessionId);
+            try {
+                if (this.roundOver) return;
+                const player = this.state.players.get(client.sessionId);
+                if (!player || player.isAI) return;
+                // Rate limit: max 20 moves/sec per client
+                const now = Date.now();
+                if (now - (this.lastMoveTime.get(client.sessionId) ?? 0) < 50) return;
+                this.lastMoveTime.set(client.sessionId, now);
+                // Validate coordinates
+                if (
+                    typeof message?.x !== 'number' || typeof message?.y !== 'number' ||
+                    !Number.isFinite(message.x) || !Number.isFinite(message.y) ||
+                    message.x < 0 || message.x >= this.cols ||
+                    message.y < 0 || message.y >= this.rows
+                ) {
+                    console.warn(`Invalid move from ${client.sessionId}:`, message);
+                    return;
+                }
+                this.lastInputTime.set(client.sessionId, now);
+                player.x = message.x;
+                player.y = message.y;
+                this.checkCollisions(player, client.sessionId);
+            } catch (err) {
+                console.error(`Move handler error for ${client.sessionId}:`, err);
+            }
         });
 
         // Allows the host to drive unclaimed 'local' slots from the same machine (co-op)
         this.onMessage("move_secondary", (client, message) => {
-            if (this.roundOver) return;
-            if (client.sessionId !== this.ownerSessionId) return;
-            const { slotIndex, x, y } = message;
-            const slot = this.state.slots[slotIndex];
-            if (!slot || slot.mode !== 'local' || slot.sessionId !== '') return;
-            const aiId = `ai_${slotIndex}`;
-            const player = this.state.players.get(aiId);
-            if (!player || !player.isAI) return;
-            this.lastInputTime.set(client.sessionId, Date.now()); // host is active
-            player.x = x;
-            player.y = y;
-            this.checkCollisions(player, aiId);
+            try {
+                if (this.roundOver) return;
+                if (client.sessionId !== this.ownerSessionId) return;
+                const { slotIndex, x, y } = message;
+                if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) {
+                    console.warn(`Invalid move_secondary from ${client.sessionId}:`, message);
+                    return;
+                }
+                const slot = this.state.slots[slotIndex];
+                if (!slot || slot.mode !== 'local' || slot.sessionId !== '') return;
+                const aiId = `ai_${slotIndex}`;
+                const player = this.state.players.get(aiId);
+                if (!player || !player.isAI) return;
+                this.lastInputTime.set(client.sessionId, Date.now()); // host is active
+                player.x = x;
+                player.y = y;
+                this.checkCollisions(player, aiId);
+            } catch (err) {
+                console.error(`move_secondary handler error for ${client.sessionId}:`, err);
+            }
         });
 
         // Host broadcasts the Steam lobby ID so all players can join it and
         // become visible to their own friends via Steam's "Join Game" button.
         this.onMessage("set_steam_lobby", (client, message) => {
-            if (client.sessionId !== this.ownerSessionId) return;
-            if (typeof message?.lobbyId === 'string' && message.lobbyId) {
-                this.state.steamLobbyId = message.lobbyId;
+            try {
+                if (client.sessionId !== this.ownerSessionId) return;
+                if (typeof message?.lobbyId === 'string' && message.lobbyId.length <= 256) {
+                    this.state.steamLobbyId = message.lobbyId;
+                }
+            } catch (err) {
+                console.error(`set_steam_lobby handler error for ${client.sessionId}:`, err);
             }
         });
 
@@ -282,9 +314,32 @@ export class GameRoom extends Room<{ state: GameState }> {
         console.log(`Client ${client.sessionId} assigned to slot ${assignedSlotIndex}`);
     }
 
-    onLeave(client: Client, _code?: number) {
+    async onLeave(client: Client, code?: number) {
+        // Codes 1000 (normal close) and our server-initiated codes mean the player
+        // intentionally left. Anything else (1001, 1006, undefined, etc.) is an
+        // unexpected drop — hold the slot for 8 seconds before converting to AI.
+        const intentional = code === 1000 || code === 4001 || code === 4002 || code === 4003;
+
+        if (!intentional) {
+            try {
+                await this.allowReconnection(client, 8);
+                // Player reconnected — restore activity timestamp and keep playing
+                this.lastInputTime.set(client.sessionId, Date.now());
+                console.log(`Client ${client.sessionId} reconnected.`);
+                return;
+            } catch {
+                console.log(`Client ${client.sessionId} reconnection window expired. Cleaning up.`);
+            }
+        }
+
+        // Player is truly leaving — clean up all tracking state
         this.lastInputTime.delete(client.sessionId);
+        this.lastMoveTime.delete(client.sessionId);
         this.friendCodeJoiners.delete(client.sessionId);
+        this.explorerLastPos.delete(client.sessionId);
+        this.guesserData.delete(client.sessionId);
+        this.aiCooldowns.delete(client.sessionId);
+
         const player = this.state.players.get(client.sessionId);
         if (player) {
             const slotIndex = player.slotIndex;

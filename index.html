@@ -613,7 +613,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.32</div>
+    <div id="version-number">v1.5.33</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2610,8 +2610,11 @@
                 });
         });
 
+        let reconnectionToken = null;
+
         async function setupRoom(newRoom) {
             room = newRoom;
+            reconnectionToken = newRoom.reconnectionToken ?? null;
             console.log("Joined room:", room.roomId, "SessionID:", room.sessionId);
 
             const isCodeJoin = joiningViaCode;
@@ -2861,7 +2864,7 @@
                 }
             });
 
-            room.onLeave((code) => {
+            room.onLeave(async (code) => {
                 if (code === 4001) {
                     alert("You were removed from the room to make space for a friend-code player.");
                     location.reload();
@@ -2871,7 +2874,33 @@
                 } else if (code === 4003) {
                     alert("You were disconnected due to 3 minutes of inactivity.");
                     location.reload();
+                } else {
+                    // Unexpected disconnect (network drop, server restart, etc.)
+                    // Try to reconnect up to 4 times over 8 seconds to match the server's hold window
+                    const MAX_ATTEMPTS = 4;
+                    let rejoined = false;
+                    for (let i = 1; i <= MAX_ATTEMPTS && !rejoined; i++) {
+                        showReconnectingOverlay(i, MAX_ATTEMPTS);
+                        await new Promise(r => setTimeout(r, 2000));
+                        try {
+                            const rejoinedRoom = await client.reconnect(reconnectionToken);
+                            hideReconnectingOverlay();
+                            setupRoom(rejoinedRoom);
+                            rejoined = true;
+                        } catch (_) { /* keep trying */ }
+                    }
+                    if (!rejoined) {
+                        hideReconnectingOverlay();
+                        alert("Could not reconnect to the server. Returning to the menu.");
+                        location.reload();
+                    }
                 }
+            });
+
+            room.onError((code, message) => {
+                console.error("Room error:", code, message);
+                alert("A server error occurred (" + code + "): " + (message || "unknown error") + ". Returning to the menu.");
+                location.reload();
             });
 
             room.onMessage("round_reset", () => {
@@ -2920,6 +2949,30 @@
         }
         function hideSlowConnectionToast() {
             if (_slowToast) { _slowToast.remove(); _slowToast = null; }
+        }
+
+        let _reconnectOverlay = null;
+        function showReconnectingOverlay(attempt, total) {
+            if (!_reconnectOverlay) {
+                _reconnectOverlay = document.createElement('div');
+                Object.assign(_reconnectOverlay.style, {
+                    position: 'fixed', inset: '0',
+                    background: 'rgba(0,0,0,0.72)',
+                    display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center',
+                    zIndex: '10000', color: '#fff',
+                    fontFamily: 'monospace', fontSize: '1.2rem',
+                    gap: '10px',
+                });
+                document.body.appendChild(_reconnectOverlay);
+            }
+            _reconnectOverlay.innerHTML =
+                `<div style="font-size:2rem">⚡</div>` +
+                `<div>Reconnecting… (${attempt}/${total})</div>` +
+                `<div style="font-size:0.85rem;color:#aaa">Connection lost — trying to resume your game</div>`;
+        }
+        function hideReconnectingOverlay() {
+            if (_reconnectOverlay) { _reconnectOverlay.remove(); _reconnectOverlay = null; }
         }
 
         quickStartBtn.addEventListener('click', async () => {
@@ -2984,9 +3037,12 @@
                 localSlotSchemes = {}; // joining someone else's room — no secondary locals
 
                 joiningViaCode = true;
+                const _slowTimerFC = setTimeout(showSlowConnectionToast, 5000);
                 const newRoom = await withTimeout(client.joinById(joinCodeInput.value, { joinedViaCode: true }), 10000);
+                clearTimeout(_slowTimerFC); hideSlowConnectionToast();
                 setupRoom(newRoom);
             } catch (e) {
+                hideSlowConnectionToast();
                 joiningViaCode = false;
                 setButtonLoading(joinFriendBtn, false);
                 console.error("Could not join room", e);
@@ -3062,13 +3118,17 @@
 
             blazers = [];
             try {
+                if (!client) throw new Error('Colyseus client not initialised — check your connection.');
                 const localSlot = lobbySlots.find(s => s.typeSelect.value === 'local');
                 localControlScheme = localSlot ? localSlot.controlSelect.value : 'WASD';
                 localSlotSchemes = {}; // rejoining — no secondary locals
                 joiningViaCode = true;
-                const newRoom = await client.joinById(code, { joinedViaCode: true });
+                const _slowTimerPA = setTimeout(showSlowConnectionToast, 5000);
+                const newRoom = await withTimeout(client.joinById(code, { joinedViaCode: true }), 10000);
+                clearTimeout(_slowTimerPA); hideSlowConnectionToast();
                 setupRoom(newRoom);
             } catch (e) {
+                hideSlowConnectionToast();
                 joiningViaCode = false;
                 console.error("Play Again failed:", e);
                 if (e.message?.toLowerCase().includes("not found")) {
