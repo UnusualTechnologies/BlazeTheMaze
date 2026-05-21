@@ -613,7 +613,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.45</div>
+    <div id="version-number">v1.5.46</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -641,7 +641,8 @@
             <!-- This menu now ONLY appears when the entire match is over -->
             <div id="post-match-layer" class="menu-overlay hidden">
                 <h1 id="pm-title">Match Over</h1>
-                
+                <div id="pm-started-notification" style="display:none; color:#00ffff; font-size:0.95rem; margin: -8px 0 12px; text-shadow: 0 0 8px #00ffff;"></div>
+
                 <div class="pm-buttons-vertical">
                     <button class="action-btn" id="play-again-btn">Play Again</button>
                     <button class="action-btn secondary-btn" id="menu-btn">Main Menu</button>
@@ -2600,13 +2601,14 @@
                     joiningViaCode = false;
                     console.error('Steam join request failed:', e);
                     const msg = colyseusErrorText(e);
+                    if (isNotFoundError(e, msg) || msg === 'MATCH_OVER') {
+                        // Room gone or match ended — create a new one with the same code
+                        startGameWithCode(roomCode);
+                        return;
+                    }
                     let body;
-                    if (isNotFoundError(e, msg)) {
-                        body = "Room not found. The host may have returned to the menu.";
-                    } else if (msg === "ROOM_FULL") {
+                    if (msg === "ROOM_FULL") {
                         body = "This room is currently full.";
-                    } else if (msg === "MATCH_OVER") {
-                        body = "That match has already ended. Wait for someone to start a new game with that code.";
                     } else {
                         body = "Could not join your friend's room. " + msg;
                     }
@@ -2826,9 +2828,11 @@
                         pmTitle.innerText = `${wId} Wins the Match!`;
                         pmTitle.style.textShadow = `0 0 20px ${wColor}, 0 0 40px ${wColor}`;
                         pmSubtitle.innerHTML = `${wId} won the Best-of-3!`;
-                        lastRoomCode = room.roomId;
-                        playAgainBtn.innerText = `Play Again with Friend Code ${room.roomId}`;
+                        lastRoomCode = room.state?.roomCode || room.roomId;
+                        playAgainBtn.innerText = `Play Again with Friend Code ${lastRoomCode}`;
+                        document.getElementById('pm-started-notification').style.display = 'none';
                         document.getElementById('pm-round-times').innerHTML = '';
+                        if (room) room.send('results_ack');
                     } else {
                         gameState = 'ROUND_OVER_COUNTDOWN';
                         currentWinner = blazers.find(b => b.id === wId) || { id: wId, color: wColor };
@@ -2887,8 +2891,10 @@
                         pmSubtitle.innerHTML = `${winnerId} won the Best-of-3!<br>Match Time: ${formatTime(matchTime)}<br>Fastest Round: ${formatTime(fastestRoundTime)}`;
                     }
 
-                    lastRoomCode = room.roomId;
-                    playAgainBtn.innerText = `Play Again with Friend Code ${room.roomId}`;
+                    lastRoomCode = room.state?.roomCode || room.roomId;
+                    playAgainBtn.innerText = `Play Again with Friend Code ${lastRoomCode}`;
+                    document.getElementById('pm-started-notification').style.display = 'none';
+                    if (room) room.send('results_ack');
 
                     const roundTimesList = document.getElementById('pm-round-times');
                     roundTimesList.innerHTML = roundTimes.map((rt, index) =>
@@ -2899,6 +2905,28 @@
                     currentWinner = winnerBlazer || { id: winnerId, color: winnerColor };
                     roundCountdown = 3000;
                 }
+            });
+
+            // Another player clicked Play Again — show notification, keep the results screen up.
+            // The server will kick us with 4002 shortly after; we then join the new room via
+            // the Play Again button or the friend-code input.
+            room.onMessage("play_again_started", ({ playerName, roomCode }) => {
+                lastRoomCode = roomCode || lastRoomCode;
+                playAgainBtn.innerText = `Join with Friend Code ${lastRoomCode}`;
+                const notif = document.getElementById('pm-started-notification');
+                notif.innerText = `⚡ ${playerName} has started a new game!`;
+                notif.style.display = 'block';
+            });
+
+            // Server confirmed our play_again_request was processed — leave the old room
+            // then re-trigger the Play Again button (room is now null, so it does join/create)
+            room.onMessage("play_again_confirm", ({ roomCode }) => {
+                lastRoomCode = roomCode || lastRoomCode;
+                leavingIntentionally = true;
+                try { room.leave(); } catch (_) {}
+                room = null;
+                // Small delay to let the server fully teardown before creating the new room
+                setTimeout(() => playAgainBtn.click(), 300);
             });
 
             room.onLeave(async (code) => {
@@ -3280,46 +3308,60 @@
             }
         });
 
-        // Play Again — rejoin via the saved room code (same rules as friend-code join from menu)
+        // Play Again — if still in the old room, tell the server first (it will notify other
+        // players), then create a fresh room with the same code.  If already disconnected
+        // (kicked with 4002), skip straight to join-or-create.
         playAgainBtn.addEventListener('click', async () => {
             const code = lastRoomCode;
             if (!code) return;
 
             Synth.init();
 
-            // Leave old room if still connected (e.g. no one has restarted yet)
             if (room) {
-                leavingIntentionally = true;
-                try { room.leave(); } catch (_) {}
-                room = null;
+                // Still connected — ask the server to broadcast to the other players.
+                // play_again_confirm handler will leave the room and clear the reference.
+                room.send('play_again_request');
+                return; // execution continues in the play_again_confirm handler
             }
-            if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
 
+            // Already disconnected (kicked with 4002 or never connected) — go straight to join/create
+            if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
             blazers = [];
+            setButtonLoading(playAgainBtn, true);
             try {
                 if (!client) throw new Error('Colyseus client not initialised — check your connection.');
                 const localSlot = lobbySlots.find(s => s.typeSelect.value === 'local');
                 localControlScheme = localSlot ? localSlot.controlSelect.value : 'WASD';
-                localSlotSchemes = {}; // rejoining — no secondary locals
+                localSlotSchemes = {};
                 joiningViaCode = true;
                 const _slowTimerPA = setTimeout(showSlowConnectionToast, 5000);
-                const newRoom = await withTimeout(client.joinById(code, { joinedViaCode: true }), 10000);
+                let newRoom;
+                try {
+                    newRoom = await withTimeout(client.joinById(code, { joinedViaCode: true }), 10000);
+                } catch (joinErr) {
+                    const joinMsg = colyseusErrorText(joinErr);
+                    if (isNotFoundError(joinErr, joinMsg) || joinMsg === 'MATCH_OVER') {
+                        // Old room gone — create a new one with the same code
+                        joiningViaCode = false;
+                        newRoom = await withTimeout(client.create("game", {
+                            cols, rows, puOpp, puSelf,
+                            slots: lobbySlots.map(s => ({
+                                mode: s.typeSelect.value, id: s.nameInput.value,
+                                color: s.colorPicker.value, aiSpeed: s.aiSpeedSelect.value,
+                                aiCustomSpeed: parseInt(s.customSpeedSlider.value, 10),
+                                aiBehavior: s.aiBehaviorSelect.value, controlScheme: s.controlSelect.value
+                            })),
+                            desiredRoomId: code
+                        }), 10000);
+                    } else { throw joinErr; }
+                }
                 clearTimeout(_slowTimerPA); hideSlowConnectionToast();
                 setupRoom(newRoom);
             } catch (e) {
                 hideSlowConnectionToast();
                 joiningViaCode = false;
-                console.error("Play Again failed:", e);
-                const msg = colyseusErrorText(e);
-                let body;
-                if (isNotFoundError(e, msg)) {
-                    body = "That room is no longer active. Start a new game from the main menu.";
-                } else if (msg === "ROOM_FULL") {
-                    body = "The room is currently full. Try again in a moment.";
-                } else {
-                    body = "Could not rejoin the room. " + msg;
-                }
-                showNetworkNotification('Could Not Rejoin', body, () => {}, 'OK');
+                setButtonLoading(playAgainBtn, false);
+                showNetworkNotification('Could Not Rejoin', colyseusErrorText(e), () => {}, 'OK');
             }
         });
 

@@ -30,6 +30,8 @@ export class GameRoom extends Room<{ state: GameState }> {
     lastMoveTime = new Map<string, number>();
     // Session ID of the room creator — only they may drive secondary local slots
     ownerSessionId: string = '';
+    // Tracks which clients have acknowledged the match-over results screen
+    resultsAckedClients = new Set<string>();
 
     // --- Lifecycle ---
 
@@ -222,6 +224,30 @@ export class GameRoom extends Room<{ state: GameState }> {
             }
         });
 
+        // Client sends this once it has rendered the match-over results screen.
+        // After 8 seconds any human who hasn't acked is kicked (4003).
+        this.onMessage("results_ack", (client) => {
+            this.resultsAckedClients.add(client.sessionId);
+        });
+
+        // First player to click Play Again broadcasts the news to everyone still on the
+        // results screen, kicks them (4002 = stay on screen / rejoin), then the room
+        // self-destructs when the sender also leaves.
+        this.onMessage("play_again_request", (client) => {
+            if (!this.matchComplete) return;
+            const player = this.state.players.get(client.sessionId);
+            const playerName = player?.id || "A player";
+            const code = this.state.roomCode || this.roomId;
+            for (const c of [...this.clients]) {
+                if (c.sessionId !== client.sessionId) {
+                    c.send("play_again_started", { playerName, roomCode: code });
+                    c.leave(4002);
+                }
+            }
+            // Sender leaves intentionally via client.leave() after receiving this confirm
+            client.send("play_again_confirm", { roomCode: code });
+        });
+
         console.log(`Room created: ${this.roomId}`);
     }
 
@@ -237,14 +263,9 @@ export class GameRoom extends Room<{ state: GameState }> {
         }
 
         if (this.matchComplete) {
-            if (!joinedViaCode) throw new Error("MATCH_OVER");
-            // First friend-code joiner after match end restarts the game for everyone
-            for (const c of [...this.clients]) {
-                if (c.sessionId !== client.sessionId) c.leave(4002);
-            }
-            this.resetMatch();
-            this.matchComplete = false;
-            this.unlock();
+            // Room is locked after a match — nobody can join. Throw so the client
+            // falls through to the create-new-room path.
+            throw new Error("MATCH_OVER");
         }
 
         // Step 1: find an empty slot
@@ -350,6 +371,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         this.explorerLastPos.delete(client.sessionId);
         this.guesserData.delete(client.sessionId);
         this.aiCooldowns.delete(client.sessionId);
+        this.resultsAckedClients.delete(client.sessionId);
 
         const player = this.state.players.get(client.sessionId);
         if (player) {
@@ -654,6 +676,17 @@ export class GameRoom extends Room<{ state: GameState }> {
             if (isMatchWon) {
                 this.matchComplete = true;
                 this.lock();
+                // 8-second window for all clients to ack the results screen.
+                // Anyone who hasn't acked by then is kicked with 4003.
+                this.resultsAckedClients.clear();
+                this.clock.setTimeout(() => {
+                    for (const c of [...this.clients]) {
+                        const p = this.state.players.get(c.sessionId);
+                        if (p && !p.isAI && !this.resultsAckedClients.has(c.sessionId)) {
+                            c.leave(4003);
+                        }
+                    }
+                }, 8000);
             } else {
                 this.clock.setTimeout(() => {
                     this.broadcast("round_reset");
