@@ -41,6 +41,13 @@ We use a strict `x.y.z` versioning system tracked in `version.json` and displaye
 2.We have changed roughly 150+ lines of code since our last commit.
 When suggesting a push, provide a brief bulleted summary of what we've done so I can review it.
 
+## Colyseus Cloud Server Deployment
+- The live Colyseus server runs on Colyseus Cloud at `wss://gb-lhr-5b4d543b.colyseus.cloud`.
+- **Deploying the server = pushing to GitHub (main branch).** Colyseus Cloud auto-deploys on push.
+- Any changes to `server/GameRoom.ts`, `server/GameState.ts`, or other server files are NOT live until pushed.
+- When server files are changed, always remind the user to push so the cloud server picks up the changes.
+- Server credentials are in `server/.colyseus-cloud.json` (applicationId: `1505-maze`).
+
 ## Steam Build Pipeline (IN PROGRESS — pick up here next session)
 
 An automated Steam deploy pipeline has been partially set up. **Do not re-explain what was done — just resume from the next step below.**
