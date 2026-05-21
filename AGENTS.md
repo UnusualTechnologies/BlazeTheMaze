@@ -40,3 +40,30 @@ We use a strict `x.y.z` versioning system tracked in `version.json` and displaye
 1.We have completed a major feature or resolved a major bug.
 2.We have changed roughly 150+ lines of code since our last commit.
 When suggesting a push, provide a brief bulleted summary of what we've done so I can review it.
+
+## Steam Build Pipeline (IN PROGRESS — pick up here next session)
+
+An automated Steam deploy pipeline has been partially set up. **Do not re-explain what was done — just resume from the next step below.**
+
+### What is already done
+- `game-ci/steam-deploy@v3` GitHub Actions workflow created at `.github/workflows/steam-deploy.yml`
+- SteamPipe VDF configs created at `scripts/app_build.vdf` and `scripts/depot_build.vdf`
+- Steam App ID: `4734010`, Depot ID: `4734011`
+- Dedicated Steam build account: `automatedbuild` (added to Steamworks with Edit/Publish permissions)
+- SteamCMD installed on dev machine at `C:\steamcmd\`
+- WSL (Ubuntu) installed on dev machine — SteamCMD also set up inside WSL at `~/steamcmd/`
+- GitHub Secrets already set: `STEAM_USERNAME`, `STEAM_PASSWORD`
+- Workflow updated to use `totp:` auth (TOTP shared secret) — `STEAM_CONFIG_VDF` approach was abandoned as it failed cross-platform
+
+### What is NOT done yet (next step)
+The pipeline is blocked on Steam auth. The fix is to use **Steam Desktop Authenticator (SDA)** to get a TOTP shared secret:
+
+1. Download SDA: **github.com/Jessecar96/SteamDesktopAuthenticator/releases**
+2. Run `Steam Desktop Authenticator.exe` → **Setup New Account** → log in as `automatedbuild`
+3. Enter the Steam Guard email code when prompted — this switches the account to TOTP auth
+4. Open `maFiles/automatedbuild.maFile` in Notepad, copy the `shared_secret` value
+5. Add it as GitHub Secret named `STEAM_TOTP` on the MazePrototype repo
+6. Re-trigger the pipeline: delete and re-push the `v1.5.32` tag (or create a new one)
+
+### Pipeline trigger
+Tag any commit with `v*` (e.g. `git tag v1.5.33 && git push origin v1.5.33`) to trigger a Steam build and upload. GitHub Pages deploy on push to master is unaffected — it runs independently.
