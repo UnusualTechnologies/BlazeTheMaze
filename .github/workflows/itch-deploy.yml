@@ -1,0 +1,23 @@
+name: Deploy to itch.io
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package game
+        run: zip blaze-the-maze.zip index.html
+
+      - name: Upload to itch.io
+        uses: josephbmanley/butler-publish-itchio-action@master
+        env:
+          BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
+          CHANNEL: html5
+          ITCH_GAME: blaze-the-maze
+          ITCH_USER: douglasut
+          PACKAGE: blaze-the-maze.zip

@@ -1,4 +1,4 @@
-# Build/Increment Script for Neon Bug Race
+# Build/Increment Script for Blaze The Maze
 # Usage: 
 #   .\build.ps1 -Type patch  (For code changes, increments z)
 #   .\build.ps1 -Type minor  (For builds, increments y)

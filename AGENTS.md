@@ -1,4 +1,4 @@
-# Neon Bug Race - Project Context
+# Blaze The Maze - Project Context
 
 ## Overview
 A high-speed multiplayer maze racing game using Colyseus for networking and Canvas for rendering.
@@ -70,7 +70,7 @@ The pipeline is blocked on Steam auth. The fix is to use **Steam Desktop Authent
 2. Run `Steam Desktop Authenticator.exe` → **Setup New Account** → log in as `automatedbuild`
 3. Enter the Steam Guard email code when prompted — this switches the account to TOTP auth
 4. Open `maFiles/automatedbuild.maFile` in Notepad, copy the `shared_secret` value
-5. Add it as GitHub Secret named `STEAM_TOTP` on the MazePrototype repo
+5. Add it as GitHub Secret named `STEAM_TOTP` on the BlazeTheMaze repo
 6. Re-trigger the pipeline: delete and re-push the `v1.5.32` tag (or create a new one)
 
 ### Pipeline trigger

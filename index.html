@@ -621,7 +621,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.58</div>
+    <div id="version-number">v1.5.59</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -876,8 +876,8 @@
         let lastPuSelf = 10;
 
         let roundFlashStart = null; // performance.now() timestamp when white flash begins
-        let bestTime = parseFloat(localStorage.getItem('neonBlazerBestTime')) || null;
-        let worstTime = parseFloat(localStorage.getItem('neonBlazerWorstTime')) || null;
+        let bestTime = parseFloat(localStorage.getItem('blazeTheMazeBestTime')) || null;
+        let worstTime = parseFloat(localStorage.getItem('blazeTheMazeWorstTime')) || null;
 
         let goal = { x: Math.floor(cols / 2), y: Math.floor(rows / 2) };
 
@@ -2896,8 +2896,8 @@
 
                     const isLocalWinner = winnerBlazer?.isLocal;
                     if (isLocalWinner) {
-                        if (bestTime === null || matchTime < bestTime) { bestTime = matchTime; localStorage.setItem('neonBlazerBestTime', bestTime); }
-                        if (worstTime === null || matchTime > worstTime) { worstTime = matchTime; localStorage.setItem('neonBlazerWorstTime', worstTime); }
+                        if (bestTime === null || matchTime < bestTime) { bestTime = matchTime; localStorage.setItem('blazeTheMazeBestTime', bestTime); }
+                        if (worstTime === null || matchTime > worstTime) { worstTime = matchTime; localStorage.setItem('blazeTheMazeWorstTime', worstTime); }
                         pmSubtitle.innerHTML = `You won the Best-of-3!<br>Match Time: ${formatTime(matchTime)}<br>Fastest Round: ${formatTime(fastestRoundTime)}<br>Best Match Ever: ${formatTime(bestTime)} | Worst: ${formatTime(worstTime)}`;
                     } else {
                         pmSubtitle.innerHTML = `${winnerId} won the Best-of-3!<br>Match Time: ${formatTime(matchTime)}<br>Fastest Round: ${formatTime(fastestRoundTime)}`;
