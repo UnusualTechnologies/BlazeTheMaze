@@ -19,5 +19,5 @@ jobs:
           BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
           CHANNEL: html5
           ITCH_GAME: blaze-the-maze
-          ITCH_USER: douglasut
+          ITCH_USER: unusual-technologies
           PACKAGE: blaze-the-maze.zip
