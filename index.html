@@ -613,7 +613,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.37</div>
+    <div id="version-number">v1.5.38</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2599,15 +2599,18 @@
                 .catch(e => {
                     joiningViaCode = false;
                     console.error('Steam join request failed:', e);
-                    if (e.message?.toLowerCase().includes("not found")) {
-                        alert("Room not found. The host may have returned to the menu.");
-                    } else if (e.message === "ROOM_FULL") {
-                        alert("This room is currently full.");
-                    } else if (e.message === "MATCH_OVER") {
-                        alert("That match has already ended. Wait for someone to start a new game with that code.");
+                    const msg = colyseusErrorText(e);
+                    let body;
+                    if (msg.toLowerCase().includes("not found")) {
+                        body = "Room not found. The host may have returned to the menu.";
+                    } else if (msg === "ROOM_FULL") {
+                        body = "This room is currently full.";
+                    } else if (msg === "MATCH_OVER") {
+                        body = "That match has already ended. Wait for someone to start a new game with that code.";
                     } else {
-                        alert("Could not join your friend's room: " + e.message);
+                        body = "Could not join your friend's room. " + msg;
                     }
+                    showNetworkNotification('Could Not Join', body, () => {}, 'OK');
                 });
         });
 
@@ -2671,7 +2674,7 @@
                         if (state.cols < min || state.cols > max) {
                             const reason = state.cols < min ? 'too small' : 'too big';
                             returnToMenu();
-                            alert(`This game's maze is ${reason} for your screen to handle.`);
+                            showNetworkNotification('Incompatible Maze', `This game's maze is ${reason} for your screen. You've been returned to the menu.`, () => {}, 'OK');
                             return;
                         }
                     }
@@ -3084,7 +3087,7 @@
                 clearTimeout(_slowTimer1); hideSlowConnectionToast();
                 console.error("Could not join/create room", e);
                 setButtonLoading(quickStartBtn, false);
-                alert("Could not connect to server: " + e.message);
+                showNetworkNotification('Connection Failed', colyseusErrorText(e), () => {}, 'OK');
             }
         });
 
@@ -3110,15 +3113,18 @@
                 joiningViaCode = false;
                 setButtonLoading(joinFriendBtn, false);
                 console.error("Could not join room", e);
-                if (e.message?.toLowerCase().includes("not found")) {
-                    alert("Room not found. Please check the code and ensure it matches exactly (Case Sensitive).");
-                } else if (e.message === "ROOM_FULL") {
-                    alert("This room is currently full.");
-                } else if (e.message === "MATCH_OVER") {
-                    alert("That match has already ended. Wait for someone to start a new game with that code.");
+                const msg = colyseusErrorText(e);
+                let body;
+                if (msg.toLowerCase().includes("not found")) {
+                    body = "Room not found. Please check the code and ensure it matches exactly (case sensitive).";
+                } else if (msg === "ROOM_FULL") {
+                    body = "This room is currently full.";
+                } else if (msg === "MATCH_OVER") {
+                    body = "That match has already ended. Wait for someone to start a new game with that code.";
                 } else {
-                    alert("An error occurred while joining the room: " + e.message);
+                    body = "Could not join the room. " + msg;
                 }
+                showNetworkNotification('Could Not Join', body, () => {}, 'OK');
             }
         });
 
@@ -3162,7 +3168,7 @@
                 clearTimeout(_slowTimer2); hideSlowConnectionToast();
                 console.error("Could not create custom room", e);
                 setButtonLoading(startBtn, false);
-                alert("Could not connect to server: " + e.message);
+                showNetworkNotification('Connection Failed', colyseusErrorText(e), () => {}, 'OK');
             }
         });
 
