@@ -613,7 +613,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.33</div>
+    <div id="version-number">v1.5.34</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2874,6 +2874,9 @@
                 } else if (code === 4003) {
                     alert("You were disconnected due to 3 minutes of inactivity.");
                     location.reload();
+                } else if (code === 1000 || code === 1001) {
+                    // Normal close: player clicked menu / Play Again called room.leave() / Electron window closed
+                    // Don't show reconnect UI — the leave was intentional
                 } else {
                     // Unexpected disconnect (network drop, server restart, etc.)
                     // Try to reconnect up to 4 times over 8 seconds to match the server's hold window
