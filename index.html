@@ -613,7 +613,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.43</div>
+    <div id="version-number">v1.5.44</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -675,7 +675,7 @@
                 <button class="action-btn tertiary-btn" id="custom-settings-btn">Custom</button>
 
                 <div class="join-group">
-                    <input type="text" id="join-code-input" placeholder="Code..." maxlength="12" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" style="text-transform: uppercase;">
+                    <input type="text" id="join-code-input" placeholder="Code..." maxlength="9" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" style="text-transform: uppercase;">
                     <button class="action-btn secondary-btn" id="join-friend-btn">Join Friend</button>
                 </div>
             </div>
@@ -2649,8 +2649,11 @@
             window.electronAPI?.setRichPresence('In Lobby');
             let gridCompatChecked = false;
 
-            // Update HUD to show the actual room code
-            document.querySelectorAll('.display-friend-code').forEach(el => el.innerText = room.roomId);
+            // Update HUD to show the actual room code (prefer state.roomCode; falls back to room.roomId)
+            const _updateRoomCodeDisplay = (code) => {
+                if (code) document.querySelectorAll('.display-friend-code').forEach(el => el.innerText = code);
+            };
+            _updateRoomCodeDisplay(room.state?.roomCode || room.roomId);
 
             // Now that we have a room and a sessionId, we can safely init the match
             initMatch();
@@ -2659,6 +2662,9 @@
 
             // Listen for server state changes
             room.onStateChange((state) => {
+                // Ensure room code display reflects state (handles first-patch timing)
+                _updateRoomCodeDisplay(state.roomCode);
+
                 // Update timer from server
                 timerElement.innerText = formatTime(state.timer * 1000);
 
