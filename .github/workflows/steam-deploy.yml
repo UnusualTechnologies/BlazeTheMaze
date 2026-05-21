@@ -43,7 +43,7 @@ jobs:
         with:
           username: ${{ secrets.STEAM_USERNAME }}
           password: ${{ secrets.STEAM_PASSWORD }}
-          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
+          totp: ${{ secrets.STEAM_TOTP }}
           appId: 4734010
           buildDescription: ${{ github.ref_name }}
           rootPath: .
