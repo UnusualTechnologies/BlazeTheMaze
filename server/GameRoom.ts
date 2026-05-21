@@ -32,6 +32,8 @@ export class GameRoom extends Room<{ state: GameState }> {
     ownerSessionId: string = '';
     // Tracks which clients have acknowledged the match-over results screen
     resultsAckedClients = new Set<string>();
+    // Prevents play_again_request from being processed more than once (simultaneous clicks)
+    playAgainProcessed: boolean = false;
 
     // --- Lifecycle ---
 
@@ -234,7 +236,8 @@ export class GameRoom extends Room<{ state: GameState }> {
         // results screen, kicks them (4002 = stay on screen / rejoin), then the room
         // self-destructs when the sender also leaves.
         this.onMessage("play_again_request", (client) => {
-            if (!this.matchComplete) return;
+            if (!this.matchComplete || this.playAgainProcessed) return;
+            this.playAgainProcessed = true;
             const player = this.state.players.get(client.sessionId);
             const playerName = player?.id || "A player";
             const code = this.state.roomCode || this.roomId;

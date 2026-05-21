@@ -370,6 +370,14 @@
             box-shadow: 0 0 30px #39ff14, 0 0 60px #39ff14;
         }
 
+        button.action-btn:disabled {
+            background: #444;
+            box-shadow: none;
+            color: #888;
+            cursor: not-allowed;
+            transform: none;
+        }
+
         /* Muted state specifically for the UI audio button */
         button.action-btn.muted {
             background: #555 !important;
@@ -613,7 +621,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.46</div>
+    <div id="version-number">v1.5.57</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2557,12 +2565,14 @@
 
         // --- MENU BUTTON BINDINGS ---
         
-        // Auto-clean and capitalize Friend Code input
+        // Auto-clean and capitalize Friend Code input; gate Join button at exactly 9 chars
+        joinFriendBtn.disabled = true;
         joinCodeInput.addEventListener('input', (e) => {
             const start = e.target.selectionStart;
             const end = e.target.selectionEnd;
             e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
             e.target.setSelectionRange(start, end);
+            joinFriendBtn.disabled = e.target.value.length !== 9;
         });
 
         // In-game Menu Button
@@ -3080,8 +3090,8 @@
             // HTTP 404 or Colyseus matchmaker code 4212 mean "room does not exist"
             if (e?.status === 404 || e?.code === 4212) return true;
             if (e?.message?.code === 4212) return true;
-            // Colyseus Cloud returns MatchMakeError (code 522) when the room doesn't exist
-            if (e?.name === 'MatchMakeError' || lc.includes('matchmakeerror')) return true;
+            // Colyseus Cloud returns HTTP 522 / MatchMakeError when the room doesn't exist
+            if (e?.status === 522 || e?.name === 'MatchMakeError' || lc.includes('matchmakeerror')) return true;
             return false;
         }
 
@@ -3227,12 +3237,17 @@
             }
         });
 
+        joinCodeInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && joinCodeInput.value.length === 9) joinFriendBtn.click();
+        });
+
         joinFriendBtn.addEventListener('click', async () => {
-            if (joinCodeInput.value.length < 3) return;
+            if (joinCodeInput.value.length !== 9) return;
             Synth.init();
             Synth.startMusic();
             blazers = [];
             setButtonLoading(joinFriendBtn, true);
+            let _slowTimerFC;
             try {
                 if (!client) throw new Error('Colyseus client not initialised — check your connection.');
                 const localSlot = lobbySlots.find(s => s.typeSelect.value === 'local');
@@ -3240,12 +3255,12 @@
                 localSlotSchemes = {}; // joining someone else's room — no secondary locals
 
                 joiningViaCode = true;
-                const _slowTimerFC = setTimeout(showSlowConnectionToast, 5000);
+                _slowTimerFC = setTimeout(showSlowConnectionToast, 5000);
                 const newRoom = await withTimeout(client.joinById(joinCodeInput.value, { joinedViaCode: true }), 10000);
                 clearTimeout(_slowTimerFC); hideSlowConnectionToast();
                 setupRoom(newRoom);
             } catch (e) {
-                hideSlowConnectionToast();
+                clearTimeout(_slowTimerFC); hideSlowConnectionToast();
                 joiningViaCode = false;
                 setButtonLoading(joinFriendBtn, false);
                 console.error("Could not join room", e);
@@ -3328,13 +3343,14 @@
             if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
             blazers = [];
             setButtonLoading(playAgainBtn, true);
+            let _slowTimerPA;
             try {
                 if (!client) throw new Error('Colyseus client not initialised — check your connection.');
                 const localSlot = lobbySlots.find(s => s.typeSelect.value === 'local');
                 localControlScheme = localSlot ? localSlot.controlSelect.value : 'WASD';
                 localSlotSchemes = {};
                 joiningViaCode = true;
-                const _slowTimerPA = setTimeout(showSlowConnectionToast, 5000);
+                _slowTimerPA = setTimeout(showSlowConnectionToast, 5000);
                 let newRoom;
                 try {
                     newRoom = await withTimeout(client.joinById(code, { joinedViaCode: true }), 10000);
@@ -3344,10 +3360,13 @@
                         // Old room gone — create a new one with the same code
                         joiningViaCode = false;
                         newRoom = await withTimeout(client.create("game", {
-                            cols, rows, puOpp, puSelf,
+                            cols: parseInt(gridSizeInput.value, 10) || 20,
+                            rows: parseInt(gridSizeInput.value, 10) || 20,
+                            puOpp: parseInt(document.getElementById('pu-opp-input').value, 10) || 10,
+                            puSelf: parseInt(document.getElementById('pu-self-input').value, 10) || 10,
                             slots: lobbySlots.map(s => ({
-                                mode: s.typeSelect.value, id: s.nameInput.value,
-                                color: s.colorPicker.value, aiSpeed: s.aiSpeedSelect.value,
+                                mode: s.typeSelect.value, id: s.id,
+                                color: s.color, aiSpeed: s.aiSpeedSelect.value,
                                 aiCustomSpeed: parseInt(s.customSpeedSlider.value, 10),
                                 aiBehavior: s.aiBehaviorSelect.value, controlScheme: s.controlSelect.value
                             })),
@@ -3358,10 +3377,15 @@
                 clearTimeout(_slowTimerPA); hideSlowConnectionToast();
                 setupRoom(newRoom);
             } catch (e) {
-                hideSlowConnectionToast();
+                clearTimeout(_slowTimerPA); hideSlowConnectionToast();
                 joiningViaCode = false;
                 setButtonLoading(playAgainBtn, false);
-                showNetworkNotification('Could Not Rejoin', colyseusErrorText(e), () => {}, 'OK');
+                const eMsg = colyseusErrorText(e);
+                if (eMsg === 'ROOM_FULL') {
+                    showNetworkNotification('Could Not Rejoin', 'The new game is already full.', () => {}, 'OK');
+                } else {
+                    showNetworkNotification('Could Not Rejoin', eMsg, () => {}, 'OK');
+                }
             }
         });
 
@@ -3536,8 +3560,8 @@
                 }
                 if (!eventsFired.has('col') && elapsed >= T_COLLISION) {
                     eventsFired.add('col');
-                    spawnPuff(6, 1, '#00ffff');  // cyan collision
-                    spawnPuff(6, 1, '#ff00ff');  // purple collision
+                    spawnPuff(6, 1, '#ff00ff');  // purple (underneath)
+                    spawnPuff(6, 1, '#00ffff');  // cyan (on top)
                 }
             }
 
