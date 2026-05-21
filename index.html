@@ -613,7 +613,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.42</div>
+    <div id="version-number">v1.5.43</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3046,6 +3046,8 @@
             // HTTP 404 or Colyseus matchmaker code 4212 mean "room does not exist"
             if (e?.status === 404 || e?.code === 4212) return true;
             if (e?.message?.code === 4212) return true;
+            // Colyseus Cloud returns MatchMakeError (code 522) when the room doesn't exist
+            if (e?.name === 'MatchMakeError' || lc.includes('matchmakeerror')) return true;
             return false;
         }
 
@@ -3216,13 +3218,8 @@
                 const msg = colyseusErrorText(e);
                 const enteredCode = joinCodeInput.value;
                 if (isNotFoundError(e, msg)) {
-                    showNetworkNotification(
-                        'Room Not Found',
-                        `No room with code "${enteredCode}" exists. You can start a new game with this code so your friend can join you.`,
-                        () => {},
-                        'OK',
-                        { text: `Start Game with Code ${enteredCode}`, action: () => startGameWithCode(enteredCode) }
-                    );
+                    // Room doesn't exist — create one with this code automatically
+                    startGameWithCode(enteredCode);
                 } else if (msg === "ROOM_FULL") {
                     showNetworkNotification('Could Not Join', 'This room is currently full.', () => {}, 'OK');
                 } else if (msg === "MATCH_OVER") {
