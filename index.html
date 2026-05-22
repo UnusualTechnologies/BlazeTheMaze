@@ -632,7 +632,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.68</div>
+    <div id="version-number">v1.5.69</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2873,6 +2873,7 @@
                     if (state.matchOver) {
                         gameState = 'MATCH_OVER';
                         Synth.muffle(true);
+                        playAgainBtn.disabled = false; // always re-enable — may be stale from a prior match
                         postMatchLayer.style.setProperty('--winner-color', wColor);
                         postMatchLayer.classList.add('winner-pulse');
                         postMatchLayer.classList.remove('hidden');
@@ -2924,6 +2925,8 @@
                     Synth.win();
                     Synth.muffle(true);
                     gameState = 'MATCH_OVER';
+
+                    playAgainBtn.disabled = false; // always re-enable — may be stale from a prior match
 
                     postMatchLayer.style.setProperty('--winner-color', winnerColor);
                     postMatchLayer.classList.add('winner-pulse');
