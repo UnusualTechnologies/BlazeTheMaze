@@ -632,7 +632,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.73</div>
+    <div id="version-number">v1.5.74</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3074,11 +3074,13 @@
                 localSlotSchemes = {};
                 pendingOwnerSlotSchemes = {};
                 lobbySlots.forEach((s, i) => { if (s.typeSelect.value === 'local') pendingOwnerSlotSchemes[i] = s.controlSelect.value; });
+                gameState = 'CONNECTING';
                 const newRoom = await withTimeout(client.create("game", settings), 10000);
                 clearTimeout(_slowTimer); hideSlowConnectionToast();
                 setupRoom(newRoom);
             } catch (e) {
                 clearTimeout(_slowTimer); hideSlowConnectionToast();
+                gameState = 'MENU';
                 setButtonLoading(joinFriendBtn, false);
                 showNetworkNotification('Connection Failed', colyseusErrorText(e), () => {}, 'OK');
             }
@@ -3271,6 +3273,7 @@
                 pendingOwnerSlotSchemes = {};
                 lobbySlots.forEach((s, i) => { if (s.typeSelect.value === 'local') pendingOwnerSlotSchemes[i] = s.controlSelect.value; });
 
+                gameState = 'CONNECTING';
                 let newRoom;
                 try {
                     newRoom = await withTimeout(client.joinOrCreate("game", settings), 10000);
@@ -3294,6 +3297,7 @@
             } catch (e) {
                 clearTimeout(_slowTimer1); hideSlowConnectionToast();
                 console.error("Could not join/create room", e);
+                gameState = 'MENU';
                 setButtonLoading(quickStartBtn, false);
                 showNetworkNotification('Connection Failed', colyseusErrorText(e), () => {}, 'OK');
             }
@@ -3317,6 +3321,7 @@
                 localSlotSchemes = {}; // joining someone else's room — no secondary locals
 
                 joiningViaCode = true;
+                gameState = 'CONNECTING';
                 _slowTimerFC = setTimeout(showSlowConnectionToast, 5000);
                 const newRoom = await withTimeout(client.joinById(joinCodeInput.value, { joinedViaCode: true }), 10000);
                 clearTimeout(_slowTimerFC); hideSlowConnectionToast();
@@ -3324,6 +3329,7 @@
             } catch (e) {
                 clearTimeout(_slowTimerFC); hideSlowConnectionToast();
                 joiningViaCode = false;
+                gameState = 'MENU';
                 setButtonLoading(joinFriendBtn, false);
                 console.error("Could not join room", e);
                 const msg = colyseusErrorText(e);
@@ -3374,12 +3380,14 @@
                 pendingOwnerSlotSchemes = {};
                 lobbySlots.forEach((s, i) => { if (s.typeSelect.value === 'local') pendingOwnerSlotSchemes[i] = s.controlSelect.value; });
 
+                gameState = 'CONNECTING';
                 const newRoom = await withTimeout(client.create("game", settings), 10000);
                 clearTimeout(_slowTimer2); hideSlowConnectionToast();
                 setupRoom(newRoom);
             } catch (e) {
                 clearTimeout(_slowTimer2); hideSlowConnectionToast();
                 console.error("Could not create custom room", e);
+                gameState = 'MENU';
                 setButtonLoading(startBtn, false);
                 showNetworkNotification('Connection Failed', colyseusErrorText(e), () => {}, 'OK');
             }
