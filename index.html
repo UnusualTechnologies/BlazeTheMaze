@@ -151,6 +151,17 @@
             padding: 0 8px;
         }
 
+        .display-friend-code {
+            user-select: all;
+            -webkit-user-select: all;
+            cursor: pointer;
+        }
+
+        .display-friend-code.copied-flash {
+            color: #00ff88 !important;
+            transition: color 0.15s;
+        }
+
         #game-container {
             position: relative;
             flex-shrink: 0;
@@ -621,7 +632,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.66</div>
+    <div id="version-number">v1.5.67</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2598,6 +2609,15 @@
 
         // In-game Menu Button
         inGameMenuBtn.addEventListener('click', returnToMenu);
+
+        // Click any friend-code display to copy it to clipboard
+        document.addEventListener('click', e => {
+            const el = e.target.closest('.display-friend-code');
+            if (!el || !el.innerText) return;
+            navigator.clipboard?.writeText(el.innerText).catch(() => {});
+            el.classList.add('copied-flash');
+            setTimeout(() => el.classList.remove('copied-flash'), 800);
+        });
 
         // Audio toggle buttons (delegated — handles all instances)
         document.addEventListener('click', e => {
