@@ -271,7 +271,9 @@ export class GameRoom extends Room<{ state: GameState }> {
 
         if (isHost) {
             this.ownerSessionId = client.sessionId;
-            client.send("owner_confirm", {});
+            // Delay slightly so the message arrives after the client has registered
+            // its onMessage("owner_confirm") handler in setupRoom.
+            this.clock.setTimeout(() => client.send("owner_confirm", {}), 150);
         }
 
         if (this.matchComplete) {
