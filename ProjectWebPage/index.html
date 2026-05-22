@@ -4,122 +4,105 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Blaze the Maze</title>
-    <style>
-        /* ── Local preview styling only — nothing below is copied to itch.io ── */
-        body {
-            background: #05050a;
-            color: #e0e0e0;
-            font-family: 'Courier New', Courier, monospace;
-            max-width: 680px;
-            margin: 0 auto;
-            padding: 30px 20px;
-            line-height: 1.7;
-        }
-        .preview-banner {
-            border: 1px dashed #444;
-            color: #555;
-            font-size: 0.8em;
-            padding: 8px 12px;
-            margin-bottom: 28px;
-            border-radius: 4px;
-        }
-        h1 { color: #fff; font-style: italic; letter-spacing: 3px; }
-        h2 { color: #00ffff; border-bottom: 1px solid rgba(0,255,255,0.25); padding-bottom: 4px; }
-        h3 { color: #fff; }
-        strong { color: #ff00ff; }
-        em { color: #aaa; }
-        a  { color: #00ffff; }
-        ul { padding-left: 20px; }
-        li { margin-bottom: 10px; }
-        hr { border: 0; border-top: 1px solid #222; margin: 24px 0; }
-        blockquote {
-            border-left: 3px solid #00ffff;
-            margin: 0 0 16px;
-            padding: 10px 16px;
-            background: rgba(0,255,255,0.04);
-            color: #ccc;
-        }
-    </style>
 </head>
 <body>
 
-<div class="preview-banner">
-    📋 Local preview — copy everything between the markers below into itch.io's description box (HTML mode).
+<!-- ═══════════════════════════════════════════════════════════════════
+     COPY EVERYTHING INSIDE THE OUTER DIV INTO ITCH.IO (HTML mode).
+
+     NOTE ON MOVING BLAZERS: itch.io strips <style>, <script>, <canvas>
+     and @keyframes — CSS animation is impossible in descriptions.
+     The only way to show moving blazers is to embed an animated GIF:
+       <img src="YOUR_GIF_URL" alt="Blazers racing through the maze">
+     A placeholder is included below. Replace the src when you have one.
+═══════════════════════════════════════════════════════════════════ -->
+
+<div style="background-color:#05050a;padding:30px;border:2px solid #0ff;border-radius:12px;box-shadow:inset 0 0 20px rgba(0,255,255,0.2);font-family:'Courier New',Courier,monospace;color:#e0e0e0;line-height:1.6;">
+
+    <!-- TITLE -->
+    <h1 style="text-align:center;color:#fff;text-shadow:0 0 5px #fff,0 0 15px #0ff,0 0 30px #0ff;font-size:2.5em;font-style:italic;text-transform:uppercase;letter-spacing:4px;margin-top:0;">
+        BLAZE THE MAZE
+    </h1>
+
+    <p style="text-align:center;font-size:1.2em;color:#ff00ff;font-weight:bold;margin-bottom:30px;">
+        ⚡ Race through neon labyrinths. Grab power-ups. Wreck your friends.
+    </p>
+
+    <!-- ANIMATED GIF PLACEHOLDER — replace src with a real URL when you have one -->
+    <!-- <img src="YOUR_ANIMATED_GIF_URL_HERE" alt="Two blazers racing through a neon maze" style="display:block;margin:0 auto 24px;max-width:100%;border-radius:6px;"> -->
+
+    <hr style="border:0;height:1px;background:linear-gradient(to right,transparent,#0ff,transparent);margin-bottom:28px;">
+
+    <!-- INTRO -->
+    <h2 style="color:#0ff;border-bottom:1px solid rgba(0,255,255,0.3);padding-bottom:5px;">&gt; LOADING...</h2>
+    <p style="font-size:1.1em;">
+        <strong>Blaze the Maze</strong> is a fast-paced, server-authoritative multiplayer maze racer where speed, precision, and quick reflexes are your only weapons.
+        Up to <strong>8 players</strong> race through a fresh procedurally-generated labyrinth every round — simultaneously, no turns.
+        Grab power-ups, outmaneuver your rivals, and reach the goal first.
+    </p>
+
+    <br>
+
+    <!-- POWER-UPS -->
+    <h2 style="color:#0ff;border-bottom:1px solid rgba(0,255,255,0.3);padding-bottom:5px;">&gt; POWER-UP MANIFEST</h2>
+    <p style="font-size:1.1em;margin-bottom:12px;">Two power-ups are hidden in every maze. Either one can flip the race in an instant:</p>
+    <ul style="list-style-type:none;padding-left:0;font-size:1.1em;">
+        <li style="margin-bottom:15px;">
+            <strong style="color:#ffffff;">⬤ Self-Teleport</strong> (spinning white ring) —
+            Instantly warps <em>you</em> to a random cell. Escape a dead end or leapfrog halfway across the grid.
+        </li>
+        <li style="margin-bottom:15px;">
+            <strong style="color:#ff00ff;">◉ Opponent-Teleport</strong> (rainbow ring) —
+            Scatters <em>every other player</em> to random cells at once. Grab it while you're winning to blow up the pack.
+        </li>
+    </ul>
+
+    <br>
+
+    <!-- FEATURES -->
+    <h2 style="color:#0ff;border-bottom:1px solid rgba(0,255,255,0.3);padding-bottom:5px;">&gt; CORE DIRECTIVES</h2>
+    <ul style="list-style-type:none;padding-left:0;font-size:1.1em;">
+        <li style="margin-bottom:15px;">
+            <strong style="color:#ff00ff;">⚡ Real-Time Multiplayer:</strong>
+            Built on a Colyseus backend. Every player's position syncs at 60fps — no lag excuses.
+        </li>
+        <li style="margin-bottom:15px;">
+            <strong style="color:#ff00ff;">🔑 Friend Codes:</strong>
+            Generate a private 6-character code and invite friends directly. Up to 8 Blazers per room.
+        </li>
+        <li style="margin-bottom:15px;">
+            <strong style="color:#ff00ff;">🏁 First to the Star:</strong>
+            Touch the rotating rainbow goal first. Your finish time is recorded — race yourself too.
+        </li>
+        <li style="margin-bottom:15px;">
+            <strong style="color:#ff00ff;">📱 Mobile Ready:</strong>
+            Full on-screen D-pad for touchscreen play — no keyboard needed.
+        </li>
+    </ul>
+
+    <br>
+
+    <!-- CONTROLS -->
+    <div style="background:rgba(0,255,255,0.05);border:1px solid #0ff;padding:20px;border-radius:8px;text-align:center;">
+        <h3 style="margin-top:0;color:#fff;">&gt; HOW TO PLAY</h3>
+        <p style="margin-bottom:0;font-size:1.15em;">
+            <strong style="color:#ff00ff;">W A S D</strong> or <strong style="color:#ff00ff;">Arrow Keys</strong> — navigate your Blazer<br>
+            <strong style="color:#ff00ff;">Mobile:</strong> on-screen D-pad<br>
+            <br>
+            <em>Don't stop. Don't hit the walls. First to the star wins.</em>
+        </p>
+    </div>
+
+    <br>
+
+    <hr style="border:0;height:1px;background:linear-gradient(to right,transparent,#ff00ff,transparent);margin-bottom:24px;">
+
+    <p style="text-align:center;font-size:0.9em;color:#a0a0a0;">
+        Active development by <span style="color:#fff;">Unusual Technologies</span>.<br>
+        Leave a comment to report bugs (the bad kind) or suggest new features!
+    </p>
+
 </div>
-
-<!-- COPY EVERYTHING BELOW THIS LINE INTO ITCH.IO -->
-
-<h1>BLAZE THE MAZE</h1>
-
-<p>
-    A high-speed, real-time multiplayer maze racer for up to <strong>8 players</strong>.
-    Every round drops everyone into a fresh procedurally-generated neon labyrinth simultaneously —
-    no turns, no waiting. First Blazer to reach the goal wins.
-</p>
-
-<hr>
-
-<h2>Power-Ups</h2>
-
-<p>Two power-ups are hidden in every maze. Either one can flip the race in an instant:</p>
-
-<ul>
-    <li>
-        <strong>Self-Teleport</strong> (white dashed ring) —
-        Instantly warps <em>you</em> to a random cell.
-        Use it to escape a dead end or leapfrog halfway across the grid.
-    </li>
-    <li>
-        <strong>Opponent-Teleport</strong> (rainbow ring) —
-        Scatters <em>every other player</em> to random cells at once.
-        Grab it while you're winning to blow up the pack behind you.
-    </li>
-</ul>
-
-<hr>
-
-<h2>Multiplayer</h2>
-
-<ul>
-    <li>
-        <strong>Instant Match</strong> —
-        Hit <em>Race!</em> and you're queued against anyone online worldwide.
-    </li>
-    <li>
-        <strong>Friend Code</strong> —
-        Generate a private 6-character code and share it.
-        Anyone who enters it joins your room — up to 8 Blazers per match.
-    </li>
-    <li>
-        <strong>Goal</strong> —
-        Touch the rotating rainbow star first. Your finish time is recorded; try to beat your personal best.
-    </li>
-    <li>
-        <strong>Mobile Ready</strong> —
-        Full on-screen D-pad for touchscreen play — no keyboard needed.
-    </li>
-</ul>
-
-<hr>
-
-<h2>How to Play</h2>
-
-<blockquote>
-    <strong>W A S D</strong> or <strong>Arrow Keys</strong> to navigate your Blazer.<br>
-    On mobile: use the on-screen D-pad.<br>
-    <em>Don't stop. Don't hit the walls. First to the star wins.</em>
-</blockquote>
-
-<hr>
-
-<p>
-    <em>
-        Currently in active development by <strong>Unusual Technologies</strong> —
-        drop a comment below to report bugs or suggest new features!
-    </em>
-</p>
-
-<!-- COPY EVERYTHING ABOVE THIS LINE INTO ITCH.IO -->
 
 </body>
 </html>
