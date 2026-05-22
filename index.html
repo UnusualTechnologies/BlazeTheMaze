@@ -152,9 +152,20 @@
         }
 
         .display-friend-code {
+            /* Render as invisible input so browsers give it native selection behaviour */
+            background: none;
+            border: none;
+            outline: none;
+            font-family: monospace;
+            font-size: inherit;
+            font-weight: bold;
+            color: #00ffff;
+            text-align: center;
+            width: 9ch;
+            padding: 0;
+            cursor: text;
             user-select: text;
             -webkit-user-select: text;
-            cursor: text;
         }
 
         .display-friend-code.copied-flash {
@@ -632,7 +643,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.74</div>
+    <div id="version-number">v1.5.75</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -647,7 +658,7 @@
                     <svg class="slash" viewBox="0 0 40 40"><line x1="31" y1="7" x2="9" y2="33" stroke="#ff4444" stroke-width="2.5" stroke-linecap="round"/></svg>
                 </button>
             </div>
-            <div id="friend-code-hud">Friend code:<br><span class="display-friend-code" style="color: #00ffff; font-weight: bold;"></span></div>
+            <div id="friend-code-hud">Friend code:<br><input class="display-friend-code" readonly value="" tabindex="-1"></div>
             <span class="ver-text"></span>
             <div class="hud-buttons">
                 <button class="action-btn secondary-btn" id="in-game-menu-btn" style="padding: 10px; font-size: 0.9rem; flex: 1; margin: 0;">Menu</button>
@@ -2610,8 +2621,9 @@
         // Click any friend-code display to copy it to clipboard
         document.addEventListener('click', e => {
             const el = e.target.closest('.display-friend-code');
-            if (!el || !el.innerText) return;
-            navigator.clipboard?.writeText(el.innerText).catch(() => {});
+            const text = el?.tagName === 'INPUT' ? el.value : el?.innerText;
+            if (!el || !text) return;
+            navigator.clipboard?.writeText(text).catch(() => {});
             el.classList.add('copied-flash');
             setTimeout(() => el.classList.remove('copied-flash'), 800);
         });
@@ -2707,7 +2719,9 @@
 
             // Update HUD to show the actual room code (prefer state.roomCode; falls back to room.roomId)
             const _updateRoomCodeDisplay = (code) => {
-                if (code) document.querySelectorAll('.display-friend-code').forEach(el => el.innerText = code);
+                if (code) document.querySelectorAll('.display-friend-code').forEach(el => {
+                    if (el.tagName === 'INPUT') el.value = code; else el.innerText = code;
+                });
             };
             _updateRoomCodeDisplay(room.state?.roomCode || room.roomId);
 
