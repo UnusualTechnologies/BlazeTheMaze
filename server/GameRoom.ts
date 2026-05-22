@@ -36,6 +36,9 @@ export class GameRoom extends Room<{ state: GameState }> {
     playAgainProcessed: boolean = false;
     // Timestamp (Date.now()) when the current round started — AI and move messages are blocked for 2 s
     roundStartMs: number = 0;
+    orbLeaderOnly: boolean = false;
+    // Tracks rocket-hit events already processed to prevent duplicate teleports
+    usedRocketHits = new Set<string>();
 
     // --- Lifecycle ---
 
@@ -53,6 +56,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         this.cols = Math.max(5, Number(options.cols) || 20);
         this.rows = Math.max(5, Number(options.rows) || 20);
         this.collisions = options.collisions !== false; // default true
+        this.orbLeaderOnly = options.orbLeaderOnly === true;
 
         const state = new GameState();
         state.cols = this.cols;
@@ -116,8 +120,9 @@ export class GameRoom extends Room<{ state: GameState }> {
         const reservedCells = 1 + 8; // goal + 8 spawn corners/edges
         const availableCells = this.cols * this.rows - reservedCells;
         const maxPuPerType = Math.max(0, Math.floor(availableCells * 0.35));
-        options.puOpp  = Math.min(isNaN(Number(options.puOpp))  ? 10 : Number(options.puOpp),  maxPuPerType);
-        options.puSelf = Math.min(isNaN(Number(options.puSelf)) ? 10 : Number(options.puSelf), maxPuPerType);
+        options.puOpp    = Math.min(isNaN(Number(options.puOpp))    ? 10 : Number(options.puOpp),    maxPuPerType);
+        options.puSelf   = Math.min(isNaN(Number(options.puSelf))   ? 10 : Number(options.puSelf),   maxPuPerType);
+        options.puRocket = Math.min(isNaN(Number(options.puRocket)) ? 0  : Number(options.puRocket), maxPuPerType);
 
         this.spawnOptions = options;
         this.setState(state);
@@ -239,6 +244,23 @@ export class GameRoom extends Room<{ state: GameState }> {
         // After 8 seconds any human who hasn't acked is kicked (4003).
         this.onMessage("results_ack", (client) => {
             this.resultsAckedClients.add(client.sessionId);
+        });
+
+        // Rocket hit: client reports that a rocket collided with a player.
+        // rocketId+targetSessionId pair is deduped so multiple clients can't double-teleport the same victim.
+        this.onMessage("rocket_hit", (client, message) => {
+            try {
+                const { rocketId, targetSessionId } = message;
+                if (typeof rocketId !== 'string' || typeof targetSessionId !== 'string') return;
+                if (this.roundOver) return;
+                const key = `${rocketId}:${targetSessionId}`;
+                if (this.usedRocketHits.has(key)) return;
+                this.usedRocketHits.add(key);
+                const target = this.state.players.get(targetSessionId);
+                if (target) this.teleportPlayer(target);
+            } catch (err) {
+                console.error(`rocket_hit handler error:`, err);
+            }
         });
 
         // First player to click Play Again broadcasts the news to everyone still on the
@@ -620,6 +642,7 @@ export class GameRoom extends Room<{ state: GameState }> {
 
     spawnPowerUps(options: any = {}) {
         this.state.powerUps.clear();
+        this.usedRocketHits.clear();
         const playerCount = this.state.players.size;
         const dynamicDefault = Math.max(2, 10 - playerCount);
         const puOpp    = options.puOpp    !== undefined ? Number(options.puOpp)    : dynamicDefault;
@@ -673,11 +696,28 @@ export class GameRoom extends Room<{ state: GameState }> {
             const pu = this.state.powerUps[puIndex];
             this.state.powerUps.splice(puIndex, 1);
             if (pu.type === "opponents") {
-                this.state.players.forEach((p, sid) => {
-                    if (sid !== sessionId) this.teleportPlayer(p);
-                });
+                if (this.orbLeaderOnly) {
+                    let leaderSid: string | null = null;
+                    let minDist = Infinity;
+                    this.state.players.forEach((p, sid) => {
+                        if (sid === sessionId) return;
+                        const d = this.getDistance(p.x, p.y);
+                        if (d < minDist) { minDist = d; leaderSid = sid; }
+                    });
+                    if (leaderSid) {
+                        const leaderPlayer = this.state.players.get(leaderSid);
+                        if (leaderPlayer) this.teleportPlayer(leaderPlayer);
+                    }
+                } else {
+                    this.state.players.forEach((p, sid) => {
+                        if (sid !== sessionId) this.teleportPlayer(p);
+                    });
+                }
             } else if (pu.type === "self") {
                 this.teleportPlayer(player);
+            } else if (pu.type === "rocket") {
+                const rocketId = `${sessionId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+                this.broadcast("rocket_fired", { id: rocketId, x: player.x, y: player.y, color: player.color });
             }
         }
 

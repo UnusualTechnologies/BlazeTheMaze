@@ -643,7 +643,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.75</div>
+    <div id="version-number">v1.5.76</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -734,8 +734,16 @@
                         <input type="number" id="pu-self-input" value="10" min="0" max="100" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px;">
-                        <input type="checkbox" id="collisions-toggle" checked style="width: 20px; height: 20px; cursor: pointer;"> 
+                        <input type="checkbox" id="collisions-toggle" checked style="width: 20px; height: 20px; cursor: pointer;">
                         <label for="collisions-toggle" style="font-size: 1.2rem; cursor: pointer; user-select: none;">Enable Collisions</label>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <input type="checkbox" id="orb-leader-toggle" style="width: 20px; height: 20px; cursor: pointer;">
+                        <label for="orb-leader-toggle" style="font-size: 1.2rem; cursor: pointer; user-select: none;">Orbs: Target Leader Only</label>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <label for="pu-rocket-input" style="font-size: 1.2rem;">Rockets:</label>
+                        <input type="number" id="pu-rocket-input" value="0" min="0" max="20" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
                     </div>
                 </div>
 
@@ -1167,18 +1175,19 @@
         }
         
         class Rocket {
-            constructor(x, y, color, ownerBlazer) {
+            constructor(x, y, color, id) {
                 this.gridX = x;
                 this.gridY = y;
                 this.pixelX = x * cellSize + cellSize / 2;
                 this.pixelY = y * cellSize + cellSize / 2;
                 this.color = color;
-                this.owner = ownerBlazer;
+                this.id = id;
                 this.moveTimer = 0;
                 this.moveInterval = 100; // Zooms at 100ms per square
                 this.life = true;
                 this.angle = 0;
                 this.stepsTaken = 0;
+                this.hitTargets = new Set(); // prevents double-reporting the same target
             }
 
             update(dt) {
@@ -1225,16 +1234,18 @@
                 }
 
                 // Check collision with blazers on the way
-                blazers.forEach(b => {
-                    if (b.gridX === this.gridX && b.gridY === this.gridY && b.state === 'normal') {
-                        // Don't hit yourself on the exact frame it launches
-                        if (b === this.owner && this.stepsTaken === 0) return;
-                        
-                        startTeleport(b);
-                        screenShake = 10;
-                        for(let i=0; i<15; i++) particles.push(new Particle(this.pixelX, this.pixelY, this.color));
-                    }
-                });
+                if (this.stepsTaken > 0) {
+                    blazers.forEach(b => {
+                        if (b.gridX === this.gridX && b.gridY === this.gridY && b.state === 'normal') {
+                            if (this.hitTargets.has(b.sessionId)) return;
+                            this.hitTargets.add(b.sessionId);
+                            screenShake = 10;
+                            for(let i=0; i<15; i++) particles.push(new Particle(this.pixelX, this.pixelY, this.color));
+                            // Report to server — server teleports authoritatively; onStateChange drives the visual
+                            if (room) room.send("rocket_hit", { rocketId: this.id, targetSessionId: b.sessionId });
+                        }
+                    });
+                }
 
                 if (this.gridX === goal.x && this.gridY === goal.y) {
                     this.life = false;
@@ -3042,6 +3053,10 @@
                 showNetworkNotification('Server Error', (message || 'An unexpected server error occurred.') + ' (code ' + code + ')', () => location.reload());
             });
 
+            room.onMessage("rocket_fired", ({ id, x, y, color }) => {
+                rockets.push(new Rocket(x, y, color, id));
+            });
+
             room.onMessage("round_reset", () => {
                 if (roundFlashStart === null) roundFlashStart = performance.now(); // failsafe if msg arrives before countdown
                 blazers.forEach(blazer => {
@@ -3072,6 +3087,8 @@
                     rows: parseInt(gridSizeInput.value, 10) || 20,
                     puOpp: parseInt(document.getElementById('pu-opp-input').value, 10) || 10,
                     puSelf: parseInt(document.getElementById('pu-self-input').value, 10) || 10,
+                    puRocket: parseInt(document.getElementById('pu-rocket-input').value, 10) || 0,
+                    orbLeaderOnly: document.getElementById('orb-leader-toggle').checked,
                     slots: lobbySlots.map(s => ({
                         mode: s.typeSelect.value,
                         id: s.id,
@@ -3270,6 +3287,8 @@
                     rows: parseInt(gridSizeInput.value, 10) || 20,
                     puOpp: parseInt(document.getElementById('pu-opp-input').value, 10) || 10,
                     puSelf: parseInt(document.getElementById('pu-self-input').value, 10) || 10,
+                    puRocket: parseInt(document.getElementById('pu-rocket-input').value, 10) || 0,
+                    orbLeaderOnly: document.getElementById('orb-leader-toggle').checked,
                     slots: lobbySlots.map(s => ({
                         mode: s.typeSelect.value,
                         id: s.id,
@@ -3375,6 +3394,7 @@
                     rows: parseInt(gridSizeInput.value, 10),
                     puOpp: parseInt(document.getElementById('pu-opp-input').value, 10),
                     puSelf: parseInt(document.getElementById('pu-self-input').value, 10),
+                    puRocket: parseInt(document.getElementById('pu-rocket-input').value, 10) || 0,
                     slots: lobbySlots.map(s => ({
                         mode: s.typeSelect.value,
                         id: s.id,
@@ -3385,6 +3405,7 @@
                         controlScheme: s.controlSelect.value
                     })),
                     collisions: document.getElementById('collisions-toggle').checked,
+                    orbLeaderOnly: document.getElementById('orb-leader-toggle').checked,
                     isPrivate: false
                 };
 
