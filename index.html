@@ -621,7 +621,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.64</div>
+    <div id="version-number">v1.5.65</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1927,7 +1927,7 @@
         }
 
         function drawSmokePuffs() {
-            const SMOKE_MS = 1000;
+            const SMOKE_MS = 500;
             const now = performance.now();
             smokePuffs = smokePuffs.filter(puff => {
                 const progress = Math.min((now - puff.startTime) / SMOKE_MS, 1);
