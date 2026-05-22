@@ -621,7 +621,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.63</div>
+    <div id="version-number">v1.5.64</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1001,7 +1001,7 @@
 
                 typeSelect.addEventListener('change', (e) => {
                     const val = e.target.value;
-                    
+
                     if (val === 'inactive' || val === 'friend_only') slotDiv.classList.add('inactive');
                     else slotDiv.classList.remove('inactive');
 
@@ -1015,6 +1015,7 @@
                         controlSelect.style.display = 'none';
                         aiSettings.style.display = 'none';
                     }
+                    updatePowerUpDefaults();
                 });
 
                 if (defaultType === 'inactive' || defaultType === 'friend_only') slotDiv.classList.add('inactive');
@@ -1031,6 +1032,18 @@
                     index: i
                 });
             }
+        }
+
+        function updatePowerUpDefaults() {
+            const count = lobbySlots.filter(s => {
+                const v = s.typeSelect.value;
+                return v !== 'inactive' && v !== 'friend_only';
+            }).length;
+            const def = Math.max(2, 10 - count);
+            const oppInput = document.getElementById('pu-opp-input');
+            const selfInput = document.getElementById('pu-self-input');
+            if (oppInput) oppInput.value = String(def);
+            if (selfInput) selfInput.value = String(def);
         }
 
         function parseLobby() {
@@ -3882,6 +3895,7 @@
 
         window.onload = () => {
             buildLobby();
+            updatePowerUpDefaults();
             generateMaze();
             resizeCanvas();
             updateGridSizeInputLimits();

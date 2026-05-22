@@ -605,31 +605,42 @@ export class GameRoom extends Room<{ state: GameState }> {
 
     spawnPowerUps(options: any = {}) {
         this.state.powerUps.clear();
-        const puOpp    = options.puOpp    !== undefined ? Number(options.puOpp)    : 10;
-        const puSelf   = options.puSelf   !== undefined ? Number(options.puSelf)   : 10;
+        const playerCount = this.state.players.size;
+        const dynamicDefault = Math.max(2, 10 - playerCount);
+        const puOpp    = options.puOpp    !== undefined ? Number(options.puOpp)    : dynamicDefault;
+        const puSelf   = options.puSelf   !== undefined ? Number(options.puSelf)   : dynamicDefault;
         const puRocket = options.puRocket !== undefined ? Number(options.puRocket) : 0;
 
-        const totalCells = this.cols * this.rows;
+        // Collect dead-end cells (exactly 1 open passage), excluding reserved cells
+        const deadEnds: { x: number; y: number }[] = [];
+        for (let x = 0; x < this.cols; x++) {
+            for (let y = 0; y < this.rows; y++) {
+                if (this.isReservedCell(x, y)) continue;
+                const cell = this.state.grid[x * this.rows + y];
+                if (!cell) continue;
+                let openCount = 0;
+                for (let w = 0; w < 4; w++) { if (!cell.walls[w]) openCount++; }
+                if (openCount === 1) deadEnds.push({ x, y });
+            }
+        }
+        // Fisher-Yates shuffle
+        for (let i = deadEnds.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [deadEnds[i], deadEnds[j]] = [deadEnds[j], deadEnds[i]];
+        }
+
         const spawn = (count: number, type: string) => {
             if (isNaN(count) || count <= 0) return;
-            const maxAttempts = totalCells * 4;
             let placed = 0;
-            let attempts = 0;
-            while (placed < count && attempts < maxAttempts) {
-                attempts++;
-                const x = Math.floor(Math.random() * this.cols);
-                const y = Math.floor(Math.random() * this.rows);
-                if (
-                    !this.isReservedCell(x, y) &&
-                    !this.state.powerUps.some((pu: PowerUp) => pu.x === x && pu.y === y)
-                ) {
-                    const pu = new PowerUp();
-                    pu.x = x;
-                    pu.y = y;
-                    pu.type = type;
-                    this.state.powerUps.push(pu);
-                    placed++;
-                }
+            for (const { x, y } of deadEnds) {
+                if (placed >= count) break;
+                if (this.state.powerUps.some((pu: PowerUp) => pu.x === x && pu.y === y)) continue;
+                const pu = new PowerUp();
+                pu.x = x;
+                pu.y = y;
+                pu.type = type;
+                this.state.powerUps.push(pu);
+                placed++;
             }
         };
 
