@@ -643,7 +643,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.76</div>
+    <div id="version-number">v1.5.77</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1192,7 +1192,7 @@
 
             update(dt) {
                 this.moveTimer += dt;
-                
+
                 // Smooth visual following
                 const targetX = this.gridX * cellSize + cellSize / 2;
                 const targetY = this.gridY * cellSize + cellSize / 2;
@@ -1201,7 +1201,7 @@
 
                 if (this.moveTimer >= this.moveInterval) {
                     this.moveTimer = 0;
-                    this.step();
+                    try { this.step(); } catch(e) { console.warn('Rocket step error:', e); }
                 }
                 return this.life;
             }
@@ -1230,7 +1230,8 @@
                     this.angle = Math.atan2(bestMove.dy, bestMove.dx);
                     this.stepsTaken++;
                 } else {
-                    this.life = false;
+                    // No valid move (shouldn't happen in a connected maze — skip this step)
+                    this.stepsTaken++;
                 }
 
                 // Check collision with blazers on the way
@@ -2792,23 +2793,39 @@
                 state.powerUps.forEach(pu => {
                     powerUps.push({ x: pu.x, y: pu.y, type: pu.type });
                 });
-                // Detect collected opponents power-ups and trigger burst animation
+                // Detect collected power-ups from state diff
                 prevPowerUps.forEach(prev => {
-                    if (prev.type !== 'opponents') return;
-                    if (powerUps.some(p => p.x === prev.x && p.y === prev.y)) return;
-                    let hitColor = null;
-                    const otherPlayers = [];
-                    state.players.forEach(ps => {
-                        if (ps.x === prev.x && ps.y === prev.y) {
-                            hitColor = ps.color;
-                        } else {
-                            otherPlayers.push({
-                                color: ps.color,
-                                angle: Math.atan2(ps.y - prev.y, ps.x - prev.x)
+                    if (powerUps.some(p => p.x === prev.x && p.y === prev.y)) return; // still exists
+
+                    if (prev.type === 'opponents') {
+                        // Burst animation for orb collection
+                        let hitColor = null;
+                        const otherPlayers = [];
+                        state.players.forEach(ps => {
+                            if (ps.x === prev.x && ps.y === prev.y) {
+                                hitColor = ps.color;
+                            } else {
+                                otherPlayers.push({
+                                    color: ps.color,
+                                    angle: Math.atan2(ps.y - prev.y, ps.x - prev.x)
+                                });
+                            }
+                        });
+                        powerUpBursts.push({ gridX: prev.x, gridY: prev.y, hitColor: hitColor || '#ffffff', otherPlayers, startTime: performance.now() });
+
+                    } else if (prev.type === 'rocket') {
+                        // Rocket collected — spawn a homing rocket at that position on every client.
+                        // Use a position-based ID so all clients produce the same dedup key for rocket_hit.
+                        const rocketId = `r${prev.x}-${prev.y}`;
+                        if (!rockets.some(r => r.id === rocketId)) {
+                            // Find the collector's color (player standing on the pickup cell)
+                            let collectorColor = '#ff6600';
+                            state.players.forEach(ps => {
+                                if (ps.x === prev.x && ps.y === prev.y) collectorColor = ps.color;
                             });
+                            rockets.push(new Rocket(prev.x, prev.y, collectorColor, rocketId));
                         }
-                    });
-                    powerUpBursts.push({ gridX: prev.x, gridY: prev.y, hitColor: hitColor || '#ffffff', otherPlayers, startTime: performance.now() });
+                    }
                 });
 
                 // Sync Players
@@ -3051,10 +3068,6 @@
             room.onError((code, message) => {
                 console.error("Room error:", code, message);
                 showNetworkNotification('Server Error', (message || 'An unexpected server error occurred.') + ' (code ' + code + ')', () => location.reload());
-            });
-
-            room.onMessage("rocket_fired", ({ id, x, y, color }) => {
-                rockets.push(new Rocket(x, y, color, id));
             });
 
             room.onMessage("round_reset", () => {

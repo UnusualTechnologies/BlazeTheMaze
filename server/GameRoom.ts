@@ -716,8 +716,8 @@ export class GameRoom extends Room<{ state: GameState }> {
             } else if (pu.type === "self") {
                 this.teleportPlayer(player);
             } else if (pu.type === "rocket") {
-                const rocketId = `${sessionId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-                this.broadcast("rocket_fired", { id: rocketId, x: player.x, y: player.y, color: player.color });
+                // Rocket pickup: nothing to do server-side on collection.
+                // All clients detect the power-up disappearing from state and spawn a local Rocket.
             }
         }
 
