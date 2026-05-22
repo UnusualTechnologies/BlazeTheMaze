@@ -632,7 +632,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.69</div>
+    <div id="version-number">v1.5.70</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2671,6 +2671,12 @@
         let leavingIntentionally = false;
 
         async function setupRoom(newRoom) {
+            // If the user navigated back to the menu while the join was in-flight,
+            // abandon this room so it doesn't silently take over the client.
+            if (gameState === 'MENU') {
+                try { newRoom.leave(); } catch (_) {}
+                return;
+            }
             room = newRoom;
             reconnectionToken = newRoom.reconnectionToken ?? null;
             console.log("Joined room:", room.roomId, "SessionID:", room.sessionId);
@@ -3268,7 +3274,7 @@
                 pendingOwnerSlotSchemes = {};
                 lobbySlots.forEach((s, i) => { if (s.typeSelect.value === 'local') pendingOwnerSlotSchemes[i] = s.controlSelect.value; });
 
-                const newRoom = await withTimeout(client.joinOrCreate("game", settings), 10000);
+                const newRoom = await withTimeout(client.create("game", settings), 10000);
                 clearTimeout(_slowTimer1); hideSlowConnectionToast();
 
                 // Wait a tiny bit to ensure sessionId is ready
