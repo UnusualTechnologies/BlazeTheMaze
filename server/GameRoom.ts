@@ -34,6 +34,8 @@ export class GameRoom extends Room<{ state: GameState }> {
     resultsAckedClients = new Set<string>();
     // Prevents play_again_request from being processed more than once (simultaneous clicks)
     playAgainProcessed: boolean = false;
+    // Timestamp (Date.now()) when the current round started — AI and move messages are blocked for 2 s
+    roundStartMs: number = 0;
 
     // --- Lifecycle ---
 
@@ -119,6 +121,7 @@ export class GameRoom extends Room<{ state: GameState }> {
 
         this.spawnOptions = options;
         this.setState(state);
+        this.roundStartMs = Date.now();
         state.roomCode = this.roomId;
         this.generateMaze();
         this.spawnPowerUps(options);
@@ -148,10 +151,12 @@ export class GameRoom extends Room<{ state: GameState }> {
                 }
             }
 
+            const moveLocked = now - this.roundStartMs < 2000;
             this.state.players.forEach((player, sessionId) => {
                 if (player.isAI) {
                     // 'local' slots are meant for human co-op on the host machine — skip AI
                     if (this.state.slots[player.slotIndex]?.mode === 'local') return;
+                    if (moveLocked) { this.aiCooldowns.set(sessionId, 0); return; }
                     const cooldown = (this.aiCooldowns.get(sessionId) ?? 0) + dt;
                     this.aiCooldowns.set(sessionId, cooldown);
                     const slotSpeed = this.state.slots[player.slotIndex]?.aiSpeed ?? 600;
@@ -170,6 +175,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                 if (!player || player.isAI) return;
                 // Rate limit: max 20 moves/sec per client
                 const now = Date.now();
+                if (now - this.roundStartMs < 2000) return;
                 if (now - (this.lastMoveTime.get(client.sessionId) ?? 0) < 50) return;
                 this.lastMoveTime.set(client.sessionId, now);
                 // Validate coordinates
@@ -195,6 +201,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         this.onMessage("move_secondary", (client, message) => {
             try {
                 if (this.roundOver) return;
+                if (Date.now() - this.roundStartMs < 2000) return;
                 if (client.sessionId !== this.ownerSessionId) return;
                 const { slotIndex, x, y } = message;
                 if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) {
@@ -740,6 +747,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         this.distanceMap = this.computeDistanceMap(this.state.goalX, this.state.goalY);
         this.spawnPowerUps(this.spawnOptions);
         this.state.timer = 0;
+        this.roundStartMs = Date.now();
 
         this.state.players.forEach((player, sessionId) => {
             const spawn = this.getSpawnPosition(player.slotIndex);
@@ -777,6 +785,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         // Fresh power-ups using original lobby settings
         this.spawnPowerUps(this.spawnOptions);
         this.state.timer = 0;
+        this.roundStartMs = Date.now();
     }
 
     getSpawnPosition(slotIndex: number): { x: number; y: number } {

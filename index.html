@@ -621,7 +621,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.65</div>
+    <div id="version-number">v1.5.66</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -871,6 +871,8 @@
         let currentWinner = null;
         let roundTimes = [];
         let gameStartLabelTime = null; // set once per game, drives player-number fade-in labels
+        let roundRingTime = null;      // set every round, drives the concentric ring animation
+        let roundMoveLockEnd = 0;      // performance.now() value until which movement is locked
         let lastRoomCode = null;
         let lastPuOpp = 10;
         let lastPuSelf = 10;
@@ -1350,7 +1352,7 @@
                     ? (this.sessionId === room.sessionId || this.isSecondaryLocal)
                     : this.isLocal;
 
-                if (this.isPlayer && this.state === 'normal' && isActuallyLocal) {
+                if (this.isPlayer && this.state === 'normal' && isActuallyLocal && now >= roundMoveLockEnd) {
                     if (now - this.lastMoveTime >= this.moveCooldown) {
                         let moved = false;
                         
@@ -1785,6 +1787,8 @@
             postMatchLayer.classList.add('hidden');
             lastTime = performance.now();
             roundStartTime = performance.now();
+            roundRingTime = performance.now();
+            roundMoveLockEnd = performance.now() + 2000;
             if (roundTimes.length === 0) gameStartLabelTime = performance.now();
             Synth.muffle(false);
         }
@@ -2096,9 +2100,9 @@
             blazers.sort((a, b) => (a.isPlayer === b.isPlayer) ? 0 : a.isPlayer ? 1 : -1);
             blazers.forEach(blazer => { blazer.update(dt); blazer.draw(); });
 
-            // Expand/contract ring — first game only, synced to label timing
-            if (gameStartLabelTime !== null) {
-                const ringElapsed = now - gameStartLabelTime;
+            // Expand/contract ring — every round, locked to round start time
+            if (roundRingTime !== null) {
+                const ringElapsed = now - roundRingTime;
                 const ringDuration = 2000;
                 const halfDuration = ringDuration / 2;
                 if (ringElapsed < ringDuration) {
@@ -2133,6 +2137,8 @@
                     ctx.globalAlpha = 1;
                     ctx.shadowBlur = 0;
                     ctx.restore();
+                } else {
+                    roundRingTime = null;
                 }
             }
 
