@@ -365,14 +365,20 @@ export class GameRoom extends Room<{ state: GameState }> {
         const intentional = code === 1000 || code === 4001 || code === 4002 || code === 4003;
 
         if (!intentional) {
-            try {
-                await this.allowReconnection(client, 8);
-                // Player reconnected — restore activity timestamp and keep playing
-                this.lastInputTime.set(client.sessionId, Date.now());
-                console.log(`Client ${client.sessionId} reconnected.`);
-                return;
-            } catch {
-                console.log(`Client ${client.sessionId} reconnection window expired. Cleaning up.`);
+            // Only hold the reconnect window if other humans are still in the game.
+            // If this player is the last human, tear down immediately so joinOrCreate
+            // doesn't match new players to a zombie room and hit "seat reservation expired".
+            const otherHumans = this.clients.filter(c => c.sessionId !== client.sessionId).length;
+            if (otherHumans > 0) {
+                try {
+                    await this.allowReconnection(client, 8);
+                    // Player reconnected — restore activity timestamp and keep playing
+                    this.lastInputTime.set(client.sessionId, Date.now());
+                    console.log(`Client ${client.sessionId} reconnected.`);
+                    return;
+                } catch {
+                    console.log(`Client ${client.sessionId} reconnection window expired. Cleaning up.`);
+                }
             }
         }
 
