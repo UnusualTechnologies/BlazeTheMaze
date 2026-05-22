@@ -151,7 +151,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                 }
             }
 
-            const moveLocked = now - this.roundStartMs < 2000;
+            const moveLocked = now - this.roundStartMs < 4000;
             this.state.players.forEach((player, sessionId) => {
                 if (player.isAI) {
                     // 'local' slots are meant for human co-op on the host machine — skip AI
@@ -175,7 +175,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                 if (!player || player.isAI) return;
                 // Rate limit: max 20 moves/sec per client
                 const now = Date.now();
-                if (now - this.roundStartMs < 2000) return;
+                if (now - this.roundStartMs < 4000) return;
                 if (now - (this.lastMoveTime.get(client.sessionId) ?? 0) < 50) return;
                 this.lastMoveTime.set(client.sessionId, now);
                 // Validate coordinates
@@ -201,7 +201,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         this.onMessage("move_secondary", (client, message) => {
             try {
                 if (this.roundOver) return;
-                if (Date.now() - this.roundStartMs < 2000) return;
+                if (Date.now() - this.roundStartMs < 4000) return;
                 if (client.sessionId !== this.ownerSessionId) return;
                 const { slotIndex, x, y } = message;
                 if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) {

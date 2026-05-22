@@ -632,7 +632,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.71</div>
+    <div id="version-number">v1.5.72</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -881,8 +881,8 @@
         let roundCountdown = 0;
         let currentWinner = null;
         let roundTimes = [];
-        let gameStartLabelTime = null; // set once per game, drives player-number fade-in labels
-        let roundRingTime = null;      // set every round, drives the concentric ring animation
+        const ROUND_START_MS = 4000;   // shared duration: ring animation, control labels, movement lock
+        let roundRingTime = null;      // set every round; drives ring, labels, and movement lock
         let roundMoveLockEnd = 0;      // performance.now() value until which movement is locked
         let lastRoomCode = null;
         let lastPuOpp = 10;
@@ -1799,8 +1799,7 @@
             lastTime = performance.now();
             roundStartTime = performance.now();
             roundRingTime = performance.now();
-            roundMoveLockEnd = performance.now() + 2000;
-            if (roundTimes.length === 0) gameStartLabelTime = performance.now();
+            roundMoveLockEnd = performance.now() + ROUND_START_MS;
             Synth.muffle(false);
         }
 
@@ -2114,7 +2113,7 @@
             // Expand/contract ring — every round, locked to round start time
             if (roundRingTime !== null) {
                 const ringElapsed = now - roundRingTime;
-                const ringDuration = 2000;
+                const ringDuration = ROUND_START_MS;
                 const halfDuration = ringDuration / 2;
                 if (ringElapsed < ringDuration) {
                     const goalPx = goal.x * cellSize + cellSize / 2;
@@ -2153,11 +2152,11 @@
                 }
             }
 
-            // Player identification labels — first game only, fade over 2 s
-            if (gameStartLabelTime !== null) {
-                const labelElapsed = now - gameStartLabelTime;
-                if (labelElapsed < 2000) {
-                    const alpha = 1 - labelElapsed / 2000;
+            // Player identification labels — every round, fades over ROUND_START_MS
+            if (roundRingTime !== null) {
+                const labelElapsed = now - roundRingTime;
+                if (labelElapsed < ROUND_START_MS) {
+                    const alpha = 1 - labelElapsed / ROUND_START_MS;
                     const fontSize = Math.round(cellSize * 0.55);
                     ctx.save();
                     ctx.font = `bold ${fontSize}px monospace`;
@@ -2198,8 +2197,6 @@
                     ctx.globalAlpha = 1;
                     ctx.shadowBlur = 0;
                     ctx.restore();
-                } else {
-                    gameStartLabelTime = null;
                 }
             }
 
