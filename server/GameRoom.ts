@@ -123,6 +123,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         options.puOpp    = Math.min(isNaN(Number(options.puOpp))    ? 10 : Number(options.puOpp),    maxPuPerType);
         options.puSelf   = Math.min(isNaN(Number(options.puSelf))   ? 10 : Number(options.puSelf),   maxPuPerType);
         options.puRocket = Math.min(isNaN(Number(options.puRocket)) ? 0  : Number(options.puRocket), maxPuPerType);
+        options.puMirror = Math.min(isNaN(Number(options.puMirror)) ? 0  : Number(options.puMirror), maxPuPerType);
 
         this.spawnOptions = options;
         this.setState(state);
@@ -623,6 +624,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         const puOpp    = options.puOpp    !== undefined ? Number(options.puOpp)    : dynamicDefault;
         const puSelf   = options.puSelf   !== undefined ? Number(options.puSelf)   : dynamicDefault;
         const puRocket = options.puRocket !== undefined ? Number(options.puRocket) : 0;
+        const puMirror = options.puMirror !== undefined ? Number(options.puMirror) : 0;
 
         // Collect dead-end cells (exactly 1 open passage), excluding reserved cells
         const deadEnds: { x: number; y: number }[] = [];
@@ -660,6 +662,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         spawn(puOpp, "opponents");
         spawn(puSelf, "self");
         spawn(puRocket, "rocket");
+        spawn(puMirror, "mirror");
     }
 
     // --- Collision & Teleport ---
@@ -693,6 +696,8 @@ export class GameRoom extends Room<{ state: GameState }> {
             } else if (pu.type === "rocket") {
                 // Rocket pickup: nothing to do server-side on collection.
                 // All clients detect the power-up disappearing from state and spawn a local Rocket.
+            } else if (pu.type === "mirror") {
+                this.broadcast("mirror_controls", { duration: 8000 });
             }
         }
 
