@@ -643,7 +643,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.77</div>
+    <div id="version-number">v1.5.78</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -671,10 +671,21 @@
             <!-- This menu now ONLY appears when the entire match is over -->
             <div id="post-match-layer" class="menu-overlay hidden">
                 <h1 id="pm-title">Match Over</h1>
-                <div id="pm-started-notification" style="display:none; color:#00ffff; font-size:0.95rem; margin: -8px 0 12px; text-shadow: 0 0 8px #00ffff;"></div>
+
+                <!-- 30-second circle countdown until next game auto-starts -->
+                <div id="pm-timer-wrap" style="display:none; text-align:center; margin-bottom:10px;">
+                    <svg width="60" height="60" viewBox="0 0 60 60">
+                        <circle cx="30" cy="30" r="26" fill="none" stroke="#333" stroke-width="4"/>
+                        <circle id="pm-timer-ring" cx="30" cy="30" r="26" fill="none"
+                                stroke="#00ffff" stroke-width="4" stroke-linecap="round"
+                                stroke-dasharray="163" stroke-dashoffset="0"
+                                transform="rotate(-90 30 30)"/>
+                        <text id="pm-timer-text" x="30" y="35" text-anchor="middle"
+                              fill="#00ffff" font-size="16" font-family="monospace">30</text>
+                    </svg>
+                </div>
 
                 <div class="pm-buttons-vertical">
-                    <button class="action-btn" id="play-again-btn">Play Again</button>
                     <button class="action-btn secondary-btn" id="menu-btn">Main Menu</button>
                 </div>
 
@@ -851,7 +862,6 @@
         const joinCodeInput = document.getElementById('join-code-input');
         const lobbyBackBtn = document.getElementById('lobby-back-btn');
         const startBtn = document.getElementById('start-btn');
-        const playAgainBtn = document.getElementById('play-again-btn');
         const menuBtn = document.getElementById('menu-btn');
         const pmTitle = document.getElementById('pm-title');
         const pmSubtitle = document.getElementById('pm-subtitle');
@@ -900,12 +910,10 @@
         let roundCountdown = 0;
         let currentWinner = null;
         let roundTimes = [];
+        let matchEndTimerInterval = null;
         const ROUND_START_MS = 4000;   // shared duration: ring animation, control labels, movement lock
         let roundRingTime = null;      // set every round; drives ring, labels, and movement lock
         let roundMoveLockEnd = 0;      // performance.now() value until which movement is locked
-        let lastRoomCode = null;
-        let lastPuOpp = 10;
-        let lastPuSelf = 10;
 
         let roundFlashStart = null; // performance.now() timestamp when white flash begins
         let bestTime = parseFloat(localStorage.getItem('blazeTheMazeBestTime')) || null;
@@ -1826,6 +1834,31 @@
             Synth.muffle(false);
         }
 
+        // Starts the 30-second SVG ring countdown shown on the post-match overlay.
+        // Called when a match ends; cleared when match_reset arrives.
+        function startMatchEndTimer() {
+            const MATCH_END_WAIT = 30000;
+            const ring = document.getElementById('pm-timer-ring');
+            const timerText = document.getElementById('pm-timer-text');
+            const circumference = 163; // 2π × 26
+            const wrap = document.getElementById('pm-timer-wrap');
+            if (wrap) wrap.style.display = 'block';
+            if (ring) { ring.style.strokeDashoffset = '0'; }
+            if (timerText) timerText.textContent = '30';
+            clearInterval(matchEndTimerInterval);
+            const startTime = Date.now();
+            matchEndTimerInterval = setInterval(() => {
+                const elapsed = Date.now() - startTime;
+                const frac = Math.min(elapsed / MATCH_END_WAIT, 1);
+                if (ring) ring.style.strokeDashoffset = frac * circumference;
+                if (timerText) timerText.textContent = Math.max(0, Math.ceil((MATCH_END_WAIT - elapsed) / 1000));
+                if (frac >= 1) {
+                    clearInterval(matchEndTimerInterval);
+                    matchEndTimerInterval = null;
+                }
+            }, 100);
+        }
+
         function returnToMenu() {
             window.electronAPI?.closeSteamLobby();
             window.electronAPI?.setRichPresence('In Menu');
@@ -1834,12 +1867,17 @@
                 room.leave();
                 room = null;
             }
+            clearInterval(matchEndTimerInterval);
+            matchEndTimerInterval = null;
             setButtonLoading(quickStartBtn, false);
             setButtonLoading(startBtn, false);
             setButtonLoading(joinFriendBtn, false);
             gameState = 'MENU';
             postMatchLayer.classList.add('hidden');
             postMatchLayer.classList.remove('winner-pulse');
+            document.getElementById('pm-timer-wrap').style.display = 'none';
+            const resetPopup = document.getElementById('match-reset-popup');
+            if (resetPopup) resetPopup.remove();
             hud.classList.add('hidden');
             hudBar.classList.add('hidden');
             lobbyLayer.classList.add('hidden');
@@ -2371,7 +2409,7 @@
                 const aPressed = !!(gp.buttons[0]?.pressed);
                 if (aPressed && !gamepadABtnPrev[gpIdx]) {
                     if (!room && gameState === 'ROUND_OVER_COUNTDOWN') roundCountdown = 0;
-                    else if (gameState === 'MATCH_OVER') playAgainBtn.click();
+                    else if (gameState === 'MATCH_OVER') menuBtn.click();
                 }
                 gamepadABtnPrev[gpIdx] = aPressed;
 
@@ -2918,18 +2956,14 @@
                     if (state.matchOver) {
                         gameState = 'MATCH_OVER';
                         Synth.muffle(true);
-                        playAgainBtn.disabled = false; // always re-enable — may be stale from a prior match
                         postMatchLayer.style.setProperty('--winner-color', wColor);
                         postMatchLayer.classList.add('winner-pulse');
                         postMatchLayer.classList.remove('hidden');
                         pmTitle.innerText = `${wId} Wins the Match!`;
                         pmTitle.style.textShadow = `0 0 20px ${wColor}, 0 0 40px ${wColor}`;
                         pmSubtitle.innerHTML = `${wId} won the Best-of-3!`;
-                        lastRoomCode = room.state?.roomCode || room.roomId;
-                        playAgainBtn.innerText = `Play Again with Friend Code ${lastRoomCode}`;
-                        document.getElementById('pm-started-notification').style.display = 'none';
                         document.getElementById('pm-round-times').innerHTML = '';
-                        if (room) room.send('results_ack');
+                        startMatchEndTimer();
                     } else {
                         gameState = 'ROUND_OVER_COUNTDOWN';
                         currentWinner = blazers.find(b => b.id === wId) || { id: wId, color: wColor };
@@ -2971,8 +3005,6 @@
                     Synth.muffle(true);
                     gameState = 'MATCH_OVER';
 
-                    playAgainBtn.disabled = false; // always re-enable — may be stale from a prior match
-
                     postMatchLayer.style.setProperty('--winner-color', winnerColor);
                     postMatchLayer.classList.add('winner-pulse');
                     postMatchLayer.classList.remove('hidden');
@@ -2990,10 +3022,7 @@
                         pmSubtitle.innerHTML = `${winnerId} won the Best-of-3!<br>Match Time: ${formatTime(matchTime)}<br>Fastest Round: ${formatTime(fastestRoundTime)}`;
                     }
 
-                    lastRoomCode = room.state?.roomCode || room.roomId;
-                    playAgainBtn.innerText = `Play Again with Friend Code ${lastRoomCode}`;
-                    document.getElementById('pm-started-notification').style.display = 'none';
-                    if (room) room.send('results_ack');
+                    startMatchEndTimer();
 
                     const roundTimesList = document.getElementById('pm-round-times');
                     roundTimesList.innerHTML = roundTimes.map((rt, index) =>
@@ -3006,40 +3035,73 @@
                 }
             });
 
-            // Another player clicked Play Again — show notification, keep the results screen up.
-            // The server will kick us with 4002 shortly after; we then join the new room via
-            // the Play Again button or the friend-code input.
-            room.onMessage("play_again_started", ({ playerName, roomCode }) => {
-                lastRoomCode = roomCode || lastRoomCode;
-                lastPuOpp  = room.state?.puOpp  ?? lastPuOpp;
-                lastPuSelf = room.state?.puSelf ?? lastPuSelf;
-                playAgainBtn.innerText = `Join with Friend Code ${lastRoomCode}`;
-                const notif = document.getElementById('pm-started-notification');
-                notif.innerText = `⚡ ${playerName} has started a new game!`;
-                notif.style.display = 'block';
-            });
+            // Server auto-resets the match after 30 seconds.
+            // Start the new game underneath the post-match overlay, then show a 5s pop-up.
+            room.onMessage("match_reset", () => {
+                // Stop the circle timer
+                clearInterval(matchEndTimerInterval);
+                matchEndTimerInterval = null;
 
-            // Server confirmed our play_again_request was processed — leave the old room
-            // then re-trigger the Play Again button (room is now null, so it does join/create)
-            room.onMessage("play_again_confirm", ({ roomCode }) => {
-                lastRoomCode = roomCode || lastRoomCode;
-                lastPuOpp  = room.state?.puOpp  ?? lastPuOpp;
-                lastPuSelf = room.state?.puSelf ?? lastPuSelf;
-                leavingIntentionally = true;
-                try { room.leave(); } catch (_) {}
-                room = null;
-                // Small delay to let the server fully teardown before creating the new room
-                setTimeout(() => playAgainBtn.click(), 300);
+                // Reset client-side match state
+                scores = {};
+                currentWinner = null;
+                roundTimes = [];
+                matchTime = 0;
+                blazers.forEach(b => {
+                    b.state = 'normal';
+                    b.stateTimer = 0;
+                    b.heldDirections = [];
+                    b.turnIntent = null;
+                    b.swipeIntent = null;
+                });
+
+                // Start the new round (runs under the overlay)
+                initRound();
+
+                // Show a 5-second "Starting next game" pop-up on top of the post-match overlay
+                let countdown = 5;
+                const popup = document.createElement('div');
+                popup.id = 'match-reset-popup';
+                popup.style.cssText = [
+                    'position:fixed', 'inset:0', 'display:flex', 'align-items:center',
+                    'justify-content:center', 'z-index:9999', 'pointer-events:none'
+                ].join(';');
+                popup.innerHTML = `
+                  <div style="background:rgba(0,0,0,0.88);border:2px solid #00ffff;border-radius:12px;
+                               padding:28px 36px;text-align:center;pointer-events:auto;
+                               box-shadow:0 0 30px rgba(0,255,255,0.4);">
+                    <div style="font-size:1.4rem;font-weight:bold;margin-bottom:10px;color:#ffffff;">Starting next game</div>
+                    <div id="popup-countdown" style="font-size:2.5rem;color:#00ffff;font-family:monospace;margin-bottom:16px;">5</div>
+                    <button id="popup-continue-btn" style="font-size:1rem;padding:10px 28px;cursor:pointer;
+                            background:#00ffff;color:#000;border:none;border-radius:8px;font-weight:bold;">
+                      Click to continue
+                    </button>
+                  </div>`;
+                document.body.appendChild(popup);
+
+                document.getElementById('popup-continue-btn').addEventListener('click', () => {
+                    clearInterval(popupTick);
+                    popup.remove();
+                    postMatchLayer.classList.add('hidden');
+                    postMatchLayer.classList.remove('winner-pulse');
+                    document.getElementById('pm-timer-wrap').style.display = 'none';
+                });
+
+                const popupTick = setInterval(() => {
+                    countdown--;
+                    const el = document.getElementById('popup-countdown');
+                    if (el) el.textContent = countdown;
+                    if (countdown <= 0) {
+                        clearInterval(popupTick);
+                        popup.remove();
+                        returnToMenu();
+                    }
+                }, 1000);
             });
 
             room.onLeave(async (code) => {
                 if (code === 4001) {
                     showNetworkNotification('Removed from Room', 'You were removed to make space for a friend-code player.', () => location.reload());
-                } else if (code === 4002) {
-                    // A new game was started — stay on the win screen, null out the stale room reference
-                    room = null;
-                } else if (code === 4003) {
-                    showNetworkNotification('Disconnected', 'You were removed due to 3 minutes of inactivity.', () => location.reload());
                 } else if (leavingIntentionally) {
                     // Player clicked menu / Play Again / closed the window — no reconnect
                     leavingIntentionally = false;
@@ -3438,72 +3500,6 @@
                 gameState = 'MENU';
                 setButtonLoading(startBtn, false);
                 showNetworkNotification('Connection Failed', colyseusErrorText(e), () => {}, 'OK');
-            }
-        });
-
-        // Play Again — if still in the old room, tell the server first (it will notify other
-        // players), then create a fresh room with the same code.  If already disconnected
-        // (kicked with 4002), skip straight to join-or-create.
-        playAgainBtn.addEventListener('click', async () => {
-            const code = lastRoomCode;
-            if (!code) return;
-
-            Synth.init();
-
-            if (room) {
-                // Still connected — ask the server to broadcast to the other players.
-                // play_again_confirm handler will leave the room and clear the reference.
-                room.send('play_again_request');
-                return; // execution continues in the play_again_confirm handler
-            }
-
-            // Already disconnected (kicked with 4002 or never connected) — go straight to join/create
-            if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
-            blazers = [];
-            setButtonLoading(playAgainBtn, true);
-            let _slowTimerPA;
-            try {
-                if (!client) throw new Error('Colyseus client not initialised — check your connection.');
-                const localSlot = lobbySlots.find(s => s.typeSelect.value === 'local');
-                localControlScheme = localSlot ? localSlot.controlSelect.value : 'WASD';
-                localSlotSchemes = {};
-                joiningViaCode = true;
-                _slowTimerPA = setTimeout(showSlowConnectionToast, 5000);
-                let newRoom;
-                try {
-                    newRoom = await withTimeout(client.joinById(code, { joinedViaCode: true }), 10000);
-                } catch (joinErr) {
-                    const joinMsg = colyseusErrorText(joinErr);
-                    if (isNotFoundError(joinErr, joinMsg) || joinMsg === 'MATCH_OVER') {
-                        // Old room gone — create a new one with the same code
-                        joiningViaCode = false;
-                        newRoom = await withTimeout(client.create("game", {
-                            cols: parseInt(gridSizeInput.value, 10) || 20,
-                            rows: parseInt(gridSizeInput.value, 10) || 20,
-                            puOpp: lastPuOpp,
-                            puSelf: lastPuSelf,
-                            slots: lobbySlots.map(s => ({
-                                mode: s.typeSelect.value, id: s.id,
-                                color: s.color, aiSpeed: s.aiSpeedSelect.value,
-                                aiCustomSpeed: parseInt(s.customSpeedSlider.value, 10),
-                                aiBehavior: s.aiBehaviorSelect.value, controlScheme: s.controlSelect.value
-                            })),
-                            desiredRoomId: code
-                        }), 10000);
-                    } else { throw joinErr; }
-                }
-                clearTimeout(_slowTimerPA); hideSlowConnectionToast();
-                setupRoom(newRoom);
-            } catch (e) {
-                clearTimeout(_slowTimerPA); hideSlowConnectionToast();
-                joiningViaCode = false;
-                setButtonLoading(playAgainBtn, false);
-                const eMsg = colyseusErrorText(e);
-                if (eMsg === 'ROOM_FULL') {
-                    showNetworkNotification('Could Not Rejoin', 'The new game is already full.', () => {}, 'OK');
-                } else {
-                    showNetworkNotification('Could Not Rejoin', eMsg, () => {}, 'OK');
-                }
             }
         });
 

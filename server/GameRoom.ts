@@ -240,12 +240,6 @@ export class GameRoom extends Room<{ state: GameState }> {
             }
         });
 
-        // Client sends this once it has rendered the match-over results screen.
-        // After 8 seconds any human who hasn't acked is kicked (4003).
-        this.onMessage("results_ack", (client) => {
-            this.resultsAckedClients.add(client.sessionId);
-        });
-
         // Rocket hit: client reports that a rocket collided with a player.
         // rocketId+targetSessionId pair is deduped so multiple clients can't double-teleport the same victim.
         this.onMessage("rocket_hit", (client, message) => {
@@ -261,25 +255,6 @@ export class GameRoom extends Room<{ state: GameState }> {
             } catch (err) {
                 console.error(`rocket_hit handler error:`, err);
             }
-        });
-
-        // First player to click Play Again broadcasts the news to everyone still on the
-        // results screen, kicks them (4002 = stay on screen / rejoin), then the room
-        // self-destructs when the sender also leaves.
-        this.onMessage("play_again_request", (client) => {
-            if (!this.matchComplete || this.playAgainProcessed) return;
-            this.playAgainProcessed = true;
-            const player = this.state.players.get(client.sessionId);
-            const playerName = player?.id || "A player";
-            const code = this.state.roomCode || this.roomId;
-            for (const c of [...this.clients]) {
-                if (c.sessionId !== client.sessionId) {
-                    c.send("play_again_started", { playerName, roomCode: code });
-                    c.leave(4002);
-                }
-            }
-            // Sender leaves intentionally via client.leave() after receiving this confirm
-            client.send("play_again_confirm", { roomCode: code });
         });
 
         console.log(`Room created: ${this.roomId}`);
@@ -747,17 +722,21 @@ export class GameRoom extends Room<{ state: GameState }> {
             if (isMatchWon) {
                 this.matchComplete = true;
                 this.lock();
-                // 8-second window for all clients to ack the results screen.
-                // Anyone who hasn't acked by then is kicked with 4003.
                 this.resultsAckedClients.clear();
+                // 30-second window: room stays alive, locked (joinOrCreate won't find it,
+                // but joinById still works for friend-code joins).
+                // After 30s: reset scores, regenerate the maze, unlock, broadcast match_reset.
                 this.clock.setTimeout(() => {
-                    for (const c of [...this.clients]) {
-                        const p = this.state.players.get(c.sessionId);
-                        if (p && !p.isAI && !this.resultsAckedClients.has(c.sessionId)) {
-                            c.leave(4003);
-                        }
-                    }
-                }, 8000);
+                    if (!this.matchComplete) return; // safety guard
+                    this.state.players.forEach(p => { p.score = 0; });
+                    this.matchComplete = false;
+                    this.playAgainProcessed = false;
+                    this.resultsAckedClients.clear();
+                    this.resetRound();
+                    this.roundStartMs = Date.now();
+                    this.unlock();
+                    this.broadcast("match_reset");
+                }, 30000);
             } else {
                 this.clock.setTimeout(() => {
                     this.broadcast("round_reset");
