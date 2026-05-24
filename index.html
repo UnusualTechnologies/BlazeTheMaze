@@ -643,7 +643,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.81</div>
+    <div id="version-number">v1.5.83</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2093,40 +2093,46 @@
                 } else if (p.type === 'rocket') {
                     const pulse = 1 + Math.sin(time * 3) * 0.1;
                     ctx.scale(pulse, pulse);
+                    // Cycle through all player colours before pickup
+                    const rIdx = Math.floor(time * 1.5) % playerColors.length;
+                    const rocketColor = playerColors[rIdx] || '#ff3300';
                     ctx.beginPath();
                     ctx.moveTo(0, -cellSize * 0.25);
                     ctx.lineTo(cellSize * 0.15, cellSize * 0.15);
                     ctx.lineTo(0, cellSize * 0.05);
                     ctx.lineTo(-cellSize * 0.15, cellSize * 0.15);
                     ctx.closePath();
-                    ctx.fillStyle = '#ff3300';
+                    ctx.fillStyle = rocketColor;
                     ctx.shadowBlur = 10;
-                    ctx.shadowColor = '#ff3300';
+                    ctx.shadowColor = rocketColor;
                     ctx.fill();
                 } else if (p.type === 'mirror') {
-                    // Phase cycles 0→1→0: 0 = arrows normal, 1 = arrows fully flipped
-                    const phase = (Math.sin(time * 1.5) + 1) / 2;
-                    const flipAngle = phase * Math.PI;
-                    const sp = cellSize * 0.21; // spacing between arrow centres
-                    const ar = cellSize * 0.155; // arrowhead half-size
+                    // flipAngle oscillates 0→π→0 (normal → flipped → normal)
+                    const flipAngle = (Math.sin(time * 0.9) + 1) / 2 * Math.PI;
+                    // Sharp shimmer: nearly opaque at 0 and π, nearly invisible at π/2
+                    const shimmer = Math.pow(Math.abs(Math.cos(flipAngle)), 5);
+                    const spH = cellSize * 0.21; // horizontal gap between left/down/right
+                    const spV = cellSize * 0.09; // vertical gap — scraping-close to bottom row
+                    const ar  = cellSize * 0.155; // arrowhead half-size
+
                     ctx.fillStyle = '#cc44ff';
                     ctx.shadowColor = '#cc44ff';
-                    ctx.shadowBlur = 10 + 8 * phase; // glow brightens mid-flip
+                    ctx.shadowBlur = 14;
+                    ctx.globalAlpha = Math.max(0.08, shimmer); // floor keeps the glow visible
 
-                    // WASD cross layout:  [up] on top row, [left][down][right] on bottom row
+                    // WASD cross: [up] barely above [left][down][right]
                     const arrows = [
-                        { ax:  0,   ay: -sp, base: -Math.PI / 2 }, // up
-                        { ax: -sp,  ay:  sp, base:  Math.PI     }, // left
-                        { ax:  0,   ay:  sp, base:  Math.PI / 2 }, // down
-                        { ax:  sp,  ay:  sp, base:  0           }, // right
+                        { ax:   0,  ay: -spV, base: -Math.PI / 2 }, // up
+                        { ax: -spH, ay:  spV, base:  Math.PI     }, // left
+                        { ax:   0,  ay:  spV, base:  Math.PI / 2 }, // down
+                        { ax:  spH, ay:  spV, base:  0           }, // right
                     ];
                     arrows.forEach(({ ax, ay, base }) => {
                         ctx.save();
                         ctx.translate(ax, ay);
                         ctx.rotate(base + flipAngle);
-                        // Solid filled triangle pointing along +x; rotate brings it to final direction
                         ctx.beginPath();
-                        ctx.moveTo( ar,       0);
+                        ctx.moveTo( ar,        0);
                         ctx.lineTo(-ar * 0.5, -ar * 0.72);
                         ctx.lineTo(-ar * 0.5,  ar * 0.72);
                         ctx.closePath();
