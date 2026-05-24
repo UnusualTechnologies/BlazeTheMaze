@@ -656,7 +656,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.97</div>
+    <div id="version-number">v1.5.98</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -914,6 +914,7 @@
         let activePlayersData = [];
         let scores = {};
         let animatingScoreIds = new Set(); // IDs whose score update is deferred for animation
+        let puManualFlags = new Set();     // PU input keys whose value was manually set (cleared on menu re-entry)
         let matchTime = 0;
         let roundStartTime = 0;
         let roundCountdown = 0;
@@ -1084,16 +1085,61 @@
             }
         }
 
+        // ── Power-up localStorage helpers ────────────────────────────────────
+        const PU_KEYS = ['opp', 'self', 'rocket', 'mirror'];
+        const PU_LS_KEY = 'blazeTheMazePuSettings';
+
+        function savePuToLocalStorage() {
+            const vals = {};
+            PU_KEYS.forEach(k => {
+                const el = document.getElementById(`pu-${k}-input`);
+                if (el) vals[k] = el.value;
+            });
+            localStorage.setItem(PU_LS_KEY, JSON.stringify(vals));
+        }
+
+        function loadPuFromLocalStorage() {
+            try {
+                const raw = localStorage.getItem(PU_LS_KEY);
+                if (!raw) return;
+                const vals = JSON.parse(raw);
+                PU_KEYS.forEach(k => {
+                    if (vals[k] !== undefined) {
+                        const el = document.getElementById(`pu-${k}-input`);
+                        if (el) {
+                            el.value = vals[k];
+                            puManualFlags.add(k); // treat as manually set so they survive player-count changes
+                        }
+                    }
+                });
+            } catch (e) {}
+        }
+
+        // ── Auto-scale power-up counts to player count ────────────────────────
+        // Formulas (n = number of active players):
+        //   Teleport Other / Self : 10 − (n−1)   [−1 per extra player]
+        //   Rockets               : 4  − ⌊(n−1)/2⌋ [−1 per 2 extra players]
+        //   Mirror Controls       : 9  − (n−1)   [−1 per extra player]
+        // Inputs that were manually edited (puManualFlags) are left unchanged.
         function updatePowerUpDefaults() {
-            const count = lobbySlots.filter(s => {
+            const n = lobbySlots.filter(s => {
                 const v = s.typeSelect.value;
                 return v !== 'inactive' && v !== 'friend_only';
             }).length;
-            const def = Math.max(2, 10 - count);
-            const oppInput = document.getElementById('pu-opp-input');
-            const selfInput = document.getElementById('pu-self-input');
-            if (oppInput) oppInput.value = String(def);
-            if (selfInput) selfInput.value = String(def);
+
+            const auto = {
+                opp:    Math.max(0, 10 - (n - 1)),
+                self:   Math.max(0, 10 - (n - 1)),
+                rocket: Math.max(0, 4  - Math.floor((n - 1) / 2)),
+                mirror: Math.max(0, 9  - (n - 1)),
+            };
+
+            PU_KEYS.forEach(k => {
+                if (!puManualFlags.has(k)) {
+                    const el = document.getElementById(`pu-${k}-input`);
+                    if (el) el.value = String(auto[k]);
+                }
+            });
         }
 
         function parseLobby() {
@@ -2868,6 +2914,9 @@
 
         // Menu Navigation
         customSettingsBtn.addEventListener('click', () => {
+            // Clear manual-override flags so auto-scaling re-applies fresh each time
+            puManualFlags.clear();
+            updatePowerUpDefaults();
             initialMenu.classList.add('hidden');
             lobbyLayer.classList.remove('hidden');
         });
@@ -4177,7 +4226,23 @@
 
         window.onload = () => {
             buildLobby();
+
+            // Restore manually-saved PU values from a previous session.
+            // loadPuFromLocalStorage flags them so auto-scaling won't overwrite them
+            // until the player re-enters the custom menu (which clears puManualFlags).
+            loadPuFromLocalStorage();
             updatePowerUpDefaults();
+
+            // Flag any input the player edits and persist the value
+            PU_KEYS.forEach(k => {
+                const el = document.getElementById(`pu-${k}-input`);
+                if (!el) return;
+                el.addEventListener('change', () => {
+                    puManualFlags.add(k);
+                    savePuToLocalStorage();
+                });
+            });
+
             generateMaze();
             resizeCanvas();
             updateGridSizeInputLimits();
