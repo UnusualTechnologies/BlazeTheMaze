@@ -656,7 +656,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.100</div>
+    <div id="version-number">v1.5.101</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -914,6 +914,7 @@
         let activePlayersData = [];
         let scores = {};
         let animatingScoreIds = new Set(); // IDs whose score update is deferred for animation
+        let scoreHiddenIds    = new Set(); // IDs omitted from all scoreboard columns during fly animation
         let puManualFlags = new Set();     // PU input keys whose value was manually set (cleared on menu re-entry)
         let matchTime = 0;
         let roundStartTime = 0;
@@ -1838,6 +1839,7 @@
             // Group players by win count (capped at 2 since 3 = instant win)
             const groups = [[], [], []];
             sorted.forEach(b => {
+                if (scoreHiddenIds.has(b.id)) return; // flying — hide from all columns
                 const w = Math.min(scores[b.id] ?? 0, 2);
                 const num = b.id.replace(/\D/g, '');
                 groups[w].push(`<span style="color:${b.color}">P${num}</span>`);
@@ -3280,11 +3282,16 @@
                             animatingScoreIds.delete(winnerId);
                             return;
                         }
+                        // Hide from old column the instant the fly starts
+                        scoreHiddenIds.add(winnerId);
+                        updateScoreboard();
+
                         const flyingEl = animateScoreStarToNextCol(winnerId, winnerColor, oldScore, winnerScore);
 
                         // After another 1 s: commit the score and clean up
                         setTimeout(() => {
                             animatingScoreIds.delete(winnerId);
+                            scoreHiddenIds.delete(winnerId);
                             if (flyingEl) flyingEl.remove();
                             scores[winnerId] = winnerScore;
                             updateScoreboard();
@@ -3301,6 +3308,7 @@
                 // Reset client-side match state
                 scores = {};
                 animatingScoreIds.clear();
+                scoreHiddenIds.clear();
                 currentWinner = null;
                 roundTimes = [];
                 matchTime = 0;
