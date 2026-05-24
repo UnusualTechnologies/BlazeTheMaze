@@ -656,7 +656,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.95</div>
+    <div id="version-number">v1.5.96</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -913,6 +913,7 @@
         // Game Loop & Match Structure Variables
         let activePlayersData = [];
         let scores = {};
+        let animatingScoreIds = new Set(); // IDs whose score update is deferred for animation
         let matchTime = 0;
         let roundStartTime = 0;
         let roundCountdown = 0;
@@ -1808,6 +1809,43 @@
                     `<div class="score-players">${groups[i].join(', ')}</div>` +
                 `</div>`
             ).join('');
+        }
+
+        // Animates a player's coloured label from one scoreboard column to the next.
+        // Returns the flying DOM element (caller removes it when done).
+        function animateScoreStarToNextCol(winnerId, winnerColor, oldScore, newScore) {
+            const cols = scoreboardElement.querySelectorAll('.score-col');
+            const oldColIdx = Math.min(oldScore, 2);
+            const newColIdx = Math.min(newScore, 2);
+            if (oldColIdx === newColIdx || !cols[oldColIdx] || !cols[newColIdx]) return null;
+
+            const oldRect = cols[oldColIdx].getBoundingClientRect();
+            const newRect = cols[newColIdx].getBoundingClientRect();
+
+            const el = document.createElement('div');
+            const num = winnerId.replace(/\D/g, '');
+            el.innerHTML = `<span style="color:${winnerColor};font-weight:bold;font-size:14px;font-family:inherit;text-shadow:0 0 8px ${winnerColor},0 0 18px ${winnerColor}">P${num}</span>`;
+            el.style.cssText = [
+                'position:fixed',
+                `left:${oldRect.left + oldRect.width / 2}px`,
+                `top:${oldRect.top + oldRect.height / 2}px`,
+                'transform:translate(-50%,-50%) scale(1.6)',
+                'pointer-events:none',
+                'z-index:9999',
+                'transition:left 0.9s cubic-bezier(0.25,0.46,0.45,0.94),' +
+                           'top 0.9s cubic-bezier(0.25,0.46,0.45,0.94),' +
+                           'transform 0.9s ease'
+            ].join(';');
+            document.body.appendChild(el);
+
+            // Double-rAF so the browser registers the start position before we change it
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+                el.style.left      = `${newRect.left + newRect.width / 2}px`;
+                el.style.top       = `${newRect.top  + newRect.height / 2}px`;
+                el.style.transform = 'translate(-50%,-50%) scale(1)';
+            }));
+
+            return el;
         }
 
         function initMatch() {
@@ -3084,9 +3122,12 @@
                 // Remove players who left
                 blazers = blazers.filter(b => state.players.has(b.sessionId));
 
-                // Sync server scores into local scores map (keeps scoreboard accurate for all clients)
+                // Sync server scores into local scores map (keeps scoreboard accurate for all clients).
+                // Skip players whose score is being animated — their update is applied at animation end.
                 state.players.forEach((playerState, sessionId) => {
-                    scores[playerState.id] = playerState.score;
+                    if (!animatingScoreIds.has(playerState.id)) {
+                        scores[playerState.id] = playerState.score;
+                    }
                 });
                 updateScoreboard();
 
@@ -3124,11 +3165,8 @@
             room.onMessage("round_won", ({ winnerId, winnerColor, winnerScore, isMatchWon }) => {
                 if (gameState === 'ROUND_OVER_COUNTDOWN' || gameState === 'MATCH_OVER') return;
 
-                // Sync the winner's score from the server (don't double-increment)
-                scores[winnerId] = winnerScore;
-                updateScoreboard();
-
                 const winnerBlazer = blazers.find(b => b.id === winnerId);
+                const oldScore = scores[winnerId] ?? 0;
 
                 // Round time tracking
                 const currentRoundTime = performance.now() - roundStartTime;
@@ -3145,6 +3183,10 @@
                 }
 
                 if (isMatchWon) {
+                    // Match win: update score immediately then show post-match
+                    scores[winnerId] = winnerScore;
+                    updateScoreboard();
+
                     Synth.win();
                     Synth.muffle(true);
                     gameState = 'MATCH_OVER';
@@ -3173,9 +3215,32 @@
                         `<div>Round ${index + 1}: <span style="color:${rt.winnerColor};font-weight:bold;">${rt.winnerId}</span> - ${formatTime(rt.time)}</div>`
                     ).join('');
                 } else {
+                    // Round win (not match): animate the score label flying to the new column.
+                    // Score stays at oldScore visually until the animation lands (at 2 s).
+                    // onStateChange is guarded to skip syncing this player during the window.
                     gameState = 'ROUND_OVER_COUNTDOWN';
                     currentWinner = winnerBlazer || { id: winnerId, color: winnerColor };
                     roundCountdown = 3000;
+
+                    animatingScoreIds.add(winnerId);
+
+                    // After 1 s: launch the flying-label animation
+                    setTimeout(() => {
+                        if (gameState === 'MATCH_OVER') {
+                            // Match ended early — abort cleanly
+                            animatingScoreIds.delete(winnerId);
+                            return;
+                        }
+                        const flyingEl = animateScoreStarToNextCol(winnerId, winnerColor, oldScore, winnerScore);
+
+                        // After another 1 s: commit the score and clean up
+                        setTimeout(() => {
+                            animatingScoreIds.delete(winnerId);
+                            if (flyingEl) flyingEl.remove();
+                            scores[winnerId] = winnerScore;
+                            updateScoreboard();
+                        }, 1000);
+                    }, 1000);
                 }
             });
 
@@ -3186,6 +3251,7 @@
 
                 // Reset client-side match state
                 scores = {};
+                animatingScoreIds.clear();
                 currentWinner = null;
                 roundTimes = [];
                 matchTime = 0;
