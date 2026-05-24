@@ -656,7 +656,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.94</div>
+    <div id="version-number">v1.5.95</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1795,7 +1795,12 @@
                 const num = b.id.replace(/\D/g, '');
                 groups[w].push(`<span style="color:${b.color}">P${num}</span>`);
             });
-            const GOAL = `<svg class="goal-star-svg" width="13" height="13" viewBox="0 0 100 100" style="vertical-align:-1px"><polygon points="50,4 61,36 94,36 67,56 77,87 50,68 23,87 33,56 6,36 39,36" fill="none" stroke="#00ffff" stroke-width="9"/><circle cx="50" cy="50" r="10" fill="#ffffff"/></svg>`;
+            // Negative delay syncs new stars to the global animation cycle,
+            // preventing a visible restart every time updateScoreboard() rebuilds the DOM.
+            const _s = Date.now() / 1000;
+            const _spinDelay = -(_s % 3).toFixed(3);
+            const _hueDelay  = -(_s % 2).toFixed(3);
+            const GOAL = `<svg class="goal-star-svg" width="13" height="13" viewBox="0 0 100 100" style="vertical-align:-1px;animation-delay:${_spinDelay}s,${_hueDelay}s"><polygon points="50,4 61,36 94,36 67,56 77,87 50,68 23,87 33,56 6,36 39,36" fill="none" stroke="#00ffff" stroke-width="9"/><circle cx="50" cy="50" r="10" fill="#ffffff"/></svg>`;
             const headers = ['–', GOAL, GOAL + GOAL];
             scoreboardElement.innerHTML = headers.map((h, i) =>
                 `<div class="score-col">` +
