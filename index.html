@@ -656,7 +656,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.98</div>
+    <div id="version-number">v1.5.99</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2214,7 +2214,7 @@
                 ctx.translate(px, py);
                 if (p.type === 'opponents') {
                     const n = playerColors.length;
-                    const r = cellSize * 0.3;
+                    const r = cellSize * 0.21;
                     const gapAngle = 5 / r;
                     const sliceAngle = (Math.PI * 2) / n;
                     const arcAngle = Math.max(0, sliceAngle - gapAngle);
@@ -4051,7 +4051,7 @@
                     ctx.translate(px, py);
                     if (pu.type === 'opponents') {
                         const n = playerColors.length;
-                        const r = CELL * 0.3;
+                        const r = CELL * 0.21;
                         const gapAngle = 5 / r;
                         const sliceAngle = (Math.PI * 2) / n;
                         const arcAngle = Math.max(0, sliceAngle - gapAngle);
