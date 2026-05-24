@@ -643,7 +643,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.80</div>
+    <div id="version-number">v1.5.81</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2104,38 +2104,35 @@
                     ctx.shadowColor = '#ff3300';
                     ctx.fill();
                 } else if (p.type === 'mirror') {
-                    const pulse = 1 + Math.sin(time * 2.8) * 0.1;
-                    ctx.scale(pulse, pulse);
-                    const r = cellSize * 0.28;
-                    ctx.strokeStyle = '#cc44ff';
+                    // Phase cycles 0→1→0: 0 = arrows normal, 1 = arrows fully flipped
+                    const phase = (Math.sin(time * 1.5) + 1) / 2;
+                    const flipAngle = phase * Math.PI;
+                    const sp = cellSize * 0.21; // spacing between arrow centres
+                    const ar = cellSize * 0.155; // arrowhead half-size
+                    ctx.fillStyle = '#cc44ff';
                     ctx.shadowColor = '#cc44ff';
-                    ctx.shadowBlur = 14;
-                    ctx.lineWidth = Math.max(1.5, cellSize * 0.09);
-                    ctx.lineCap = 'round';
-                    // Horizontal double-headed arrow (←→)
-                    ctx.beginPath();
-                    ctx.moveTo(-r, 0); ctx.lineTo(r, 0);
-                    ctx.stroke();
-                    ctx.beginPath(); // left arrowhead
-                    ctx.moveTo(-r, 0); ctx.lineTo(-r * 0.5, -r * 0.35);
-                    ctx.moveTo(-r, 0); ctx.lineTo(-r * 0.5,  r * 0.35);
-                    ctx.stroke();
-                    ctx.beginPath(); // right arrowhead
-                    ctx.moveTo(r, 0); ctx.lineTo(r * 0.5, -r * 0.35);
-                    ctx.moveTo(r, 0); ctx.lineTo(r * 0.5,  r * 0.35);
-                    ctx.stroke();
-                    // Vertical double-headed arrow (↑↓)
-                    ctx.beginPath();
-                    ctx.moveTo(0, -r); ctx.lineTo(0, r);
-                    ctx.stroke();
-                    ctx.beginPath(); // top arrowhead
-                    ctx.moveTo(0, -r); ctx.lineTo(-r * 0.35, -r * 0.5);
-                    ctx.moveTo(0, -r); ctx.lineTo( r * 0.35, -r * 0.5);
-                    ctx.stroke();
-                    ctx.beginPath(); // bottom arrowhead
-                    ctx.moveTo(0, r); ctx.lineTo(-r * 0.35, r * 0.5);
-                    ctx.moveTo(0, r); ctx.lineTo( r * 0.35, r * 0.5);
-                    ctx.stroke();
+                    ctx.shadowBlur = 10 + 8 * phase; // glow brightens mid-flip
+
+                    // WASD cross layout:  [up] on top row, [left][down][right] on bottom row
+                    const arrows = [
+                        { ax:  0,   ay: -sp, base: -Math.PI / 2 }, // up
+                        { ax: -sp,  ay:  sp, base:  Math.PI     }, // left
+                        { ax:  0,   ay:  sp, base:  Math.PI / 2 }, // down
+                        { ax:  sp,  ay:  sp, base:  0           }, // right
+                    ];
+                    arrows.forEach(({ ax, ay, base }) => {
+                        ctx.save();
+                        ctx.translate(ax, ay);
+                        ctx.rotate(base + flipAngle);
+                        // Solid filled triangle pointing along +x; rotate brings it to final direction
+                        ctx.beginPath();
+                        ctx.moveTo( ar,       0);
+                        ctx.lineTo(-ar * 0.5, -ar * 0.72);
+                        ctx.lineTo(-ar * 0.5,  ar * 0.72);
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.restore();
+                    });
                 }
                 ctx.restore();
             });
