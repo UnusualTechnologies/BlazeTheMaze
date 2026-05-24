@@ -131,6 +131,19 @@
             justify-content: center;
         }
 
+        .goal-star-svg {
+            transform-box: fill-box;
+            transform-origin: center;
+            animation: goal-star-spin 3s linear infinite, goal-star-hue 2s linear infinite;
+            overflow: visible;
+        }
+        @keyframes goal-star-spin {
+            to { transform: rotate(360deg); }
+        }
+        @keyframes goal-star-hue {
+            to { filter: hue-rotate(360deg); }
+        }
+
         .score-players {
             font-size: 0.8rem;
             line-height: 1.5;
@@ -643,7 +656,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.91</div>
+    <div id="version-number">v1.5.92</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1790,7 +1803,7 @@
                 const num = b.id.replace(/\D/g, '');
                 groups[w].push(`<span style="color:${b.color}">P${num}</span>`);
             });
-            const GOAL = `<svg width="13" height="13" viewBox="0 0 100 100" style="vertical-align:-1px"><polygon class="goal-star-poly" points="50,4 61,36 94,36 67,56 77,87 50,68 23,87 33,56 6,36 39,36" fill="none" stroke="#00ffff" stroke-width="9"/><circle cx="50" cy="50" r="10" fill="#ffffff"/></svg>`;
+            const GOAL = `<svg class="goal-star-svg" width="13" height="13" viewBox="0 0 100 100" style="vertical-align:-1px"><polygon points="50,4 61,36 94,36 67,56 77,87 50,68 23,87 33,56 6,36 39,36" fill="none" stroke="#00ffff" stroke-width="9"/><circle cx="50" cy="50" r="10" fill="#ffffff"/></svg>`;
             const headers = ['', GOAL, GOAL + GOAL];
             scoreboardElement.innerHTML = headers.map((h, i) =>
                 `<div class="score-col">` +
