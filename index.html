@@ -656,7 +656,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.99</div>
+    <div id="version-number">v1.5.100</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -686,11 +686,11 @@
                 <h1 id="pm-title">Match Over</h1>
 
                 <div class="pm-buttons-vertical">
-                    <button class="action-btn secondary-btn" id="menu-btn">Main Menu</button>
                     <button class="action-btn" id="pm-next-game-btn" disabled
                             style="display:none; opacity:0.4; cursor:not-allowed;">
-                        30s until next game starts
+                        30 until next game starts
                     </button>
+                    <button class="action-btn secondary-btn" id="menu-btn">Main Menu</button>
                 </div>
 
                 <div class="stats-container">
@@ -1963,7 +1963,7 @@
                 btn.disabled = true;
                 btn.style.opacity = '0.4';
                 btn.style.cursor = 'not-allowed';
-                btn.textContent = '30s until next game starts';
+                btn.textContent = '30 until next game starts';
                 btn.onclick = () => {
                     if (btn.disabled) return;
                     pmJoinIntent = true;
@@ -1984,9 +1984,9 @@
                             btn.style.opacity = '1';
                             btn.style.cursor = 'pointer';
                         }
-                        btn.textContent = `${secsLeft}s until next game — Click now to join it`;
+                        btn.textContent = `${secsLeft} until next game — Click now to join it`;
                     } else {
-                        btn.textContent = `${secsLeft}s until next game starts`;
+                        btn.textContent = `${secsLeft} until next game starts`;
                     }
                 }
                 if (elapsed >= MATCH_END_WAIT) {
