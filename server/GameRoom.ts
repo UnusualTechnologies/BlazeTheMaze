@@ -626,8 +626,9 @@ export class GameRoom extends Room<{ state: GameState }> {
         const puRocket = options.puRocket !== undefined ? Number(options.puRocket) : 0;
         const puMirror = options.puMirror !== undefined ? Number(options.puMirror) : 0;
 
-        // Collect dead-end cells (exactly 1 open passage), excluding reserved cells
-        const deadEnds: { x: number; y: number }[] = [];
+        // Collect dead-end cells (exactly 1 open passage) and corridor cells (2+ passages)
+        const deadEnds:  { x: number; y: number }[] = [];
+        const corridors: { x: number; y: number }[] = [];
         for (let x = 0; x < this.cols; x++) {
             for (let y = 0; y < this.rows; y++) {
                 if (this.isReservedCell(x, y)) continue;
@@ -636,18 +637,24 @@ export class GameRoom extends Room<{ state: GameState }> {
                 let openCount = 0;
                 for (let w = 0; w < 4; w++) { if (!cell.walls[w]) openCount++; }
                 if (openCount === 1) deadEnds.push({ x, y });
+                else if (openCount >= 2) corridors.push({ x, y });
             }
         }
-        // Fisher-Yates shuffle
-        for (let i = deadEnds.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [deadEnds[i], deadEnds[j]] = [deadEnds[j], deadEnds[i]];
-        }
+        // Fisher-Yates shuffle both lists
+        const shuffle = (arr: { x: number; y: number }[]) => {
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+        };
+        shuffle(deadEnds);
+        shuffle(corridors);
 
-        const spawn = (count: number, type: string) => {
+        // Spawn power-ups from a given cell list
+        const spawnFrom = (cells: { x: number; y: number }[], count: number, type: string) => {
             if (isNaN(count) || count <= 0) return;
             let placed = 0;
-            for (const { x, y } of deadEnds) {
+            for (const { x, y } of cells) {
                 if (placed >= count) break;
                 if (this.state.powerUps.some((pu: PowerUp) => pu.x === x && pu.y === y)) continue;
                 const pu = new PowerUp();
@@ -659,10 +666,10 @@ export class GameRoom extends Room<{ state: GameState }> {
             }
         };
 
-        spawn(puOpp, "opponents");
-        spawn(puSelf, "self");
-        spawn(puRocket, "rocket");
-        spawn(puMirror, "mirror");
+        spawnFrom(deadEnds,  puOpp,    "opponents");
+        spawnFrom(deadEnds,  puSelf,   "self");
+        spawnFrom(deadEnds,  puRocket, "rocket");
+        spawnFrom(corridors, puMirror, "mirror"); // on the critical path — players run into these naturally
     }
 
     // --- Collision & Teleport ---
