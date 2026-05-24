@@ -643,7 +643,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.87</div>
+    <div id="version-number">v1.5.88</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1576,6 +1576,15 @@
                 }
                 ctx.shadowBlur = 0;
                 ctx.globalAlpha = 1;
+
+                // Red outline while mirror controls are active
+                if (isMirrored) {
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#ff0000';
+                    ctx.lineWidth = Math.max(1, size * 0.28);
+                    ctx.stroke();
+                }
 
                 ctx.restore();
             }
