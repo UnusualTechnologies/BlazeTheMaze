@@ -704,7 +704,8 @@ export class GameRoom extends Room<{ state: GameState }> {
                 // Rocket pickup: nothing to do server-side on collection.
                 // All clients detect the power-up disappearing from state and spawn a local Rocket.
             } else if (pu.type === "mirror") {
-                this.broadcast("mirror_controls", { duration: 8000 });
+                const targetClient = this.clients.find(c => c.sessionId === sessionId);
+                if (targetClient) targetClient.send("mirror_controls", { duration: 3000, collectorSessionId: sessionId });
             }
         }
 

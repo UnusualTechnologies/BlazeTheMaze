@@ -643,7 +643,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.84</div>
+    <div id="version-number">v1.5.85</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -896,7 +896,6 @@
         let shockwaves = [];
         let particles = [];
         let rockets = []; // Store active homing rockets
-        let mirrorControlsUntil = 0; // ms timestamp (Date.now) until mirror controls expire, 0 = inactive
         
         let localControlScheme = 'WASD'; // captured from lobby before connecting
         let localSlotSchemes = {}; // slotIndex → controlScheme for secondary local (co-op) slots
@@ -1330,6 +1329,7 @@
                 this.targetGridX = 0;
                 this.targetGridY = 0;
                 this.flashTimer = 0;
+                this.mirrorUntil = 0; // Date.now() timestamp until mirror controls expire for this blazer
                 
                 this.bonkDx = 0;
                 this.bonkDy = 0;
@@ -1410,7 +1410,7 @@
                 if (this.isPlayer && this.state === 'normal' && isActuallyLocal && now >= roundMoveLockEnd) {
                     if (now - this.lastMoveTime >= this.moveCooldown) {
                         let moved = false;
-                        const mirrored = Date.now() < mirrorControlsUntil;
+                        const mirrored = this.mirrorUntil > 0 && Date.now() < this.mirrorUntil;
 
                         // Helper: convert a stored direction string to dx/dy, flipping if mirror is active
                         const dirToDxDy = (dir) => {
@@ -1532,11 +1532,12 @@
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
 
+                const isMirrored = this.mirrorUntil > 0 && Date.now() < this.mirrorUntil;
                 if (this.trail.length > 1) {
                     ctx.save();
                     for (let i = 1; i < this.trail.length; i++) {
                         const alpha = i / this.trail.length;
-                        ctx.strokeStyle = this.color;
+                        ctx.strokeStyle = isMirrored ? '#ffffff' : this.color;
                         ctx.globalAlpha = alpha * 0.5;
                         ctx.beginPath();
                         ctx.moveTo(this.trail[i-1].x, this.trail[i-1].y);
@@ -1563,7 +1564,7 @@
                 }
 
                 // Body — drawn three times with decreasing shadowBlur for maximum bloom
-                const bodyColor = this.flashTimer > 0 ? '#ffffff' : this.color;
+                const bodyColor = (this.flashTimer > 0 || isMirrored) ? '#ffffff' : this.color;
                 ctx.fillStyle = bodyColor;
                 ctx.globalAlpha = 0.75;
                 for (const blur of [80, 40, 15]) {
@@ -1832,7 +1833,6 @@
             rockets = [];
             smokePuffs = [];
             powerUpBursts = [];
-            mirrorControlsUntil = 0;
             powerUps = []; // Will be repopulated by server state
             screenShake = 0;
             
@@ -1904,7 +1904,6 @@
             particles = [];
             shockwaves = [];
             rockets = [];
-            mirrorControlsUntil = 0;
             updateDpad();
             draw(true);
         }
@@ -2389,24 +2388,6 @@
             }
 
             ctx.restore();
-
-            // Mirror controls HUD indicator
-            if (mirrorControlsUntil > Date.now() && gameState === 'PLAYING') {
-                const secsLeft = Math.ceil((mirrorControlsUntil - Date.now()) / 1000);
-                const barH = Math.max(22, height * 0.055);
-                const fontSize = Math.round(barH * 0.58);
-                ctx.save();
-                ctx.fillStyle = 'rgba(30, 0, 50, 0.82)';
-                ctx.fillRect(0, 0, width, barH);
-                ctx.font = `bold ${fontSize}px monospace`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.shadowBlur = 12;
-                ctx.shadowColor = '#cc44ff';
-                ctx.fillStyle = '#cc44ff';
-                ctx.fillText(`CONTROLS MIRRORED  ${secsLeft}s`, width / 2, barH / 2);
-                ctx.restore();
-            }
 
             // Round-transition white flash — full white for 1s then instant cut
             if (roundFlashStart !== null) {
@@ -3218,8 +3199,9 @@
                 showNetworkNotification('Server Error', (message || 'An unexpected server error occurred.') + ' (code ' + code + ')', () => location.reload());
             });
 
-            room.onMessage("mirror_controls", ({ duration }) => {
-                mirrorControlsUntil = Date.now() + duration;
+            room.onMessage("mirror_controls", ({ duration, collectorSessionId }) => {
+                const blazer = blazers.find(b => b.sessionId === collectorSessionId);
+                if (blazer) blazer.mirrorUntil = Date.now() + duration;
             });
 
             room.onMessage("round_reset", () => {
