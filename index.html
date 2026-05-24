@@ -643,7 +643,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.85</div>
+    <div id="version-number">v1.5.86</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2134,6 +2134,9 @@
                     const spV = cellSize * 0.09; // scraping-close to bottom row
                     const ar  = cellSize * 0.155;
                     ctx.fillStyle = '#ffffff';
+                    ctx.strokeStyle = '#ff0000';
+                    ctx.lineWidth = Math.max(1, cellSize * 0.055);
+                    ctx.lineJoin = 'round';
                     ctx.shadowColor = '#ffffff';
                     ctx.shadowBlur = 10;
                     // WASD cross: [up] barely above [left][down][right]
@@ -2153,6 +2156,8 @@
                         ctx.lineTo(-ar * 0.5,  ar * 0.72);
                         ctx.closePath();
                         ctx.fill();
+                        ctx.shadowBlur = 0; // no glow bleed on the outline
+                        ctx.stroke();
                         ctx.restore();
                     });
                 }
