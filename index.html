@@ -656,7 +656,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.93</div>
+    <div id="version-number">v1.5.94</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -685,21 +685,12 @@
             <div id="post-match-layer" class="menu-overlay hidden">
                 <h1 id="pm-title">Match Over</h1>
 
-                <!-- 30-second circle countdown until next game auto-starts -->
-                <div id="pm-timer-wrap" style="display:none; text-align:center; margin-bottom:10px;">
-                    <svg width="60" height="60" viewBox="0 0 60 60">
-                        <circle cx="30" cy="30" r="26" fill="none" stroke="#333" stroke-width="4"/>
-                        <circle id="pm-timer-ring" cx="30" cy="30" r="26" fill="none"
-                                stroke="#00ffff" stroke-width="4" stroke-linecap="round"
-                                stroke-dasharray="163" stroke-dashoffset="0"
-                                transform="rotate(-90 30 30)"/>
-                        <text id="pm-timer-text" x="30" y="35" text-anchor="middle"
-                              fill="#00ffff" font-size="16" font-family="monospace">30</text>
-                    </svg>
-                </div>
-
                 <div class="pm-buttons-vertical">
                     <button class="action-btn secondary-btn" id="menu-btn">Main Menu</button>
+                    <button class="action-btn" id="pm-next-game-btn" disabled
+                            style="display:none; opacity:0.4; cursor:not-allowed;">
+                        30s until next game starts
+                    </button>
                 </div>
 
                 <div class="stats-container">
@@ -928,6 +919,7 @@
         let currentWinner = null;
         let roundTimes = [];
         let matchEndTimerInterval = null;
+        let pmJoinIntent = false; // true when user clicks the "join next game" button
         const ROUND_START_MS = 4000;   // shared duration: ring animation, control labels, movement lock
         let roundRingTime = null;      // set every round; drives ring, labels, and movement lock
         let roundMoveLockEnd = 0;      // performance.now() value until which movement is locked
@@ -1871,24 +1863,44 @@
         }
 
         // Starts the 30-second SVG ring countdown shown on the post-match overlay.
-        // Called when a match ends; cleared when match_reset arrives.
+        // Called when a match ends; drives the countdown button until match_reset arrives.
         function startMatchEndTimer() {
             const MATCH_END_WAIT = 30000;
-            const ring = document.getElementById('pm-timer-ring');
-            const timerText = document.getElementById('pm-timer-text');
-            const circumference = 163; // 2π × 26
-            const wrap = document.getElementById('pm-timer-wrap');
-            if (wrap) wrap.style.display = 'block';
-            if (ring) { ring.style.strokeDashoffset = '0'; }
-            if (timerText) timerText.textContent = '30';
+            const JOIN_UNLOCK_MS  = 25000; // unlock room at 25 s → 5 s remaining
+            pmJoinIntent = false;
+            const btn = document.getElementById('pm-next-game-btn');
+            if (btn) {
+                btn.style.display = '';
+                btn.disabled = true;
+                btn.style.opacity = '0.4';
+                btn.style.cursor = 'not-allowed';
+                btn.textContent = '30s until next game starts';
+                btn.onclick = () => {
+                    if (btn.disabled) return;
+                    pmJoinIntent = true;
+                    btn.disabled = true;
+                    btn.style.cursor = 'default';
+                    btn.textContent = 'Joining next game…';
+                };
+            }
             clearInterval(matchEndTimerInterval);
             const startTime = Date.now();
             matchEndTimerInterval = setInterval(() => {
-                const elapsed = Date.now() - startTime;
-                const frac = Math.min(elapsed / MATCH_END_WAIT, 1);
-                if (ring) ring.style.strokeDashoffset = frac * circumference;
-                if (timerText) timerText.textContent = Math.max(0, Math.ceil((MATCH_END_WAIT - elapsed) / 1000));
-                if (frac >= 1) {
+                const elapsed  = Date.now() - startTime;
+                const secsLeft = Math.max(0, Math.ceil((MATCH_END_WAIT - elapsed) / 1000));
+                if (btn && !pmJoinIntent) {
+                    if (elapsed >= JOIN_UNLOCK_MS) {
+                        if (btn.disabled) {
+                            btn.disabled = false;
+                            btn.style.opacity = '1';
+                            btn.style.cursor = 'pointer';
+                        }
+                        btn.textContent = `${secsLeft}s until next game — Click now to join it`;
+                    } else {
+                        btn.textContent = `${secsLeft}s until next game starts`;
+                    }
+                }
+                if (elapsed >= MATCH_END_WAIT) {
                     clearInterval(matchEndTimerInterval);
                     matchEndTimerInterval = null;
                 }
@@ -1911,9 +1923,9 @@
             gameState = 'MENU';
             postMatchLayer.classList.add('hidden');
             postMatchLayer.classList.remove('winner-pulse');
-            document.getElementById('pm-timer-wrap').style.display = 'none';
-            const resetPopup = document.getElementById('match-reset-popup');
-            if (resetPopup) resetPopup.remove();
+            pmJoinIntent = false;
+            const pmNextBtn = document.getElementById('pm-next-game-btn');
+            if (pmNextBtn) pmNextBtn.style.display = 'none';
             hud.classList.add('hidden');
             hudBar.classList.add('hidden');
             lobbyLayer.classList.add('hidden');
@@ -3162,10 +3174,8 @@
                 }
             });
 
-            // Server auto-resets the match after 30 seconds.
-            // Start the new game underneath the post-match overlay, then show a 5s pop-up.
+            // Server resets the match after 30 s (room was already unlocked at 25 s).
             room.onMessage("match_reset", () => {
-                // Stop the circle timer
                 clearInterval(matchEndTimerInterval);
                 matchEndTimerInterval = null;
 
@@ -3182,48 +3192,19 @@
                     b.swipeIntent = null;
                 });
 
-                // Start the new round (runs under the overlay)
-                initRound();
-
-                // Show a 5-second "Starting next game" pop-up on top of the post-match overlay
-                let countdown = 5;
-                const popup = document.createElement('div');
-                popup.id = 'match-reset-popup';
-                popup.style.cssText = [
-                    'position:fixed', 'inset:0', 'display:flex', 'align-items:center',
-                    'justify-content:center', 'z-index:9999', 'pointer-events:none'
-                ].join(';');
-                popup.innerHTML = `
-                  <div style="background:rgba(0,0,0,0.88);border:2px solid #00ffff;border-radius:12px;
-                               padding:28px 36px;text-align:center;pointer-events:auto;
-                               box-shadow:0 0 30px rgba(0,255,255,0.4);">
-                    <div style="font-size:1.4rem;font-weight:bold;margin-bottom:10px;color:#ffffff;">Starting next game</div>
-                    <div id="popup-countdown" style="font-size:2.5rem;color:#00ffff;font-family:monospace;margin-bottom:16px;">5</div>
-                    <button id="popup-continue-btn" style="font-size:1rem;padding:10px 28px;cursor:pointer;
-                            background:#00ffff;color:#000;border:none;border-radius:8px;font-weight:bold;">
-                      Click to continue
-                    </button>
-                  </div>`;
-                document.body.appendChild(popup);
-
-                document.getElementById('popup-continue-btn').addEventListener('click', () => {
-                    clearInterval(popupTick);
-                    popup.remove();
+                if (pmJoinIntent) {
+                    // Player clicked the join button — drop straight into the new game
+                    pmJoinIntent = false;
+                    const pmNextBtn = document.getElementById('pm-next-game-btn');
+                    if (pmNextBtn) pmNextBtn.style.display = 'none';
                     postMatchLayer.classList.add('hidden');
                     postMatchLayer.classList.remove('winner-pulse');
-                    document.getElementById('pm-timer-wrap').style.display = 'none';
-                });
-
-                const popupTick = setInterval(() => {
-                    countdown--;
-                    const el = document.getElementById('popup-countdown');
-                    if (el) el.textContent = countdown;
-                    if (countdown <= 0) {
-                        clearInterval(popupTick);
-                        popup.remove();
-                        returnToMenu();
-                    }
-                }, 1000);
+                    initRound();
+                } else {
+                    // Player didn't opt in — return to menu
+                    pmJoinIntent = false;
+                    returnToMenu();
+                }
             });
 
             room.onLeave(async (code) => {

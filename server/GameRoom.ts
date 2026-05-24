@@ -736,18 +736,20 @@ export class GameRoom extends Room<{ state: GameState }> {
                 this.matchComplete = true;
                 this.lock();
                 this.resultsAckedClients.clear();
-                // 30-second window: room stays alive, locked (joinOrCreate won't find it,
-                // but joinById still works for friend-code joins).
-                // After 30s: reset scores, regenerate the maze, unlock, broadcast match_reset.
+                // At 25 s: unlock so new players can join for the final 5-second window.
                 this.clock.setTimeout(() => {
-                    if (!this.matchComplete) return; // safety guard
+                    if (!this.matchComplete) return;
+                    this.unlock();
+                }, 25000);
+                // At 30 s: reset scores, regenerate maze, broadcast match_reset.
+                this.clock.setTimeout(() => {
+                    if (!this.matchComplete) return;
                     this.state.players.forEach(p => { p.score = 0; });
                     this.matchComplete = false;
                     this.playAgainProcessed = false;
                     this.resultsAckedClients.clear();
                     this.resetRound();
                     this.roundStartMs = Date.now();
-                    this.unlock();
                     this.broadcast("match_reset");
                 }, 30000);
             } else {
