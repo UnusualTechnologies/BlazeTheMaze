@@ -643,7 +643,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.79</div>
+    <div id="version-number">v1.5.80</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -738,11 +738,11 @@
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <label for="pu-opp-input" style="font-size: 1.2rem;">Orbs (Teleport Others):</label>
-                        <input type="number" id="pu-opp-input" value="10" min="0" max="100" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
+                        <input type="number" id="pu-opp-input" value="5" min="0" max="100" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <label for="pu-self-input" style="font-size: 1.2rem;">Holes (Teleport Self):</label>
-                        <input type="number" id="pu-self-input" value="10" min="0" max="100" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
+                        <input type="number" id="pu-self-input" value="5" min="0" max="100" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <input type="checkbox" id="collisions-toggle" checked style="width: 20px; height: 20px; cursor: pointer;">
@@ -754,11 +754,11 @@
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                         <label for="pu-rocket-input" style="font-size: 1.2rem;">Rockets:</label>
-                        <input type="number" id="pu-rocket-input" value="0" min="0" max="20" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
+                        <input type="number" id="pu-rocket-input" value="5" min="0" max="20" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                         <label for="pu-mirror-input" style="font-size: 1.2rem;">Mirror Controls:</label>
-                        <input type="number" id="pu-mirror-input" value="0" min="0" max="20" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
+                        <input type="number" id="pu-mirror-input" value="5" min="0" max="20" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
                     </div>
                 </div>
 
@@ -3230,8 +3230,8 @@
                 const settings = {
                     cols: parseInt(gridSizeInput.value, 10) || 20,
                     rows: parseInt(gridSizeInput.value, 10) || 20,
-                    puOpp: parseInt(document.getElementById('pu-opp-input').value, 10) || 10,
-                    puSelf: parseInt(document.getElementById('pu-self-input').value, 10) || 10,
+                    puOpp: parseInt(document.getElementById('pu-opp-input').value, 10) || 5,
+                    puSelf: parseInt(document.getElementById('pu-self-input').value, 10) || 5,
                     puRocket: parseInt(document.getElementById('pu-rocket-input').value, 10) || 0,
                     puMirror: parseInt(document.getElementById('pu-mirror-input').value, 10) || 0,
                     orbLeaderOnly: document.getElementById('orb-leader-toggle').checked,
@@ -3431,8 +3431,8 @@
                 const settings = {
                     cols: parseInt(gridSizeInput.value, 10) || 20,
                     rows: parseInt(gridSizeInput.value, 10) || 20,
-                    puOpp: parseInt(document.getElementById('pu-opp-input').value, 10) || 10,
-                    puSelf: parseInt(document.getElementById('pu-self-input').value, 10) || 10,
+                    puOpp: parseInt(document.getElementById('pu-opp-input').value, 10) || 5,
+                    puSelf: parseInt(document.getElementById('pu-self-input').value, 10) || 5,
                     puRocket: parseInt(document.getElementById('pu-rocket-input').value, 10) || 0,
                     puMirror: parseInt(document.getElementById('pu-mirror-input').value, 10) || 0,
                     orbLeaderOnly: document.getElementById('orb-leader-toggle').checked,
