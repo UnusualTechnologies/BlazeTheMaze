@@ -643,7 +643,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.88</div>
+    <div id="version-number">v1.5.89</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1978,7 +1978,7 @@
             const miniCount = 5;
             for (let i = 0; i < miniCount; i++) {
                 const phase    = (i / miniCount) * Math.PI * 2;
-                const orbitR   = cellSize * (0.65 + (i % 2) * 0.07); // alternate inner/outer ring
+                const orbitR   = cellSize * (0.47 + (i % 2) * 0.06); // alternate inner/outer ring, close to star
                 const wobble   = Math.sin(time * 1.5 + phase * 2) * cellSize * 0.035; // gentle float
                 const orbitAng = phase + time * (0.65 + i * 0.07);   // each orbits at its own speed
                 const mx = Math.cos(orbitAng) * (orbitR + wobble);
