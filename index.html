@@ -656,7 +656,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.109</div>
+    <div id="version-number">v1.5.111</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -767,6 +767,10 @@
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                         <label for="pu-mystery-input" style="font-size: 1.2rem;">Mystery:</label>
                         <input type="number" id="pu-mystery-input" value="3" min="0" max="20" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <label for="pu-freeze-input" style="font-size: 1.2rem;">Freeze:</label>
+                        <input type="number" id="pu-freeze-input" value="3" min="0" max="20" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
                     </div>
                 </div>
 
@@ -886,6 +890,7 @@
         const puRocketInput   = document.getElementById('pu-rocket-input');
         const puMirrorInput   = document.getElementById('pu-mirror-input');
         const puMysteryInput  = document.getElementById('pu-mystery-input');
+        const puFreezeInput   = document.getElementById('pu-freeze-input');
         const orbLeaderToggle = document.getElementById('orb-leader-toggle');
         const pmNextGameBtn   = document.getElementById('pm-next-game-btn');
 
@@ -1101,7 +1106,7 @@
         }
 
         // ── Power-up localStorage helpers ────────────────────────────────────
-        const PU_KEYS = ['opp', 'self', 'rocket', 'mirror', 'mystery'];
+        const PU_KEYS = ['opp', 'self', 'rocket', 'mirror', 'mystery', 'freeze'];
         const PU_LS_KEY = 'blazeTheMazePuSettings';
 
         function savePuToLocalStorage() {
@@ -1149,6 +1154,7 @@
                 rocket:  Math.max(0, 4  - Math.floor((n - 1) / 2)),
                 mirror:  Math.max(0, 9  - (n - 1)),
                 mystery: 3, // flat — wildcard power-up count doesn't scale with player count
+                freeze:  3, // flat — more players = more satisfying freeze, keep count constant
             };
 
             PU_KEYS.forEach(k => {
@@ -1406,6 +1412,7 @@
                 this.targetGridY = 0;
                 this.flashTimer = 0;
                 this.mirrorUntil = 0; // Date.now() timestamp until mirror controls expire for this blazer
+                this.frozenUntil = 0; // Date.now() timestamp until freeze expires for this blazer
                 
                 this.bonkDx = 0;
                 this.bonkDy = 0;
@@ -1489,7 +1496,7 @@
             update(dt) {
                 const now = performance.now();
 
-                if (this.isPlayer && this.state === 'normal' && this.isActuallyLocal() && now >= roundMoveLockEnd) {
+                if (this.isPlayer && this.state === 'normal' && this.isActuallyLocal() && now >= roundMoveLockEnd && Date.now() >= this.frozenUntil) {
                     if (now - this.lastMoveTime >= this.moveCooldown) {
                         let moved = false;
                         const mirrored = this.mirrorUntil > 0 && Date.now() < this.mirrorUntil;
@@ -1619,6 +1626,7 @@
                 ctx.lineJoin = 'round';
 
                 const isMirrored = this.mirrorUntil > 0 && Date.now() < this.mirrorUntil;
+                const isFrozen   = this.frozenUntil > 0 && Date.now() < this.frozenUntil;
                 if (this.trail.length > 1) {
                     ctx.save();
                     for (let i = 1; i < this.trail.length; i++) {
@@ -1650,7 +1658,9 @@
                 }
 
                 // Body — drawn three times with decreasing shadowBlur for maximum bloom
-                const bodyColor = (this.flashTimer > 0 || isMirrored) ? '#ffffff' : this.color;
+                const bodyColor = isFrozen ? '#88ddff'
+                    : (this.flashTimer > 0 || isMirrored) ? '#ffffff'
+                    : this.color;
 
                 // Motion-blur ghost copies — appear after 2+ cells in the same direction
                 if (this.speedBlur > 0.04 && (this.lastDx !== 0 || this.lastDy !== 0)) {
@@ -1683,6 +1693,39 @@
                 }
                 ctx.shadowBlur = 0;
                 ctx.globalAlpha = 1;
+
+                // Ice crystal spikes while frozen
+                if (isFrozen) {
+                    const spikeCount = 6;
+                    const spikeLen   = size * 1.7;
+                    const now2 = Date.now();
+                    ctx.lineWidth = Math.max(1, size * 0.22);
+                    ctx.lineCap = 'round';
+                    for (let i = 0; i < spikeCount; i++) {
+                        const angle = i * Math.PI / 3 + now2 / 2200;
+                        const tipX  = Math.cos(angle) * spikeLen;
+                        const tipY  = Math.sin(angle) * spikeLen;
+                        // Spike colour alternates white / ice-blue
+                        const spikeColor = i % 2 === 0 ? '#ffffff' : '#44bbff';
+                        ctx.strokeStyle  = spikeColor;
+                        ctx.shadowBlur   = 8;
+                        ctx.shadowColor  = '#00aaff';
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0);
+                        ctx.lineTo(tipX, tipY);
+                        ctx.stroke();
+                        // Small crossbar at 60% of the way out
+                        const bx = tipX * 0.6, by = tipY * 0.6;
+                        const perpA = angle + Math.PI / 2;
+                        const bl = spikeLen * 0.28;
+                        ctx.beginPath();
+                        ctx.moveTo(bx - Math.cos(perpA) * bl, by - Math.sin(perpA) * bl);
+                        ctx.lineTo(bx + Math.cos(perpA) * bl, by + Math.sin(perpA) * bl);
+                        ctx.stroke();
+                    }
+                    ctx.shadowBlur = 0;
+                    ctx.lineCap = 'butt';
+                }
 
                 // Red outline while mirror controls are active
                 if (isMirrored) {
@@ -2271,9 +2314,9 @@
                 if (p.type === 'opponents') {
                     const n = playerColors.length;
                     const r = cellSize * 0.21;
-                    const gapAngle = 5 / r;
                     const sliceAngle = (Math.PI * 2) / n;
-                    const arcAngle = Math.max(0, sliceAngle - gapAngle);
+                    const gapAngle = sliceAngle * 0.12; // proportional gap — stays visible at all cell sizes
+                    const arcAngle = sliceAngle - gapAngle;
                     ctx.rotate(time);
                     playerColors.forEach((col, i) => {
                         const startA = i * sliceAngle + gapAngle / 2;
@@ -2376,7 +2419,7 @@
                     });
                 } else if (p.type === 'mystery') {
                     // Cycles through each power-up type's colour at 200 ms/type
-                    const MYSTERY_COLORS = ['#ffff00', '#00ffff', '#ff6600', '#ff00ff']; // opp/self/rocket/mirror
+                    const MYSTERY_COLORS = ['#ffff00', '#00ffff', '#ff6600', '#ff00ff', '#00aaff']; // opp/self/rocket/mirror/freeze
                     const cycleIdx = Math.floor(performance.now() / 200) % MYSTERY_COLORS.length;
                     const mColor   = MYSTERY_COLORS[cycleIdx];
                     const r        = cellSize * 0.28;
@@ -2401,6 +2444,49 @@
                     ctx.textAlign    = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.fillText('?', 0, 0);
+                } else if (p.type === 'freeze') {
+                    // Icy snowball — dark navy sphere with 6-point snowflake, cold blue glow
+                    const pulse   = (Math.sin(performance.now() / 350) + 1) / 2;
+                    const sphereR = cellSize * 0.25;
+
+                    // Sphere body (dark navy)
+                    ctx.beginPath();
+                    ctx.arc(0, 0, sphereR, 0, Math.PI * 2);
+                    ctx.fillStyle   = '#001a33';
+                    ctx.shadowBlur  = 18 + pulse * 12;
+                    ctx.shadowColor = '#00aaff';
+                    ctx.fill();
+
+                    // Icy highlight ring
+                    ctx.beginPath();
+                    ctx.arc(0, 0, sphereR, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(136,220,255,${0.5 + pulse * 0.4})`;
+                    ctx.lineWidth   = Math.max(1, cellSize * 0.04);
+                    ctx.shadowBlur  = 6;
+                    ctx.shadowColor = '#ffffff';
+                    ctx.stroke();
+
+                    // 6-point snowflake (slowly rotating)
+                    const spokeLen  = sphereR * 0.75;
+                    const barLen    = spokeLen * 0.35;
+                    ctx.lineWidth   = Math.max(1, cellSize * 0.045);
+                    ctx.lineCap     = 'round';
+                    ctx.shadowBlur  = 6;
+                    ctx.shadowColor = '#ffffff';
+                    for (let i = 0; i < 6; i++) {
+                        const a   = i * Math.PI / 3 + time * 0.25;
+                        const tx  = Math.cos(a) * spokeLen, ty  = Math.sin(a) * spokeLen;
+                        const bx  = Math.cos(a) * spokeLen * 0.55, by = Math.sin(a) * spokeLen * 0.55;
+                        const pa  = a + Math.PI / 2;
+                        ctx.strokeStyle = i % 2 === 0 ? '#ffffff' : '#88ddff';
+                        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(tx, ty); ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(bx - Math.cos(pa) * barLen, by - Math.sin(pa) * barLen);
+                        ctx.lineTo(bx + Math.cos(pa) * barLen, by + Math.sin(pa) * barLen);
+                        ctx.stroke();
+                    }
+                    ctx.lineCap    = 'butt';
+                    ctx.shadowBlur = 0;
                 }
                 ctx.restore();
             });
@@ -3441,6 +3527,13 @@
                 if (blazer) blazer.mirrorUntil = Date.now() + duration;
             });
 
+            room.onMessage("freeze", ({ collectorSessionId, duration }) => {
+                const freezeUntil = Date.now() + duration;
+                blazers.forEach(b => {
+                    if (b.sessionId !== collectorSessionId) b.frozenUntil = freezeUntil;
+                });
+            });
+
             room.onMessage("mystery_resolved", ({ x, y, resolvedType, collectorSessionId }) => {
                 if (resolvedType === 'rocket') {
                     const rocketId = `mr${x}-${y}`; // "mr" prefix avoids collision with normal rocket pickup ids
@@ -3451,7 +3544,7 @@
                     }
                 }
                 // Burst flash in the resolved type's colour so players know what they got
-                const MYSTERY_COLORS = { opponents: '#ffff00', self: '#00ffff', rocket: '#ff6600', mirror: '#ff00ff' };
+                const MYSTERY_COLORS = { opponents: '#ffff00', self: '#00ffff', rocket: '#ff6600', mirror: '#ff00ff', freeze: '#00aaff' };
                 powerUpBursts.push({
                     gridX: x, gridY: y,
                     hitColor: MYSTERY_COLORS[resolvedType] || '#ffffff',
@@ -3520,11 +3613,12 @@
             return {
                 cols: parseInt(gridSizeInput.value, 10) || 20,
                 rows: parseInt(gridSizeInput.value, 10) || 20,
-                puOpp:   parseInt(puOppInput.value,    10) || 5,
-                puSelf:  parseInt(puSelfInput.value,   10) || 5,
+                puOpp:   (v => isNaN(v) ? 5 : v)(parseInt(puOppInput.value,  10)),
+                puSelf:  (v => isNaN(v) ? 5 : v)(parseInt(puSelfInput.value, 10)),
                 puRocket: parseInt(puRocketInput.value, 10) || 0,
                 puMirror:  parseInt(puMirrorInput.value,  10) || 0,
         puMystery: parseInt(puMysteryInput.value, 10) || 0,
+        puFreeze:  parseInt(puFreezeInput.value,  10) || 0,
                 orbLeaderOnly: orbLeaderToggle.checked,
                 slots: lobbySlots.map(s => ({
                     mode: s.typeSelect.value,
@@ -4128,9 +4222,9 @@
                     if (pu.type === 'opponents') {
                         const n = playerColors.length;
                         const r = CELL * 0.21;
-                        const gapAngle = 5 / r;
                         const sliceAngle = (Math.PI * 2) / n;
-                        const arcAngle = Math.max(0, sliceAngle - gapAngle);
+                        const gapAngle = sliceAngle * 0.12; // proportional gap — stays visible at all cell sizes
+                        const arcAngle = sliceAngle - gapAngle;
                         ctx.rotate(time);
                         playerColors.forEach((col, i) => {
                             const startA = i * sliceAngle + gapAngle / 2;

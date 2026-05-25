@@ -17,6 +17,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     aiCooldowns = new Map<string, number>();
     explorerLastPos = new Map<string, { x: number; y: number }>();
     guesserData = new Map<string, { target: { x: number; y: number }; distMap: number[] }>();
+    frozenPlayers = new Map<string, number>(); // sessionId → unfreeze timestamp (ms)
     // Freeze simulation while waiting for round reset
     roundOver: boolean = false;
     // True once a match is won; blocks new joins until someone with the code restarts
@@ -134,6 +135,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         options.puRocket  = Math.min(isNaN(Number(options.puRocket))  ? 0  : Number(options.puRocket),  maxPuPerType);
         options.puMirror  = Math.min(isNaN(Number(options.puMirror))  ? 0  : Number(options.puMirror),  maxPuPerType);
         options.puMystery = Math.min(isNaN(Number(options.puMystery)) ? 0  : Number(options.puMystery), maxPuPerType);
+        options.puFreeze  = Math.min(isNaN(Number(options.puFreeze))  ? 0  : Number(options.puFreeze),  maxPuPerType);
 
         this.spawnOptions = options;
         this.setState(state);
@@ -193,6 +195,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                 const now = Date.now();
                 if (now - this.roundStartMs < GameRoom.MOVE_LOCK_MS) return;
                 if (now - (this.lastMoveTime.get(client.sessionId) ?? 0) < GameRoom.RATE_LIMIT_MS) return;
+                if (now < (this.frozenPlayers.get(client.sessionId) ?? 0)) return; // frozen
                 this.lastMoveTime.set(client.sessionId, now);
                 // Validate coordinates
                 if (
@@ -494,6 +497,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     }
 
     moveAI(sessionId: string, player: Player) {
+        if (Date.now() < (this.frozenPlayers.get(sessionId) ?? 0)) return; // frozen
         const slot = this.state.slots[player.slotIndex];
         let behavior = slot?.aiBehavior ?? "random";
 
@@ -622,6 +626,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         const puRocket  = options.puRocket  !== undefined ? Number(options.puRocket)  : 0;
         const puMirror  = options.puMirror  !== undefined ? Number(options.puMirror)  : 0;
         const puMystery = options.puMystery !== undefined ? Number(options.puMystery) : 0;
+        const puFreeze  = options.puFreeze  !== undefined ? Number(options.puFreeze)  : 0;
 
         // Collect dead-end cells (exactly 1 open passage) and corridor cells (2+ passages)
         const deadEnds:  { x: number; y: number }[] = [];
@@ -668,6 +673,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         spawnFrom(deadEnds,  puRocket,  "rocket");
         spawnFrom(corridors, puMirror,  "mirror");  // on the critical path — players run into these naturally
         spawnFrom(corridors, puMystery, "mystery"); // mid-path so players encounter them during the race
+        spawnFrom(deadEnds,  puFreeze,  "freeze");  // dead-ends — powerful, should be sought out
     }
 
     // --- Collision & Teleport ---
@@ -704,8 +710,14 @@ export class GameRoom extends Room<{ state: GameState }> {
             } else if (pu.type === "mirror") {
                 const targetClient = this.clients.find(c => c.sessionId === sessionId);
                 if (targetClient) targetClient.send("mirror_controls", { duration: 3000, collectorSessionId: sessionId });
+            } else if (pu.type === "freeze") {
+                const freezeUntil = Date.now() + 3000;
+                this.state.players.forEach((_p, sid) => {
+                    if (sid !== sessionId) this.frozenPlayers.set(sid, freezeUntil);
+                });
+                this.broadcast("freeze", { collectorSessionId: sessionId, duration: 3000 });
             } else if (pu.type === "mystery") {
-                const MYSTERY_TYPES = ["opponents", "self", "rocket", "mirror"] as const;
+                const MYSTERY_TYPES = ["opponents", "self", "rocket", "mirror", "freeze"] as const;
                 const resolvedType = MYSTERY_TYPES[Math.floor(Date.now() / 200) % MYSTERY_TYPES.length];
 
                 if (resolvedType === "opponents") {
@@ -726,6 +738,12 @@ export class GameRoom extends Room<{ state: GameState }> {
                 } else if (resolvedType === "mirror") {
                     const tc = this.clients.find(c => c.sessionId === sessionId);
                     if (tc) tc.send("mirror_controls", { duration: 3000, collectorSessionId: sessionId });
+                } else if (resolvedType === "freeze") {
+                    const freezeUntil = Date.now() + 3000;
+                    this.state.players.forEach((_p, sid) => {
+                        if (sid !== sessionId) this.frozenPlayers.set(sid, freezeUntil);
+                    });
+                    this.broadcast("freeze", { collectorSessionId: sessionId, duration: 3000 });
                 }
                 // "rocket" — no server-side action; client handles it via mystery_resolved
 
@@ -817,6 +835,7 @@ export class GameRoom extends Room<{ state: GameState }> {
 
     resetRound() {
         this.roundOver = false;
+        this.frozenPlayers.clear();
         this.lastRoundWon = null;
         this.state.roundOver = false;
         this.state.matchOver = false;
