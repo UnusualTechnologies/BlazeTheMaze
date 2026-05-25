@@ -318,9 +318,13 @@
             width: 100%;
             max-width: 600px;
             margin-bottom: 20px;
-            overflow-y: auto;
-            max-height: 50vh;
-            padding-right: 5px;
+        }
+
+        /* Lobby always scrolls as one unified column — no inner scroll regions */
+        #lobby-layer {
+            justify-content: flex-start;
+            padding-top: 24px;
+            padding-bottom: 24px;
         }
 
         .player-slot {
@@ -601,11 +605,8 @@
                 z-index: 1000;
             }
 
-            /* Lobby has lots of content — start from top and scroll */
-            #lobby-layer {
-                justify-content: flex-start;
-                padding-top: max(24px, env(safe-area-inset-top));
-            }
+            /* On mobile, respect the notch safe area for lobby top padding */
+            #lobby-layer { padding-top: max(24px, env(safe-area-inset-top)); }
 
             /* Join code input fills available space */
             .join-group { width: 90%; }
@@ -656,7 +657,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.111</div>
+    <div id="version-number">v1.5.112</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -935,6 +936,7 @@
         let scoreHiddenIds    = new Set(); // IDs omitted from all scoreboard columns during fly animation
         let puManualFlags = new Set();     // PU input keys whose value was manually set (cleared on menu re-entry)
         let gridSizeManualFlag = false;    // true when player has manually edited grid size
+        let savedLobbyState = null;        // in-memory snapshot of last custom lobby config
         let matchTime = 0;
         let roundStartTime = 0;
         let roundCountdown = 0;
@@ -1168,6 +1170,69 @@
                 const autoSize = Math.min(28, Math.max(20, 20 + Math.round((n - 2) * 4 / 3)));
                 gridSizeInput.value = String(autoSize);
             }
+        }
+
+        /** Snapshot the current lobby config into memory so it can be restored next time the player creates a game. */
+        function saveLobbyState() {
+            savedLobbyState = {
+                gridSize:      gridSizeInput.value,
+                puOpp:         puOppInput.value,
+                puSelf:        puSelfInput.value,
+                puRocket:      puRocketInput.value,
+                puMirror:      puMirrorInput.value,
+                puMystery:     puMysteryInput.value,
+                puFreeze:      puFreezeInput.value,
+                collisions:    document.getElementById('collisions-toggle').checked,
+                orbLeader:     orbLeaderToggle.checked,
+                slots:         lobbySlots.map(s => ({
+                    mode:        s.typeSelect.value,
+                    control:     s.controlSelect.value,
+                    aiBehavior:  s.aiBehaviorSelect.value,
+                    aiSpeed:     s.aiSpeedSelect.value,
+                    customSpeed: s.customSpeedSlider.value,
+                })),
+                puManualFlags:  [...puManualFlags],
+                gridSizeManual: gridSizeManualFlag,
+            };
+        }
+
+        /**
+         * Restore a previously saved lobby state.  If nothing has been saved yet, falls through to
+         * updatePowerUpDefaults() so the first visit always gets sensible auto-scaled values.
+         */
+        function restoreLobbyState() {
+            if (!savedLobbyState) { updatePowerUpDefaults(); return; }
+            const s = savedLobbyState;
+            // 1. Lock ALL auto-scaling keys so slot change events can't overwrite saved values
+            PU_KEYS.forEach(k => puManualFlags.add(k));
+            gridSizeManualFlag = true;
+            // 2. Restore each slot (dispatching 'change' keeps the show/hide UI logic in sync)
+            s.slots.forEach((sd, i) => {
+                const slot = lobbySlots[i];
+                if (!slot) return;
+                slot.typeSelect.value = sd.mode;
+                slot.typeSelect.dispatchEvent(new Event('change'));
+                slot.controlSelect.value    = sd.control;
+                slot.aiBehaviorSelect.value = sd.aiBehavior;
+                slot.aiSpeedSelect.value    = sd.aiSpeed;
+                slot.aiSpeedSelect.dispatchEvent(new Event('change')); // shows/hides custom-speed wrapper
+                slot.customSpeedSlider.value = sd.customSpeed;
+                const display = slot.customSpeedSlider.parentElement.querySelector('.custom-speed-display');
+                if (display) display.innerText = sd.customSpeed;
+            });
+            // 3. Restore all settings inputs
+            gridSizeInput.value  = s.gridSize;
+            puOppInput.value     = s.puOpp;
+            puSelfInput.value    = s.puSelf;
+            puRocketInput.value  = s.puRocket;
+            puMirrorInput.value  = s.puMirror;
+            puMysteryInput.value = s.puMystery;
+            puFreezeInput.value  = s.puFreeze;
+            document.getElementById('collisions-toggle').checked = s.collisions;
+            orbLeaderToggle.checked = s.orbLeader;
+            // 4. Restore the actual manual-flag state (not the all-locked state from step 1)
+            puManualFlags      = new Set(s.puManualFlags);
+            gridSizeManualFlag = s.gridSizeManual;
         }
 
         function parseLobby() {
@@ -3065,15 +3130,14 @@
 
         // Menu Navigation
         customSettingsBtn.addEventListener('click', () => {
-            // Clear manual-override flags so auto-scaling re-applies fresh each time
-            puManualFlags.clear();
-            gridSizeManualFlag = false;
-            updatePowerUpDefaults();
+            restoreLobbyState(); // uses saved state if available, else runs updatePowerUpDefaults()
+            lobbyLayer.scrollTop = 0;
             initialMenu.classList.add('hidden');
             lobbyLayer.classList.remove('hidden');
         });
 
         lobbyBackBtn.addEventListener('click', () => {
+            saveLobbyState(); // preserve edits even if the player backs out without starting
             lobbyLayer.classList.add('hidden');
             initialMenu.classList.remove('hidden');
         });
@@ -3798,6 +3862,7 @@
         }
 
         quickStartBtn.addEventListener('click', async () => {
+            saveLobbyState();
             Synth.init();
             Synth.startMusic();
             blazers = [];
@@ -3882,6 +3947,7 @@
         });
 
         startBtn.addEventListener('click', async () => {
+            saveLobbyState();
             Synth.init();
             Synth.startMusic();
             blazers = [];
