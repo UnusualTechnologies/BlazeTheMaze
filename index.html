@@ -682,7 +682,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.121</div>
+    <div id="version-number">v1.5.122</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2469,7 +2469,7 @@
                 const timeLeft = (b.beaconUntil - now) / 1000;
                 const fadeAlpha = Math.min(1, timeLeft / 1.5); // fade out over last 1.5 s
                 const pulse = 0.28 + 0.07 * Math.sin(now / 150);
-                const path = getPathToGoal(b.gridX, b.gridY);
+                const path = getPathToGoal(b.gridX, b.gridY).slice(0, cols);
                 const pathLen = path.length;
                 if (pathLen === 0) return;
 
