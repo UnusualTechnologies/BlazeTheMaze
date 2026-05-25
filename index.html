@@ -682,7 +682,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.129</div>
+    <div id="version-number">v1.5.130</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2702,6 +2702,10 @@
                     // Cycling path cell — looks like an activated beacon cell, loops through all 8 blazer colours
                     const cycleColor = playerColors[Math.floor(performance.now() / 350) % playerColors.length];
                     const pulse = 0.28 + 0.07 * Math.sin(time * 2.5);
+                    // Clip to cell so glow doesn't bleed past the walls
+                    ctx.beginPath();
+                    ctx.rect(-cellSize / 2, -cellSize / 2, cellSize, cellSize);
+                    ctx.clip();
                     ctx.globalAlpha = Math.min(0.55, pulse);
                     ctx.fillStyle = cycleColor;
                     ctx.shadowBlur = 10;
