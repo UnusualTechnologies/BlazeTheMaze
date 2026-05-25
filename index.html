@@ -682,7 +682,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.128</div>
+    <div id="version-number">v1.5.129</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -976,7 +976,7 @@
         let roundTimes = [];
         let matchEndTimerInterval = null;
         let pmJoinIntent = false; // true when user clicks the "join next game" button
-        const ROUND_START_MS = 4000;   // shared duration: ring animation, control labels, movement lock
+        const ROUND_START_MS = 4500;   // total ring animation duration — pulse 3 fires at exactly 3s (4500 * 2/3 = 3000ms)
         let roundRingTime = null;      // set every round; drives ring, labels, and movement lock
         let roundMoveLockEnd = 0;      // performance.now() value until which movement is locked
         let roundUnlockFlashFired = false; // true once the unlock flash has been triggered this round
