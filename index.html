@@ -657,7 +657,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.112</div>
+    <div id="version-number">v1.5.113</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -772,6 +772,10 @@
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                         <label for="pu-freeze-input" style="font-size: 1.2rem;">Freeze:</label>
                         <input type="number" id="pu-freeze-input" value="3" min="0" max="20" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <label for="pu-beacon-input" style="font-size: 1.2rem;">Path Guide:</label>
+                        <input type="number" id="pu-beacon-input" value="3" min="0" max="20" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
                     </div>
                 </div>
 
@@ -892,6 +896,7 @@
         const puMirrorInput   = document.getElementById('pu-mirror-input');
         const puMysteryInput  = document.getElementById('pu-mystery-input');
         const puFreezeInput   = document.getElementById('pu-freeze-input');
+        const puBeaconInput   = document.getElementById('pu-beacon-input');
         const orbLeaderToggle = document.getElementById('orb-leader-toggle');
         const pmNextGameBtn   = document.getElementById('pm-next-game-btn');
 
@@ -1108,7 +1113,7 @@
         }
 
         // ── Power-up localStorage helpers ────────────────────────────────────
-        const PU_KEYS = ['opp', 'self', 'rocket', 'mirror', 'mystery', 'freeze'];
+        const PU_KEYS = ['opp', 'self', 'rocket', 'mirror', 'mystery', 'freeze', 'beacon'];
         const PU_LS_KEY = 'blazeTheMazePuSettings';
 
         function savePuToLocalStorage() {
@@ -1157,6 +1162,7 @@
                 mirror:  Math.max(0, 9  - (n - 1)),
                 mystery: 3, // flat — wildcard power-up count doesn't scale with player count
                 freeze:  3, // flat — more players = more satisfying freeze, keep count constant
+                beacon:  3, // flat — path guide; useful regardless of player count
             };
 
             PU_KEYS.forEach(k => {
@@ -1182,6 +1188,7 @@
                 puMirror:      puMirrorInput.value,
                 puMystery:     puMysteryInput.value,
                 puFreeze:      puFreezeInput.value,
+                puBeacon:      puBeaconInput.value,
                 collisions:    document.getElementById('collisions-toggle').checked,
                 orbLeader:     orbLeaderToggle.checked,
                 slots:         lobbySlots.map(s => ({
@@ -1228,6 +1235,7 @@
             puMirrorInput.value  = s.puMirror;
             puMysteryInput.value = s.puMystery;
             puFreezeInput.value  = s.puFreeze;
+            puBeaconInput.value  = s.puBeacon;
             document.getElementById('collisions-toggle').checked = s.collisions;
             orbLeaderToggle.checked = s.orbLeader;
             // 4. Restore the actual manual-flag state (not the all-locked state from step 1)
@@ -1478,6 +1486,7 @@
                 this.flashTimer = 0;
                 this.mirrorUntil = 0; // Date.now() timestamp until mirror controls expire for this blazer
                 this.frozenUntil = 0; // Date.now() timestamp until freeze expires for this blazer
+                this.beaconUntil = 0; // Date.now() timestamp until path-guide beacon expires
                 
                 this.bonkDx = 0;
                 this.bonkDy = 0;
@@ -2370,6 +2379,89 @@
             });
         }
 
+        /** Trace the shortest path from (startX, startY) to the goal using the client-side distance map. */
+        function getPathToGoal(startX, startY) {
+            if (!grid[startX]?.[startY] || distanceMap[startX]?.[startY] === undefined) return [];
+            const DIRS = [
+                { dx:  0, dy: -1, wall: 0 },
+                { dx:  1, dy:  0, wall: 1 },
+                { dx:  0, dy:  1, wall: 2 },
+                { dx: -1, dy:  0, wall: 3 },
+            ];
+            const path = [];
+            let x = startX, y = startY;
+            for (let step = 0; step < cols * rows; step++) {
+                if (x === goal.x && y === goal.y) break;
+                path.push({ x, y });
+                const cell = grid[x][y];
+                let bestX = -1, bestY = -1, bestDist = distanceMap[x][y] ?? Infinity;
+                for (const d of DIRS) {
+                    const nx = x + d.dx, ny = y + d.dy;
+                    if (nx >= 0 && nx < cols && ny >= 0 && ny < rows && !cell.walls[d.wall]) {
+                        const nd = distanceMap[nx]?.[ny] ?? Infinity;
+                        if (nd < bestDist) { bestX = nx; bestY = ny; bestDist = nd; }
+                    }
+                }
+                if (bestX === -1) break; // at goal or stuck
+                x = bestX; y = bestY;
+            }
+            return path;
+        }
+
+        /** Draw glowing path-cells for any blazer whose beacon power-up is active. */
+        function drawBeaconPaths() {
+            const now = Date.now();
+            blazers.forEach(b => {
+                if (!b.beaconUntil || now >= b.beaconUntil) return;
+                if (!grid.length || !distanceMap.length) return;
+                const timeLeft = (b.beaconUntil - now) / 1000;
+                const fadeAlpha = Math.min(1, timeLeft / 1.5); // fade out over last 1.5 s
+                const pulse = 0.28 + 0.07 * Math.sin(now / 150);
+                const path = getPathToGoal(b.gridX, b.gridY);
+                const pathLen = path.length;
+                if (pathLen === 0) return;
+
+                path.forEach(({ x, y }, idx) => {
+                    const { x: px, y: py } = gridToPixel(x, y);
+                    // Brighter near the player, dimmer towards the goal
+                    const intensityFrac = 1 - idx / Math.max(1, pathLen);
+                    const alpha = (pulse + intensityFrac * 0.12) * fadeAlpha;
+
+                    // Glowing cell fill
+                    ctx.save();
+                    ctx.globalAlpha = Math.min(0.55, alpha);
+                    ctx.fillStyle = b.color;
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = b.color;
+                    ctx.fillRect(px - cellSize / 2 + 1, py - cellSize / 2 + 1, cellSize - 2, cellSize - 2);
+                    ctx.shadowBlur = 0;
+                    ctx.restore();
+
+                    // Directional arrow (white, pointing toward goal)
+                    if (idx < pathLen - 1) {
+                        const next = path[idx + 1];
+                        const angle = Math.atan2(next.y - y, next.x - x);
+                        const al = cellSize * 0.18;
+                        ctx.save();
+                        ctx.translate(px, py);
+                        ctx.rotate(angle);
+                        ctx.globalAlpha = Math.min(0.75, (pulse + 0.1) * fadeAlpha);
+                        ctx.fillStyle = '#ffffff';
+                        ctx.shadowBlur = 4;
+                        ctx.shadowColor = b.color;
+                        ctx.beginPath();
+                        ctx.moveTo( al,       0);
+                        ctx.lineTo(-al * 0.5, -al * 0.5);
+                        ctx.lineTo(-al * 0.5,  al * 0.5);
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.shadowBlur = 0;
+                        ctx.restore();
+                    }
+                });
+            });
+        }
+
         function drawPowerUps() {
             const time = performance.now() / 600;
             powerUps.forEach(p => {
@@ -2484,7 +2576,7 @@
                     });
                 } else if (p.type === 'mystery') {
                     // Cycles through each power-up type's colour at 200 ms/type
-                    const MYSTERY_COLORS = ['#ffff00', '#00ffff', '#ff6600', '#ff00ff', '#00aaff']; // opp/self/rocket/mirror/freeze
+                    const MYSTERY_COLORS = ['#ffff00', '#00ffff', '#ff6600', '#ff00ff', '#00aaff', '#ffcc00']; // opp/self/rocket/mirror/freeze/beacon
                     const cycleIdx = Math.floor(performance.now() / 200) % MYSTERY_COLORS.length;
                     const mColor   = MYSTERY_COLORS[cycleIdx];
                     const r        = cellSize * 0.28;
@@ -2552,6 +2644,40 @@
                     }
                     ctx.lineCap    = 'butt';
                     ctx.shadowBlur = 0;
+                } else if (p.type === 'beacon') {
+                    // Pulsing golden compass — reveals path to the star
+                    const pulse = 0.9 + 0.1 * Math.sin(time * 2.5);
+                    const r = cellSize * 0.20 * pulse;
+                    // Outer glow ring (3 passes for depth)
+                    for (let pass = 0; pass < 3; pass++) {
+                        ctx.beginPath();
+                        ctx.arc(0, 0, r, 0, Math.PI * 2);
+                        ctx.strokeStyle = '#ffcc00';
+                        ctx.lineWidth   = 2;
+                        ctx.shadowBlur  = [40, 20, 8][pass];
+                        ctx.shadowColor = '#ffcc00';
+                        ctx.stroke();
+                    }
+                    ctx.shadowBlur = 0;
+                    // 4 compass spokes, slowly rotating — alternating long/short
+                    ctx.save();
+                    ctx.rotate(time * 0.3);
+                    ctx.lineWidth = Math.max(1.5, cellSize * 0.045);
+                    ctx.lineCap   = 'round';
+                    ctx.shadowBlur  = 8;
+                    ctx.shadowColor = '#ffcc00';
+                    for (let i = 0; i < 4; i++) {
+                        const a      = (i / 4) * Math.PI * 2;
+                        const tipLen = i % 2 === 0 ? r * 1.05 : r * 0.65; // cardinal long, diagonal short
+                        ctx.strokeStyle = i % 2 === 0 ? '#ffcc00' : '#ffe066';
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0);
+                        ctx.lineTo(Math.cos(a) * tipLen, Math.sin(a) * tipLen);
+                        ctx.stroke();
+                    }
+                    ctx.lineCap   = 'butt';
+                    ctx.shadowBlur = 0;
+                    ctx.restore();
                 }
                 ctx.restore();
             });
@@ -2624,6 +2750,7 @@
             }
 
             drawMaze();
+            drawBeaconPaths(); // lit path cells drawn beneath power-ups and blazers
             drawPowerUps();
 
             for (let i = shockwaves.length - 1; i >= 0; i--) {
@@ -3598,6 +3725,11 @@
                 });
             });
 
+            room.onMessage("beacon", ({ collectorSessionId, duration }) => {
+                const blazer = blazers.find(b => b.sessionId === collectorSessionId);
+                if (blazer) blazer.beaconUntil = Date.now() + duration;
+            });
+
             room.onMessage("mystery_resolved", ({ x, y, resolvedType, collectorSessionId }) => {
                 if (resolvedType === 'rocket') {
                     const rocketId = `mr${x}-${y}`; // "mr" prefix avoids collision with normal rocket pickup ids
@@ -3608,7 +3740,7 @@
                     }
                 }
                 // Burst flash in the resolved type's colour so players know what they got
-                const MYSTERY_COLORS = { opponents: '#ffff00', self: '#00ffff', rocket: '#ff6600', mirror: '#ff00ff', freeze: '#00aaff' };
+                const MYSTERY_COLORS = { opponents: '#ffff00', self: '#00ffff', rocket: '#ff6600', mirror: '#ff00ff', freeze: '#00aaff', beacon: '#ffcc00' };
                 powerUpBursts.push({
                     gridX: x, gridY: y,
                     hitColor: MYSTERY_COLORS[resolvedType] || '#ffffff',
@@ -3683,6 +3815,7 @@
                 puMirror:  parseInt(puMirrorInput.value,  10) || 0,
         puMystery: parseInt(puMysteryInput.value, 10) || 0,
         puFreeze:  parseInt(puFreezeInput.value,  10) || 0,
+                puBeacon:  parseInt(puBeaconInput.value,  10) || 0,
                 orbLeaderOnly: orbLeaderToggle.checked,
                 slots: lobbySlots.map(s => ({
                     mode: s.typeSelect.value,

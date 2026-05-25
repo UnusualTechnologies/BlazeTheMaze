@@ -136,6 +136,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         options.puMirror  = Math.min(isNaN(Number(options.puMirror))  ? 0  : Number(options.puMirror),  maxPuPerType);
         options.puMystery = Math.min(isNaN(Number(options.puMystery)) ? 0  : Number(options.puMystery), maxPuPerType);
         options.puFreeze  = Math.min(isNaN(Number(options.puFreeze))  ? 0  : Number(options.puFreeze),  maxPuPerType);
+        options.puBeacon  = Math.min(isNaN(Number(options.puBeacon))  ? 0  : Number(options.puBeacon),  maxPuPerType);
 
         this.spawnOptions = options;
         this.setState(state);
@@ -627,6 +628,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         const puMirror  = options.puMirror  !== undefined ? Number(options.puMirror)  : 0;
         const puMystery = options.puMystery !== undefined ? Number(options.puMystery) : 0;
         const puFreeze  = options.puFreeze  !== undefined ? Number(options.puFreeze)  : 0;
+        const puBeacon  = options.puBeacon  !== undefined ? Number(options.puBeacon)  : 0;
 
         // Collect dead-end cells (exactly 1 open passage) and corridor cells (2+ passages)
         const deadEnds:  { x: number; y: number }[] = [];
@@ -674,6 +676,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         spawnFrom(corridors, puMirror,  "mirror");  // on the critical path — players run into these naturally
         spawnFrom(corridors, puMystery, "mystery"); // mid-path so players encounter them during the race
         spawnFrom(deadEnds,  puFreeze,  "freeze");  // dead-ends — powerful, should be sought out
+        spawnFrom(corridors, puBeacon,  "beacon");  // corridors — encountered naturally on the way to goal
     }
 
     // --- Collision & Teleport ---
@@ -716,8 +719,10 @@ export class GameRoom extends Room<{ state: GameState }> {
                     if (sid !== sessionId) this.frozenPlayers.set(sid, freezeUntil);
                 });
                 this.broadcast("freeze", { collectorSessionId: sessionId, duration: 3000 });
+            } else if (pu.type === "beacon") {
+                this.broadcast("beacon", { collectorSessionId: sessionId, duration: 8000 });
             } else if (pu.type === "mystery") {
-                const MYSTERY_TYPES = ["opponents", "self", "rocket", "mirror", "freeze"] as const;
+                const MYSTERY_TYPES = ["opponents", "self", "rocket", "mirror", "freeze", "beacon"] as const;
                 const resolvedType = MYSTERY_TYPES[Math.floor(Date.now() / 200) % MYSTERY_TYPES.length];
 
                 if (resolvedType === "opponents") {
@@ -744,6 +749,8 @@ export class GameRoom extends Room<{ state: GameState }> {
                         if (sid !== sessionId) this.frozenPlayers.set(sid, freezeUntil);
                     });
                     this.broadcast("freeze", { collectorSessionId: sessionId, duration: 3000 });
+                } else if (resolvedType === "beacon") {
+                    this.broadcast("beacon", { collectorSessionId: sessionId, duration: 8000 });
                 }
                 // "rocket" — no server-side action; client handles it via mystery_resolved
 
