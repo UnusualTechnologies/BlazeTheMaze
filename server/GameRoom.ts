@@ -855,6 +855,7 @@ export class GameRoom extends Room<{ state: GameState }> {
             (
                 (x === startX && y === startY) ||
                 this.isReservedCell(x, y) ||
+                this.getDistance(x, y) <= 10 ||   // keep players away from the goal area
                 this.state.powerUps.some((pu: PowerUp) => pu.x === x && pu.y === y) ||
                 [...this.state.players.values()].some((p: Player) => p.x === x && p.y === y)
             )

@@ -656,7 +656,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.105</div>
+    <div id="version-number">v1.5.106</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1255,12 +1255,13 @@
         }
         
         class Rocket {
-            constructor(x, y, color, id) {
+            constructor(x, y, color, id, ownerSessionId = null) {
                 this.gridX = x;
                 this.gridY = y;
                 ({ x: this.pixelX, y: this.pixelY } = gridToPixel(x, y));
                 this.color = color;
                 this.id = id;
+                this.ownerSessionId = ownerSessionId; // activator — immune to their own rocket
                 this.moveTimer = 0;
                 this.moveInterval = 100; // Zooms at 100ms per square
                 this.life = true;
@@ -1317,6 +1318,7 @@
                     blazers.forEach(b => {
                         if (b.gridX === this.gridX && b.gridY === this.gridY && b.state === 'normal') {
                             if (this.hitTargets.has(b.sessionId)) return;
+                            if (b.sessionId === this.ownerSessionId) return; // activator is immune
                             this.hitTargets.add(b.sessionId);
                             screenShake = 10;
                             for(let i=0; i<15; i++) particles.push(new Particle(this.pixelX, this.pixelY, this.color));
@@ -2071,9 +2073,12 @@
 
             if (closestBlazer && minDist <= 10) {
                 const tension = 1 - (minDist / 10);
-                const pulse = (Math.sin(performance.now() / 150) + 1) / 2;
+                const aboutToWin = (scores[closestBlazer.id] ?? 0) >= 2;
+                const pulseSpeed = aboutToWin ? 90 : 150;   // faster throb when match is on the line
+                const maxAlpha   = aboutToWin ? 0.40 : 0.15; // much more visible
+                const pulse = (Math.sin(performance.now() / pulseSpeed) + 1) / 2;
                 ctx.fillStyle = closestBlazer.color;
-                ctx.globalAlpha = tension * pulse * 0.15;
+                ctx.globalAlpha = tension * pulse * maxAlpha;
                 ctx.fillRect(0, 0, width, height);
                 ctx.globalAlpha = 1.0;
             }
@@ -3086,12 +3091,16 @@
                         // Use a position-based ID so all clients produce the same dedup key for rocket_hit.
                         const rocketId = `r${prev.x}-${prev.y}`;
                         if (!rockets.some(r => r.id === rocketId)) {
-                            // Find the collector's color (player standing on the pickup cell)
+                            // Find the collector's color and sessionId (player standing on the pickup cell)
                             let collectorColor = '#ff6600';
-                            state.players.forEach(ps => {
-                                if (ps.x === prev.x && ps.y === prev.y) collectorColor = ps.color;
+                            let collectorSessionId = null;
+                            state.players.forEach((ps, sid) => {
+                                if (ps.x === prev.x && ps.y === prev.y) {
+                                    collectorColor = ps.color;
+                                    collectorSessionId = sid;
+                                }
                             });
-                            rockets.push(new Rocket(prev.x, prev.y, collectorColor, rocketId));
+                            rockets.push(new Rocket(prev.x, prev.y, collectorColor, rocketId, collectorSessionId));
                         }
                     }
                 });
