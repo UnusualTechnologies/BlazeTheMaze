@@ -682,7 +682,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.125</div>
+    <div id="version-number">v1.5.126</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -979,6 +979,7 @@
         const ROUND_START_MS = 4000;   // shared duration: ring animation, control labels, movement lock
         let roundRingTime = null;      // set every round; drives ring, labels, and movement lock
         let roundMoveLockEnd = 0;      // performance.now() value until which movement is locked
+        let roundUnlockFlashFired = false; // true once the unlock flash has been triggered this round
 
         let roundFlashStart = null; // performance.now() timestamp when white flash begins
         let bestTime = parseFloat(localStorage.getItem('blazeTheMazeBestTime')) || null;
@@ -2150,7 +2151,8 @@
             lastTime = performance.now();
             roundStartTime = performance.now();
             roundRingTime = performance.now();
-            roundMoveLockEnd = performance.now() + ROUND_START_MS;
+            roundMoveLockEnd = performance.now() + ROUND_START_MS * (2 / 3); // unlock at start of pulse 3
+            roundUnlockFlashFired = false;
             Synth.muffle(false);
         }
 
@@ -2800,6 +2802,11 @@
                     const pulseDur = ringDuration / PULSE_COUNT;
                     const pulseIdx = Math.min(PULSE_COUNT - 1, Math.floor(ringElapsed / pulseDur)); // 0,1,2
                     const pulseT = (ringElapsed - pulseIdx * pulseDur) / pulseDur; // 0→1 within pulse
+                    // Flash white and unlock at the very start of pulse 3
+                    if (pulseIdx === 2 && !roundUnlockFlashFired) {
+                        blazers.forEach(b => { if (b.isLocal) b.flashTimer = 1.0; });
+                        roundUnlockFlashFired = true;
+                    }
                     // Each pulse reaches a smaller max: big=1.0, mid≈0.67, small≈0.33 of max radius
                     const endFrac = 1 - pulseIdx / PULSE_COUNT;
                     // Ease-out expand — fast burst then settles at the edge
@@ -2827,8 +2834,6 @@
                     ctx.shadowBlur = 0;
                     ctx.restore();
                 } else {
-                    // Final pulse just finished — flash all local blazers white (movement now unlocked)
-                    blazers.forEach(b => { if (b.isLocal) b.flashTimer = 1.0; });
                     roundRingTime = null;
                 }
             }
