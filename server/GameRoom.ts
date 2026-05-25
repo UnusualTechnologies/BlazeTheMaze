@@ -616,10 +616,11 @@ export class GameRoom extends Room<{ state: GameState }> {
         this.usedRocketHits.clear();
         const playerCount = this.state.players.size;
         const dynamicDefault = Math.max(2, 10 - playerCount);
-        const puOpp    = options.puOpp    !== undefined ? Number(options.puOpp)    : dynamicDefault;
-        const puSelf   = options.puSelf   !== undefined ? Number(options.puSelf)   : dynamicDefault;
-        const puRocket = options.puRocket !== undefined ? Number(options.puRocket) : 0;
-        const puMirror = options.puMirror !== undefined ? Number(options.puMirror) : 0;
+        const puOpp     = options.puOpp     !== undefined ? Number(options.puOpp)     : dynamicDefault;
+        const puSelf    = options.puSelf    !== undefined ? Number(options.puSelf)    : dynamicDefault;
+        const puRocket  = options.puRocket  !== undefined ? Number(options.puRocket)  : 0;
+        const puMirror  = options.puMirror  !== undefined ? Number(options.puMirror)  : 0;
+        const puMystery = options.puMystery !== undefined ? Number(options.puMystery) : 0;
 
         // Collect dead-end cells (exactly 1 open passage) and corridor cells (2+ passages)
         const deadEnds:  { x: number; y: number }[] = [];
@@ -661,10 +662,11 @@ export class GameRoom extends Room<{ state: GameState }> {
             }
         };
 
-        spawnFrom(deadEnds,  puOpp,    "opponents");
-        spawnFrom(deadEnds,  puSelf,   "self");
-        spawnFrom(deadEnds,  puRocket, "rocket");
-        spawnFrom(corridors, puMirror, "mirror"); // on the critical path — players run into these naturally
+        spawnFrom(deadEnds,  puOpp,     "opponents");
+        spawnFrom(deadEnds,  puSelf,    "self");
+        spawnFrom(deadEnds,  puRocket,  "rocket");
+        spawnFrom(corridors, puMirror,  "mirror");  // on the critical path — players run into these naturally
+        spawnFrom(corridors, puMystery, "mystery"); // mid-path so players encounter them during the race
     }
 
     // --- Collision & Teleport ---
@@ -701,6 +703,32 @@ export class GameRoom extends Room<{ state: GameState }> {
             } else if (pu.type === "mirror") {
                 const targetClient = this.clients.find(c => c.sessionId === sessionId);
                 if (targetClient) targetClient.send("mirror_controls", { duration: 3000, collectorSessionId: sessionId });
+            } else if (pu.type === "mystery") {
+                const MYSTERY_TYPES = ["opponents", "self", "rocket", "mirror"] as const;
+                const resolvedType = MYSTERY_TYPES[Math.floor(Date.now() / 200) % MYSTERY_TYPES.length];
+
+                if (resolvedType === "opponents") {
+                    if (this.orbLeaderOnly) {
+                        let leaderSid: string | null = null, minDist = Infinity;
+                        this.state.players.forEach((p, sid) => {
+                            if (sid === sessionId) return;
+                            const d = this.getDistance(p.x, p.y);
+                            if (d < minDist) { minDist = d; leaderSid = sid; }
+                        });
+                        const lp = leaderSid ? this.state.players.get(leaderSid) : null;
+                        if (lp) this.teleportPlayer(lp);
+                    } else {
+                        this.state.players.forEach((p, sid) => { if (sid !== sessionId) this.teleportPlayer(p); });
+                    }
+                } else if (resolvedType === "self") {
+                    this.teleportPlayer(player);
+                } else if (resolvedType === "mirror") {
+                    const tc = this.clients.find(c => c.sessionId === sessionId);
+                    if (tc) tc.send("mirror_controls", { duration: 3000, collectorSessionId: sessionId });
+                }
+                // "rocket" — no server-side action; client handles it via mystery_resolved
+
+                this.broadcast("mystery_resolved", { x: pu.x, y: pu.y, resolvedType, collectorSessionId: sessionId });
             }
         }
 

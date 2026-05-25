@@ -656,7 +656,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.106</div>
+    <div id="version-number">v1.5.107</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -763,6 +763,10 @@
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                         <label for="pu-mirror-input" style="font-size: 1.2rem;">Mirror Controls:</label>
                         <input type="number" id="pu-mirror-input" value="5" min="0" max="20" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <label for="pu-mystery-input" style="font-size: 1.2rem;">Mystery:</label>
+                        <input type="number" id="pu-mystery-input" value="3" min="0" max="20" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
                     </div>
                 </div>
 
@@ -881,6 +885,7 @@
         const puSelfInput     = document.getElementById('pu-self-input');
         const puRocketInput   = document.getElementById('pu-rocket-input');
         const puMirrorInput   = document.getElementById('pu-mirror-input');
+        const puMysteryInput  = document.getElementById('pu-mystery-input');
         const orbLeaderToggle = document.getElementById('orb-leader-toggle');
         const pmNextGameBtn   = document.getElementById('pm-next-game-btn');
 
@@ -1096,7 +1101,7 @@
         }
 
         // ── Power-up localStorage helpers ────────────────────────────────────
-        const PU_KEYS = ['opp', 'self', 'rocket', 'mirror'];
+        const PU_KEYS = ['opp', 'self', 'rocket', 'mirror', 'mystery'];
         const PU_LS_KEY = 'blazeTheMazePuSettings';
 
         function savePuToLocalStorage() {
@@ -1139,10 +1144,11 @@
             }).length;
 
             const auto = {
-                opp:    Math.max(0, 10 - (n - 1)),
-                self:   Math.max(0, 10 - (n - 1)),
-                rocket: Math.max(0, 4  - Math.floor((n - 1) / 2)),
-                mirror: Math.max(0, 9  - (n - 1)),
+                opp:     Math.max(0, 10 - (n - 1)),
+                self:    Math.max(0, 10 - (n - 1)),
+                rocket:  Math.max(0, 4  - Math.floor((n - 1) / 2)),
+                mirror:  Math.max(0, 9  - (n - 1)),
+                mystery: 3, // flat — wildcard power-up count doesn't scale with player count
             };
 
             PU_KEYS.forEach(k => {
@@ -2339,6 +2345,33 @@
                         }
                         ctx.restore();
                     });
+                } else if (p.type === 'mystery') {
+                    // Cycles through each power-up type's colour at 200 ms/type
+                    const MYSTERY_COLORS = ['#ffff00', '#00ffff', '#ff6600', '#ff00ff']; // opp/self/rocket/mirror
+                    const cycleIdx = Math.floor(performance.now() / 200) % MYSTERY_COLORS.length;
+                    const mColor   = MYSTERY_COLORS[cycleIdx];
+                    const r        = cellSize * 0.28;
+
+                    // Spinning diamond outline
+                    ctx.save();
+                    ctx.rotate(Math.PI / 4 + time * 1.5);
+                    ctx.beginPath();
+                    ctx.rect(-r, -r, r * 2, r * 2);
+                    ctx.strokeStyle = mColor;
+                    ctx.lineWidth   = 2;
+                    ctx.shadowBlur  = 18;
+                    ctx.shadowColor = mColor;
+                    ctx.stroke();
+                    ctx.restore();
+
+                    // "?" label in the current colour
+                    ctx.shadowBlur   = 10;
+                    ctx.shadowColor  = mColor;
+                    ctx.fillStyle    = mColor;
+                    ctx.font         = `bold ${Math.round(cellSize * 0.30)}px monospace`;
+                    ctx.textAlign    = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('?', 0, 0);
                 }
                 ctx.restore();
             });
@@ -3379,6 +3412,25 @@
                 if (blazer) blazer.mirrorUntil = Date.now() + duration;
             });
 
+            room.onMessage("mystery_resolved", ({ x, y, resolvedType, collectorSessionId }) => {
+                if (resolvedType === 'rocket') {
+                    const rocketId = `mr${x}-${y}`; // "mr" prefix avoids collision with normal rocket pickup ids
+                    if (!rockets.some(r => r.id === rocketId)) {
+                        let collectorColor = '#ff6600';
+                        blazers.forEach(b => { if (b.sessionId === collectorSessionId) collectorColor = b.color; });
+                        rockets.push(new Rocket(x, y, collectorColor, rocketId, collectorSessionId));
+                    }
+                }
+                // Burst flash in the resolved type's colour so players know what they got
+                const MYSTERY_COLORS = { opponents: '#ffff00', self: '#00ffff', rocket: '#ff6600', mirror: '#ff00ff' };
+                powerUpBursts.push({
+                    gridX: x, gridY: y,
+                    hitColor: MYSTERY_COLORS[resolvedType] || '#ffffff',
+                    otherPlayers: [],
+                    startTime: performance.now()
+                });
+            });
+
             room.onMessage("round_reset", () => {
                 if (roundFlashStart === null) roundFlashStart = performance.now(); // failsafe if msg arrives before countdown
                 blazers.forEach(blazer => {
@@ -3442,7 +3494,8 @@
                 puOpp:   parseInt(puOppInput.value,    10) || 5,
                 puSelf:  parseInt(puSelfInput.value,   10) || 5,
                 puRocket: parseInt(puRocketInput.value, 10) || 0,
-                puMirror: parseInt(puMirrorInput.value, 10) || 0,
+                puMirror:  parseInt(puMirrorInput.value,  10) || 0,
+        puMystery: parseInt(puMysteryInput.value, 10) || 0,
                 orbLeaderOnly: orbLeaderToggle.checked,
                 slots: lobbySlots.map(s => ({
                     mode: s.typeSelect.value,
