@@ -682,7 +682,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.120</div>
+    <div id="version-number">v1.5.121</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2272,12 +2272,14 @@
                 ctx.fillRect(0, 0, width, height);
             }
 
-            // Tension pulse: bright maze flash when the leader is ≤ 10 cells from the goal
-            if (closestBlazer && minDist <= 10 && gameState === 'PLAYING') {
-                const tension = 1 - (minDist / 10);
+            // Tension pulse: scales with maze size — starts cols cells away, dramatic by 10% of cols
+            if (closestBlazer && minDist <= cols && gameState === 'PLAYING') {
+                // Cubic curve: barely visible far out, rockets up in the final 10% of distance
+                const tension = Math.pow(1 - minDist / cols, 3);
                 const aboutToWin = (scores[closestBlazer.id] ?? 0) >= 2;
-                const pulseSpeed = aboutToWin ? 80 : 120;
-                const maxAlpha   = aboutToWin ? 0.80 : 0.55;
+                const maxAlpha = aboutToWin ? 0.80 : 0.58;
+                // Pulse rate accelerates as blazer closes in (120ms → 55ms)
+                const pulseSpeed = aboutToWin ? 55 : Math.max(55, 120 - tension * 65);
                 const pulse = (Math.sin(performance.now() / pulseSpeed) + 1) / 2;
                 ctx.fillStyle = closestBlazer.color;
                 ctx.globalAlpha = tension * pulse * maxAlpha;
