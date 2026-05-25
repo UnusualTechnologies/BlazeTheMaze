@@ -39,7 +39,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     // --- Constants ---
 
     static readonly IDLE_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
-    static readonly MOVE_LOCK_MS    = 4000;            // movement blocked at round start
+    static readonly MOVE_LOCK_MS    = 2667;            // movement blocked at round start (⅔ of 4000ms — matches client pulse-3 unlock)
     static readonly RATE_LIMIT_MS   = 50;              // minimum ms between accepted moves (max 20/sec)
 
     /** Navigation directions with wall indices and their opposites. */
