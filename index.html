@@ -656,7 +656,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.101</div>
+    <div id="version-number">v1.5.104</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -875,6 +875,14 @@
         const pmSubtitle = document.getElementById('pm-subtitle');
         const timerElement = document.getElementById('timer');
         const scoreboardElement = document.getElementById('scoreboard');
+
+        // Power-up inputs & lobby toggles (cached to avoid repeated getElementById calls)
+        const puOppInput      = document.getElementById('pu-opp-input');
+        const puSelfInput     = document.getElementById('pu-self-input');
+        const puRocketInput   = document.getElementById('pu-rocket-input');
+        const puMirrorInput   = document.getElementById('pu-mirror-input');
+        const orbLeaderToggle = document.getElementById('orb-leader-toggle');
+        const pmNextGameBtn   = document.getElementById('pm-next-game-btn');
 
         let width, height;
         let cols = 20; 
@@ -1243,8 +1251,7 @@
             constructor(x, y, color, id) {
                 this.gridX = x;
                 this.gridY = y;
-                this.pixelX = x * cellSize + cellSize / 2;
-                this.pixelY = y * cellSize + cellSize / 2;
+                ({ x: this.pixelX, y: this.pixelY } = gridToPixel(x, y));
                 this.color = color;
                 this.id = id;
                 this.moveTimer = 0;
@@ -1259,10 +1266,9 @@
                 this.moveTimer += dt;
 
                 // Smooth visual following
-                const targetX = this.gridX * cellSize + cellSize / 2;
-                const targetY = this.gridY * cellSize + cellSize / 2;
-                this.pixelX += (targetX - this.pixelX) * 0.4;
-                this.pixelY += (targetY - this.pixelY) * 0.4;
+                const target = gridToPixel(this.gridX, this.gridY);
+                this.pixelX += (target.x - this.pixelX) * 0.4;
+                this.pixelY += (target.y - this.pixelY) * 0.4;
 
                 if (this.moveTimer >= this.moveInterval) {
                     this.moveTimer = 0;
@@ -1393,9 +1399,8 @@
             }
 
             updatePixelPos(instant = false) {
-                const targetX = this.gridX * cellSize + cellSize / 2;
-                const targetY = this.gridY * cellSize + cellSize / 2;
-                
+                const { x: targetX, y: targetY } = gridToPixel(this.gridX, this.gridY);
+
                 this.lastPixelX = this.pixelX;
                 this.lastPixelY = this.pixelY;
 
@@ -1428,6 +1433,16 @@
                 this.bonkTimer = 1.0;
             }
 
+            /**
+             * True if this blazer should process local input / prediction on this client.
+             * Covers both the primary local player and secondary co-op slots.
+             */
+            isActuallyLocal() {
+                return (room && room.sessionId)
+                    ? (this.sessionId === room.sessionId || this.isSecondaryLocal)
+                    : this.isLocal;
+            }
+
             executeMove(dx, dy) {
                 if (gameState !== 'PLAYING') return;
 
@@ -1455,12 +1470,7 @@
             update(dt) {
                 const now = performance.now();
 
-                // Authoritative local check for movement prediction
-                const isActuallyLocal = (room && room.sessionId)
-                    ? (this.sessionId === room.sessionId || this.isSecondaryLocal)
-                    : this.isLocal;
-
-                if (this.isPlayer && this.state === 'normal' && isActuallyLocal && now >= roundMoveLockEnd) {
+                if (this.isPlayer && this.state === 'normal' && this.isActuallyLocal() && now >= roundMoveLockEnd) {
                     if (now - this.lastMoveTime >= this.moveCooldown) {
                         let moved = false;
                         const mirrored = this.mirrorUntil > 0 && Date.now() < this.mirrorUntil;
@@ -1959,7 +1969,7 @@
             const MATCH_END_WAIT = 30000;
             const JOIN_UNLOCK_MS  = 25000; // unlock room at 25 s → 5 s remaining
             pmJoinIntent = false;
-            const btn = document.getElementById('pm-next-game-btn');
+            const btn = pmNextGameBtn;
             if (btn) {
                 btn.style.display = '';
                 btn.disabled = true;
@@ -2015,8 +2025,7 @@
             postMatchLayer.classList.add('hidden');
             postMatchLayer.classList.remove('winner-pulse');
             pmJoinIntent = false;
-            const pmNextBtn = document.getElementById('pm-next-game-btn');
-            if (pmNextBtn) pmNextBtn.style.display = 'none';
+            if (pmNextGameBtn) pmNextGameBtn.style.display = 'none';
             hud.classList.add('hidden');
             hudBar.classList.add('hidden');
             lobbyLayer.classList.add('hidden');
@@ -2084,7 +2093,7 @@
             }
             ctx.stroke();
             
-            const gx = goal.x * cellSize + cellSize / 2, gy = goal.y * cellSize + cellSize / 2;
+            const { x: gx, y: gy } = gridToPixel(goal.x, goal.y);
             const time = performance.now() / 500;
             
             ctx.save();
@@ -2180,10 +2189,8 @@
                 const progress = Math.min((now - puff.startTime) / SMOKE_MS, 1);
                 if (progress >= 1) return false;
 
-                const fromPx = puff.fromX * cellSize + cellSize / 2;
-                const fromPy = puff.fromY * cellSize + cellSize / 2;
-                const toPx   = puff.toX   * cellSize + cellSize / 2;
-                const toPy   = puff.toY   * cellSize + cellSize / 2;
+                const { x: fromPx, y: fromPy } = gridToPixel(puff.fromX, puff.fromY);
+                const { x: toPx,   y: toPy   } = gridToPixel(puff.toX,   puff.toY);
 
                 // Drift slowly toward destination — fades well before arriving
                 const cx = fromPx + (toPx - fromPx) * progress * 0.28;
@@ -2211,7 +2218,7 @@
         function drawPowerUps() {
             const time = performance.now() / 600;
             powerUps.forEach(p => {
-                const px = p.x * cellSize + cellSize / 2, py = p.y * cellSize + cellSize / 2;
+                const { x: px, y: py } = gridToPixel(p.x, p.y);
                 ctx.save();
                 ctx.translate(px, py);
                 if (p.type === 'opponents') {
@@ -2314,8 +2321,10 @@
                         ctx.lineTo(-ar * 0.5,  ar * 0.72);
                         ctx.closePath();
                         ctx.fill();
-                        ctx.shadowBlur = 0; // no glow bleed on the outline
-                        ctx.stroke();
+                        if (flipped) {
+                            ctx.shadowBlur = 0; // no glow bleed on the outline
+                            ctx.stroke();
+                        }
                         ctx.restore();
                     });
                 }
@@ -2329,8 +2338,7 @@
                 const progress = Math.min((burstNow - burst.startTime) / BURST_MS, 1);
                 if (progress >= 1) return false;
 
-                const px = burst.gridX * cellSize + cellSize / 2;
-                const py = burst.gridY * cellSize + cellSize / 2;
+                const { x: px, y: py } = gridToPixel(burst.gridX, burst.gridY);
                 const radius = cellSize * 0.32;
 
                 ctx.save();
@@ -2407,8 +2415,7 @@
                 const ringDuration = ROUND_START_MS;
                 const halfDuration = ringDuration / 2;
                 if (ringElapsed < ringDuration) {
-                    const goalPx = goal.x * cellSize + cellSize / 2;
-                    const goalPy = goal.y * cellSize + cellSize / 2;
+                    const { x: goalPx, y: goalPy } = gridToPixel(goal.x, goal.y);
                     ctx.save();
                     blazers.forEach(b => {
                         if (!b.isLocal) return;
@@ -2583,12 +2590,7 @@
 
         // When there is only one local player, merge all keyboard schemes so any keys work.
         function effectiveControlMap(blazer) {
-            const localCount = blazers.filter(b => {
-                if (!b.isPlayer) return false;
-                return (room && room.sessionId)
-                    ? (b.sessionId === room.sessionId || b.isSecondaryLocal)
-                    : b.isLocal;
-            }).length;
+            const localCount = blazers.filter(b => b.isPlayer && b.isActuallyLocal()).length;
             if (localCount === 1) {
                 return {
                     up:    Object.values(controlsMap).flatMap(m => m.up),
@@ -2621,12 +2623,7 @@
                 const scheme = `controller_${gpIdx + 1}`;
                 const prev = gamepadPrevState[gpIdx] ?? { up: false, right: false, down: false, left: false };
 
-                const blazer = blazers.find(b => {
-                    if (!b.isPlayer || b.controlScheme !== scheme) return false;
-                    return (room && room.sessionId)
-                        ? (b.sessionId === room.sessionId || b.isSecondaryLocal)
-                        : b.isLocal;
-                });
+                const blazer = blazers.find(b => b.isPlayer && b.controlScheme === scheme && b.isActuallyLocal());
 
                 if (!gp || !blazer) {
                     if (!gp && blazer) { blazer.heldDirections = []; blazer.turnIntent = null; }
@@ -2734,11 +2731,7 @@
             blazers.forEach(blazer => {
                 if (!blazer.isPlayer) return;
                 
-                // Authoritative local check for input processing
-                const isActuallyLocal = (room && room.sessionId)
-                    ? (blazer.sessionId === room.sessionId || blazer.isSecondaryLocal)
-                    : blazer.isLocal;
-                if (!isActuallyLocal) return;
+                if (!blazer.isActuallyLocal()) return;
 
                 const map = effectiveControlMap(blazer);
                 if (!map) return;
@@ -2766,11 +2759,7 @@
             blazers.forEach(blazer => {
                 if (!blazer.isPlayer) return;
 
-                // Authoritative local check for input processing
-                const isActuallyLocal = (room && room.sessionId)
-                    ? (blazer.sessionId === room.sessionId || blazer.isSecondaryLocal)
-                    : blazer.isLocal;
-                if (!isActuallyLocal) return;
+                if (!blazer.isActuallyLocal()) return;
 
                 const map = effectiveControlMap(blazer);
                 if (!map) return;
@@ -3323,8 +3312,7 @@
                 if (pmJoinIntent) {
                     // Player clicked the join button — drop straight into the new game
                     pmJoinIntent = false;
-                    const pmNextBtn = document.getElementById('pm-next-game-btn');
-                    if (pmNextBtn) pmNextBtn.style.display = 'none';
+                    if (pmNextGameBtn) pmNextGameBtn.style.display = 'none';
                     postMatchLayer.classList.add('hidden');
                     postMatchLayer.classList.remove('winner-pulse');
                     initRound();
@@ -3343,12 +3331,13 @@
                     leavingIntentionally = false;
                 } else {
                     // Unexpected disconnect (network drop, server restart, etc.)
-                    // Try to reconnect up to 4 times over 8 seconds to match the server's hold window
+                    // Try to reconnect up to 4 times. Server holds the slot for 8 s;
+                    // 1800 ms intervals mean the 4th attempt fires at ~7.2 s, well inside the window.
                     const MAX_ATTEMPTS = 4;
                     let rejoined = false;
                     for (let i = 1; i <= MAX_ATTEMPTS && !rejoined; i++) {
                         showReconnectingOverlay(i, MAX_ATTEMPTS);
-                        await new Promise(r => setTimeout(r, 2000));
+                        await new Promise(r => setTimeout(r, 1800));
                         try {
                             const rejoinedRoom = await client.reconnect(reconnectionToken);
                             hideReconnectingOverlay();
@@ -3398,30 +3387,8 @@
             setButtonLoading(joinFriendBtn, true);
             const _slowTimer = setTimeout(showSlowConnectionToast, 5000);
             try {
-                const settings = {
-                    cols: parseInt(gridSizeInput.value, 10) || 20,
-                    rows: parseInt(gridSizeInput.value, 10) || 20,
-                    puOpp: parseInt(document.getElementById('pu-opp-input').value, 10) || 5,
-                    puSelf: parseInt(document.getElementById('pu-self-input').value, 10) || 5,
-                    puRocket: parseInt(document.getElementById('pu-rocket-input').value, 10) || 0,
-                    puMirror: parseInt(document.getElementById('pu-mirror-input').value, 10) || 0,
-                    orbLeaderOnly: document.getElementById('orb-leader-toggle').checked,
-                    slots: lobbySlots.map(s => ({
-                        mode: s.typeSelect.value,
-                        id: s.id,
-                        color: s.color,
-                        aiSpeed: s.aiSpeedSelect.value,
-                        aiCustomSpeed: parseInt(s.customSpeedSlider.value, 10),
-                        aiBehavior: s.aiBehaviorSelect.value,
-                        controlScheme: s.controlSelect.value
-                    })),
-                    desiredRoomId: desiredCode,
-                };
-                const localSlot = lobbySlots.find(s => s.typeSelect.value === 'local');
-                localControlScheme = localSlot ? localSlot.controlSelect.value : 'WASD';
-                localSlotSchemes = {};
-                pendingOwnerSlotSchemes = {};
-                lobbySlots.forEach((s, i) => { if (s.typeSelect.value === 'local') pendingOwnerSlotSchemes[i] = s.controlSelect.value; });
+                const settings = buildLobbySettings({ desiredRoomId: desiredCode });
+                initControlSchemeState();
                 gameState = 'CONNECTING';
                 const newRoom = await withTimeout(client.create("game", settings), 10000);
                 clearTimeout(_slowTimer); hideSlowConnectionToast();
@@ -3439,6 +3406,54 @@
                 promise,
                 new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timed out')), ms))
             ]);
+        }
+
+        /** Convert grid coordinates to canvas pixel coordinates (cell centre). */
+        function gridToPixel(gx, gy) {
+            return { x: gx * cellSize + cellSize / 2, y: gy * cellSize + cellSize / 2 };
+        }
+
+        /**
+         * Build the Colyseus room settings object from the current lobby UI.
+         * Pass an overrides object to merge in handler-specific fields
+         * (e.g. desiredRoomId, collisions, isPrivate).
+         */
+        function buildLobbySettings(overrides = {}) {
+            return {
+                cols: parseInt(gridSizeInput.value, 10) || 20,
+                rows: parseInt(gridSizeInput.value, 10) || 20,
+                puOpp:   parseInt(puOppInput.value,    10) || 5,
+                puSelf:  parseInt(puSelfInput.value,   10) || 5,
+                puRocket: parseInt(puRocketInput.value, 10) || 0,
+                puMirror: parseInt(puMirrorInput.value, 10) || 0,
+                orbLeaderOnly: orbLeaderToggle.checked,
+                slots: lobbySlots.map(s => ({
+                    mode: s.typeSelect.value,
+                    id: s.id,
+                    color: s.color,
+                    aiSpeed: s.aiSpeedSelect.value,
+                    aiCustomSpeed: parseInt(s.customSpeedSlider.value, 10),
+                    aiBehavior: s.aiBehaviorSelect.value,
+                    controlScheme: s.controlSelect.value
+                })),
+                ...overrides
+            };
+        }
+
+        /**
+         * Initialise control-scheme state before connecting to a room.
+         * Set isCreator=false when joining an existing room (skips pendingOwnerSlotSchemes).
+         */
+        function initControlSchemeState({ isCreator = true } = {}) {
+            const localSlot = lobbySlots.find(s => s.typeSelect.value === 'local');
+            localControlScheme = localSlot ? localSlot.controlSelect.value : 'WASD';
+            localSlotSchemes = {};
+            pendingOwnerSlotSchemes = {};
+            if (isCreator) {
+                lobbySlots.forEach((s, i) => {
+                    if (s.typeSelect.value === 'local') pendingOwnerSlotSchemes[i] = s.controlSelect.value;
+                });
+            }
         }
 
         function setButtonLoading(btn, loading) {
@@ -3599,30 +3614,8 @@
             try {
                 if (!client) throw new Error('Colyseus client not initialised — check your connection.');
                 // Build settings from the lobby UI so Quick Start respects the player's configured slots
-                const settings = {
-                    cols: parseInt(gridSizeInput.value, 10) || 20,
-                    rows: parseInt(gridSizeInput.value, 10) || 20,
-                    puOpp: parseInt(document.getElementById('pu-opp-input').value, 10) || 5,
-                    puSelf: parseInt(document.getElementById('pu-self-input').value, 10) || 5,
-                    puRocket: parseInt(document.getElementById('pu-rocket-input').value, 10) || 0,
-                    puMirror: parseInt(document.getElementById('pu-mirror-input').value, 10) || 0,
-                    orbLeaderOnly: document.getElementById('orb-leader-toggle').checked,
-                    slots: lobbySlots.map(s => ({
-                        mode: s.typeSelect.value,
-                        id: s.id,
-                        color: s.color,
-                        aiSpeed: s.aiSpeedSelect.value,
-                        aiCustomSpeed: parseInt(s.customSpeedSlider.value, 10),
-                        aiBehavior: s.aiBehaviorSelect.value,
-                        controlScheme: s.controlSelect.value
-                    }))
-                };
-
-                const localSlot = lobbySlots.find(s => s.typeSelect.value === 'local');
-                localControlScheme = localSlot ? localSlot.controlSelect.value : 'WASD';
-                localSlotSchemes = {}; // restored by owner_confirm if we created the room
-                pendingOwnerSlotSchemes = {};
-                lobbySlots.forEach((s, i) => { if (s.typeSelect.value === 'local') pendingOwnerSlotSchemes[i] = s.controlSelect.value; });
+                const settings = buildLobbySettings();
+                initControlSchemeState();
 
                 gameState = 'CONNECTING';
                 let newRoom;
@@ -3667,10 +3660,7 @@
             let _slowTimerFC;
             try {
                 if (!client) throw new Error('Colyseus client not initialised — check your connection.');
-                const localSlot = lobbySlots.find(s => s.typeSelect.value === 'local');
-                localControlScheme = localSlot ? localSlot.controlSelect.value : 'WASD';
-                localSlotSchemes = {}; // joining someone else's room — no secondary locals
-
+                initControlSchemeState({ isCreator: false }); // joining someone else's room — no secondary locals
                 joiningViaCode = true;
                 gameState = 'CONNECTING';
                 _slowTimerFC = setTimeout(showSlowConnectionToast, 5000);
@@ -3707,32 +3697,11 @@
             const _slowTimer2 = setTimeout(showSlowConnectionToast, 5000);
             try {
                 if (!client) throw new Error('Colyseus client not initialised — check your connection.');
-                const settings = {
-                    cols: parseInt(gridSizeInput.value, 10),
-                    rows: parseInt(gridSizeInput.value, 10),
-                    puOpp: parseInt(document.getElementById('pu-opp-input').value, 10),
-                    puSelf: parseInt(document.getElementById('pu-self-input').value, 10),
-                    puRocket: parseInt(document.getElementById('pu-rocket-input').value, 10) || 0,
-                    puMirror: parseInt(document.getElementById('pu-mirror-input').value, 10) || 0,
-                    slots: lobbySlots.map(s => ({
-                        mode: s.typeSelect.value,
-                        id: s.id,
-                        color: s.color,
-                        aiSpeed: s.aiSpeedSelect.value,
-                        aiCustomSpeed: parseInt(s.customSpeedSlider.value, 10),
-                        aiBehavior: s.aiBehaviorSelect.value,
-                        controlScheme: s.controlSelect.value
-                    })),
+                const settings = buildLobbySettings({
                     collisions: document.getElementById('collisions-toggle').checked,
-                    orbLeaderOnly: document.getElementById('orb-leader-toggle').checked,
                     isPrivate: false
-                };
-
-                const localSlot = lobbySlots.find(s => s.typeSelect.value === 'local');
-                localControlScheme = localSlot ? localSlot.controlSelect.value : 'WASD';
-                localSlotSchemes = {}; // restored by owner_confirm
-                pendingOwnerSlotSchemes = {};
-                lobbySlots.forEach((s, i) => { if (s.typeSelect.value === 'local') pendingOwnerSlotSchemes[i] = s.controlSelect.value; });
+                });
+                initControlSchemeState();
 
                 gameState = 'CONNECTING';
                 const newRoom = await withTimeout(client.create("game", settings), 10000);

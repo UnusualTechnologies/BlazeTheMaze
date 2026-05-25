@@ -9,7 +9,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     collisions = true;
     spawnOptions: any = {};
 
-    // BFS distance map from goal — flat array indexed [x * rows + y]
+    // BFS distance map from goal — flat array indexed by idx(x, y)
     distanceMap: number[] = [];
     // Tracks which connected sessionIds joined via friend code (cannot be kicked)
     friendCodeJoiners = new Set<string>();
@@ -25,20 +25,29 @@ export class GameRoom extends Room<{ state: GameState }> {
     lastRoundWon: { winnerId: string; winnerColor: string; winnerScore: number; isMatchWon: boolean } | null = null;
     // Last input timestamp per human sessionId — used for idle kick
     lastInputTime = new Map<string, number>();
-    static readonly IDLE_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
-    // Last accepted move timestamp per sessionId — for rate limiting (max 20 moves/sec)
+    // Last accepted move timestamp per sessionId — for rate limiting
     lastMoveTime = new Map<string, number>();
     // Session ID of the room creator — only they may drive secondary local slots
     ownerSessionId: string = '';
-    // Tracks which clients have acknowledged the match-over results screen
-    resultsAckedClients = new Set<string>();
-    // Prevents play_again_request from being processed more than once (simultaneous clicks)
-    playAgainProcessed: boolean = false;
-    // Timestamp (Date.now()) when the current round started — AI and move messages are blocked for 2 s
+    // Timestamp (Date.now()) when the current round started — AI and move messages are blocked
     roundStartMs: number = 0;
     orbLeaderOnly: boolean = false;
     // Tracks rocket-hit events already processed to prevent duplicate teleports
     usedRocketHits = new Set<string>();
+
+    // --- Constants ---
+
+    static readonly IDLE_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
+    static readonly MOVE_LOCK_MS    = 4000;            // movement blocked at round start
+    static readonly RATE_LIMIT_MS   = 50;              // minimum ms between accepted moves (max 20/sec)
+
+    /** Navigation directions with wall indices and their opposites. */
+    private static readonly DIRS = [
+        { dx:  0, dy: -1, wall: 0, oppWall: 2 },
+        { dx:  1, dy:  0, wall: 1, oppWall: 3 },
+        { dx:  0, dy:  1, wall: 2, oppWall: 0 },
+        { dx: -1, dy:  0, wall: 3, oppWall: 1 },
+    ] as const;
 
     // --- Lifecycle ---
 
@@ -144,10 +153,7 @@ export class GameRoom extends Room<{ state: GameState }> {
 
         // 100 ms tick — AI moves every 300–600 ms so 60 fps server ticks are pointless overhead
         this.setSimulationInterval((dt) => {
-            if (this.roundOver) return; // Freeze everything during round-over countdown
-            this.state.timer += dt / 1000;
-
-            // Idle kick: disconnect human players with no input for 3 minutes
+            // Idle kick runs regardless of round state so players can't squat through post-match
             const now = Date.now();
             for (const client of [...this.clients]) {
                 const last = this.lastInputTime.get(client.sessionId);
@@ -157,7 +163,10 @@ export class GameRoom extends Room<{ state: GameState }> {
                 }
             }
 
-            const moveLocked = now - this.roundStartMs < 4000;
+            if (this.roundOver) return; // Freeze AI and timer during round-over countdown
+            this.state.timer += dt / 1000;
+
+            const moveLocked = now - this.roundStartMs < GameRoom.MOVE_LOCK_MS;
             this.state.players.forEach((player, sessionId) => {
                 if (player.isAI) {
                     // 'local' slots are meant for human co-op on the host machine — skip AI
@@ -181,8 +190,8 @@ export class GameRoom extends Room<{ state: GameState }> {
                 if (!player || player.isAI) return;
                 // Rate limit: max 20 moves/sec per client
                 const now = Date.now();
-                if (now - this.roundStartMs < 4000) return;
-                if (now - (this.lastMoveTime.get(client.sessionId) ?? 0) < 50) return;
+                if (now - this.roundStartMs < GameRoom.MOVE_LOCK_MS) return;
+                if (now - (this.lastMoveTime.get(client.sessionId) ?? 0) < GameRoom.RATE_LIMIT_MS) return;
                 this.lastMoveTime.set(client.sessionId, now);
                 // Validate coordinates
                 if (
@@ -207,7 +216,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         this.onMessage("move_secondary", (client, message) => {
             try {
                 if (this.roundOver) return;
-                if (Date.now() - this.roundStartMs < 4000) return;
+                if (Date.now() - this.roundStartMs < GameRoom.MOVE_LOCK_MS) return;
                 if (client.sessionId !== this.ownerSessionId) return;
                 const { slotIndex, x, y } = message;
                 if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) {
@@ -389,28 +398,15 @@ export class GameRoom extends Room<{ state: GameState }> {
         this.explorerLastPos.delete(client.sessionId);
         this.guesserData.delete(client.sessionId);
         this.aiCooldowns.delete(client.sessionId);
-        this.resultsAckedClients.delete(client.sessionId);
 
         const player = this.state.players.get(client.sessionId);
         if (player) {
             const slotIndex = player.slotIndex;
             const slot = this.state.slots[slotIndex];
-            if (slot.mode === "ai_online" || slot.mode === "local") {
-                const aiId = `ai_${slotIndex}`;
-                player.isAI = true;
-                slot.sessionId = "";
-                this.state.players.delete(client.sessionId);
-                this.state.players.set(aiId, player);
-                this.initAIState(aiId, player);
-                console.log(`Player ${client.sessionId} left. AI taking over slot ${slotIndex}.`);
-            } else if (slot.mode === "ai_friend") {
-                const aiId = `ai_${slotIndex}`;
-                player.isAI = true;
-                slot.sessionId = "";
-                this.state.players.delete(client.sessionId);
-                this.state.players.set(aiId, player);
-                this.initAIState(aiId, player);
-                console.log(`Friend left slot ${slotIndex}. AI resuming.`);
+            if (slot.mode === "ai_online" || slot.mode === "local" || slot.mode === "ai_friend") {
+                this.convertPlayerToAI(client.sessionId, player, slotIndex);
+                const label = slot.mode === "ai_friend" ? "Friend" : "Player";
+                console.log(`${label} ${client.sessionId} left. AI taking over slot ${slotIndex}.`);
             } else if (slot.mode === "friend_only") {
                 slot.sessionId = "";
                 this.state.players.delete(client.sessionId);
@@ -436,27 +432,38 @@ export class GameRoom extends Room<{ state: GameState }> {
         }
     }
 
+    // --- Helpers ---
+
+    /** Flat grid index for cell at (x, y). */
+    private idx(x: number, y: number): number {
+        return x * this.rows + y;
+    }
+
+    /** Convert a human player's slot back to AI control. */
+    private convertPlayerToAI(clientSessionId: string, player: Player, slotIndex: number): void {
+        const aiId = `ai_${slotIndex}`;
+        player.isAI = true;
+        this.state.slots[slotIndex].sessionId = "";
+        this.state.players.delete(clientSessionId);
+        this.state.players.set(aiId, player);
+        this.initAIState(aiId, player);
+    }
+
     // --- AI Navigation ---
 
-    /** BFS from (goalX, goalY) through the maze; returns flat [x*rows+y] distance array. */
+    /** BFS from (goalX, goalY) through the maze; returns flat distance array indexed by idx(x, y). */
     computeDistanceMap(goalX: number, goalY: number): number[] {
         const map = new Array(this.cols * this.rows).fill(Infinity);
-        map[goalX * this.rows + goalY] = 0;
+        map[this.idx(goalX, goalY)] = 0;
         const queue: { x: number; y: number }[] = [{ x: goalX, y: goalY }];
-        const dirs = [
-            { dx: 0, dy: -1, wall: 0 },
-            { dx: 1,  dy: 0, wall: 1 },
-            { dx: 0,  dy: 1, wall: 2 },
-            { dx: -1, dy: 0, wall: 3 },
-        ];
         while (queue.length > 0) {
             const curr = queue.shift()!;
-            const cell = this.state.grid[curr.x * this.rows + curr.y];
-            const currDist = map[curr.x * this.rows + curr.y];
-            for (const d of dirs) {
+            const cell = this.state.grid[this.idx(curr.x, curr.y)];
+            const currDist = map[this.idx(curr.x, curr.y)];
+            for (const d of GameRoom.DIRS) {
                 const nx = curr.x + d.dx, ny = curr.y + d.dy;
                 if (nx >= 0 && nx < this.cols && ny >= 0 && ny < this.rows && !cell.walls[d.wall]) {
-                    const ni = nx * this.rows + ny;
+                    const ni = this.idx(nx, ny);
                     if (map[ni] === Infinity) {
                         map[ni] = currDist + 1;
                         queue.push({ x: nx, y: ny });
@@ -489,16 +496,10 @@ export class GameRoom extends Room<{ state: GameState }> {
         const slot = this.state.slots[player.slotIndex];
         let behavior = slot?.aiBehavior ?? "random";
 
-        const cell = this.state.grid[player.x * this.rows + player.y];
-        const dirs = [
-            { dx: 0, dy: -1, wall: 0 },
-            { dx: 1,  dy: 0, wall: 1 },
-            { dx: 0,  dy: 1, wall: 2 },
-            { dx: -1, dy: 0, wall: 3 },
-        ];
+        const cell = this.state.grid[this.idx(player.x, player.y)];
 
         // Collect open neighbours
-        const open = dirs
+        const open = GameRoom.DIRS
             .filter(d => {
                 const nx = player.x + d.dx, ny = player.y + d.dy;
                 return nx >= 0 && nx < this.cols && ny >= 0 && ny < this.rows && !cell.walls[d.wall];
@@ -513,11 +514,11 @@ export class GameRoom extends Room<{ state: GameState }> {
             const last = this.explorerLastPos.get(sessionId) ?? { x: -1, y: -1 };
 
             // If no one else is closer to the goal, act focused
-            const myDist = this.distanceMap[player.x * this.rows + player.y];
+            const myDist = this.distanceMap[this.idx(player.x, player.y)];
             let minOtherDist = Infinity;
             this.state.players.forEach((other, sid) => {
                 if (sid !== sessionId) {
-                    const d = this.distanceMap[other.x * this.rows + other.y];
+                    const d = this.distanceMap[this.idx(other.x, other.y)];
                     if (d < minOtherDist) minOtherDist = d;
                 }
             });
@@ -525,8 +526,8 @@ export class GameRoom extends Room<{ state: GameState }> {
             if (myDist <= minOtherDist) {
                 // Act focused
                 for (const n of open) {
-                    const d = this.distanceMap[n.x * this.rows + n.y];
-                    if (d < myDist && (!move || d < this.distanceMap[move.x * this.rows + move.y])) move = n;
+                    const d = this.distanceMap[this.idx(n.x, n.y)];
+                    if (d < myDist && (!move || d < this.distanceMap[this.idx(move.x, move.y)])) move = n;
                 }
             }
 
@@ -542,10 +543,10 @@ export class GameRoom extends Room<{ state: GameState }> {
             const gd = this.guesserData.get(sessionId);
             if (gd && (player.x !== gd.target.x || player.y !== gd.target.y)) {
                 // Navigate to guess target
-                const currDist = gd.distMap[player.x * this.rows + player.y];
+                const currDist = gd.distMap[this.idx(player.x, player.y)];
                 for (const n of open) {
-                    const d = gd.distMap[n.x * this.rows + n.y];
-                    if (d < currDist && (!move || d < gd.distMap[move.x * this.rows + move.y])) move = n;
+                    const d = gd.distMap[this.idx(n.x, n.y)];
+                    if (d < currDist && (!move || d < gd.distMap[this.idx(move.x, move.y)])) move = n;
                 }
             }
             // If at target or no route, fall through to focused
@@ -554,10 +555,10 @@ export class GameRoom extends Room<{ state: GameState }> {
 
         if (behavior === "focused" || (!move && behavior !== "explorer")) {
             // Greedy: step to open neighbour with smallest BFS distance to goal
-            const currDist = this.distanceMap[player.x * this.rows + player.y];
+            const currDist = this.distanceMap[this.idx(player.x, player.y)];
             for (const n of open) {
-                const d = this.distanceMap[n.x * this.rows + n.y];
-                if (d < currDist && (!move || d < this.distanceMap[move.x * this.rows + move.y])) move = n;
+                const d = this.distanceMap[this.idx(n.x, n.y)];
+                if (d < currDist && (!move || d < this.distanceMap[this.idx(move.x, move.y)])) move = n;
             }
         }
 
@@ -592,22 +593,16 @@ export class GameRoom extends Room<{ state: GameState }> {
         while (stack.length > 0) {
             const curr = stack[stack.length - 1];
             const neighbors: { x: number; y: number; wall: number; oppWall: number }[] = [];
-            const dirs = [
-                { x: 0, y: -1, wall: 0, oppWall: 2 },
-                { x: 1,  y: 0, wall: 1, oppWall: 3 },
-                { x: 0,  y: 1, wall: 2, oppWall: 0 },
-                { x: -1, y: 0, wall: 3, oppWall: 1 },
-            ];
-            for (const d of dirs) {
-                const nx = curr.x + d.x, ny = curr.y + d.y;
+            for (const d of GameRoom.DIRS) {
+                const nx = curr.x + d.dx, ny = curr.y + d.dy;
                 if (nx >= 0 && nx < this.cols && ny >= 0 && ny < this.rows && !visited.has(`${nx},${ny}`)) {
                     neighbors.push({ x: nx, y: ny, wall: d.wall, oppWall: d.oppWall });
                 }
             }
             if (neighbors.length > 0) {
                 const next = neighbors[Math.floor(Math.random() * neighbors.length)];
-                this.state.grid[curr.x * this.rows + curr.y].walls[next.wall] = false;
-                this.state.grid[next.x * this.rows + next.y].walls[next.oppWall] = false;
+                this.state.grid[this.idx(curr.x, curr.y)].walls[next.wall] = false;
+                this.state.grid[this.idx(next.x, next.y)].walls[next.oppWall] = false;
                 visited.add(`${next.x},${next.y}`);
                 stack.push({ x: next.x, y: next.y });
             } else {
@@ -632,7 +627,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         for (let x = 0; x < this.cols; x++) {
             for (let y = 0; y < this.rows; y++) {
                 if (this.isReservedCell(x, y)) continue;
-                const cell = this.state.grid[x * this.rows + y];
+                const cell = this.state.grid[this.idx(x, y)];
                 if (!cell) continue;
                 let openCount = 0;
                 for (let w = 0; w < 4; w++) { if (!cell.walls[w]) openCount++; }
@@ -735,7 +730,6 @@ export class GameRoom extends Room<{ state: GameState }> {
             if (isMatchWon) {
                 this.matchComplete = true;
                 this.lock();
-                this.resultsAckedClients.clear();
                 // At 25 s: unlock so new players can join for the final 5-second window.
                 this.clock.setTimeout(() => {
                     if (!this.matchComplete) return;
@@ -746,8 +740,6 @@ export class GameRoom extends Room<{ state: GameState }> {
                     if (!this.matchComplete) return;
                     this.state.players.forEach(p => { p.score = 0; });
                     this.matchComplete = false;
-                    this.playAgainProcessed = false;
-                    this.resultsAckedClients.clear();
                     this.resetRound();
                     this.roundStartMs = Date.now();
                     this.broadcast("match_reset");
@@ -770,14 +762,8 @@ export class GameRoom extends Room<{ state: GameState }> {
             if (!player.isAI) toConvert.push({ sessionId, player, slotIndex: player.slotIndex });
         });
         for (const { sessionId, player, slotIndex } of toConvert) {
-            const slot = this.state.slots[slotIndex];
-            const aiId = `ai_${slotIndex}`;
-            player.isAI = true;
             player.score = 0;
-            slot.sessionId = "";
-            this.state.players.delete(sessionId);
-            this.state.players.set(aiId, player);
-            this.initAIState(aiId, player);
+            this.convertPlayerToAI(sessionId, player, slotIndex);
             this.friendCodeJoiners.delete(sessionId);
         }
         // Reset AI scores too
@@ -878,6 +864,6 @@ export class GameRoom extends Room<{ state: GameState }> {
     }
 
     getDistance(x: number, y: number) {
-        return this.distanceMap[x * this.rows + y] ?? Infinity;
+        return this.distanceMap[this.idx(x, y)] ?? Infinity;
     }
 }
