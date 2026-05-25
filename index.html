@@ -236,6 +236,31 @@
             animation: winnerPulse 2s infinite ease-in-out;
         }
 
+        /* ── Victory stars ──────────────────────────────────────────────────── */
+        @keyframes vstar-fall {
+            0%   { transform: translateY(0)             rotate(0deg);          opacity: 0;   }
+            7%   {                                                               opacity: 1;   }
+            88%  {                                                               opacity: 0.9; }
+            100% { transform: translateY(var(--vfall))  rotate(var(--vspin));  opacity: 0;   }
+        }
+
+        #victory-stars {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: 9999;
+        }
+
+        .vstar {
+            position: absolute;
+            top: -40px;
+            pointer-events: none;
+            user-select: none;
+            will-change: transform, opacity;
+            animation: vstar-fall linear infinite;
+        }
+
         .hidden {
             opacity: 0;
             pointer-events: none;
@@ -657,7 +682,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.114</div>
+    <div id="version-number">v1.5.115</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2102,6 +2127,7 @@
         function initRound() {
             gameState = 'INITIALIZING'; // Temporarily change state to block draw() recursion
             bgTintR = bgTintG = bgTintB = 0; // reset so leader tint fades in fresh each round
+            stopVictoryStars();
 
             // Always build a local grid so drawMaze has a valid 2D array.
             // For networked play this placeholder is overwritten by the first onStateChange.
@@ -2173,6 +2199,7 @@
         }
 
         function returnToMenu() {
+            stopVictoryStars();
             window.electronAPI?.closeSteamLobby();
             window.electronAPI?.setRichPresence('In Menu');
             if (typeof room !== 'undefined' && room) {
@@ -3560,10 +3587,12 @@
                         pmSubtitle.innerHTML = `${wId} won the Best-of-3!`;
                         document.getElementById('pm-round-times').innerHTML = '';
                         startMatchEndTimer();
+                        startVictoryStars(wColor);
                     } else {
                         gameState = 'ROUND_OVER_COUNTDOWN';
                         currentWinner = blazers.find(b => b.id === wId) || { id: wId, color: wColor };
                         roundCountdown = 3000;
+                        startVictoryStars(wColor);
                     }
                 }
             });
@@ -3605,6 +3634,7 @@
                     postMatchLayer.style.setProperty('--winner-color', winnerColor);
                     postMatchLayer.classList.add('winner-pulse');
                     postMatchLayer.classList.remove('hidden');
+                    startVictoryStars(winnerColor);
 
                     const fastestRoundTime = Math.min(...roundTimes.map(rt => rt.time));
                     pmTitle.innerText = `${winnerId} Wins the Match!`;
@@ -3632,6 +3662,7 @@
                     gameState = 'ROUND_OVER_COUNTDOWN';
                     currentWinner = winnerBlazer || { id: winnerId, color: winnerColor };
                     roundCountdown = 3000;
+                    startVictoryStars(winnerColor);
 
                     animatingScoreIds.add(winnerId);
 
@@ -3686,6 +3717,7 @@
                     if (pmNextGameBtn) pmNextGameBtn.style.display = 'none';
                     postMatchLayer.classList.add('hidden');
                     postMatchLayer.classList.remove('winner-pulse');
+                    stopVictoryStars();
                     initRound();
                 } else {
                     // Player didn't opt in — return to menu
@@ -3808,6 +3840,55 @@
                 promise,
                 new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timed out')), ms))
             ]);
+        }
+
+        /**
+         * Spawn falling stars along the left and right viewport margins.
+         * Uses fixed positioning so it works whether the menu is absolute or fixed.
+         */
+        function startVictoryStars(winnerColor) {
+            stopVictoryStars();
+            const wrap = document.createElement('div');
+            wrap.id = 'victory-stars';
+            document.body.appendChild(wrap);
+
+            const W     = window.innerWidth;
+            const H     = window.innerHeight;
+            const sideW = Math.min(W * 0.16, 120); // up to 16 % from each edge
+            const CHARS  = ['★', '✦', '✦', '★', '✧', '★'];
+            const ACCENT = ['#ffffff', '#ffdd00', '#ffee88', '#fffaaa'];
+
+            for (let i = 0; i < 48; i++) {
+                const span = document.createElement('span');
+                span.className = 'vstar';
+                span.textContent = CHARS[i % CHARS.length];
+
+                const onLeft = i % 2 === 0;
+                const x      = onLeft
+                    ? Math.random() * sideW
+                    : W - sideW + Math.random() * sideW;
+                const size   = 11 + Math.random() * 18;
+                const dur    = 2.4 + Math.random() * 2.8;
+                const phase  = (Math.random() * dur).toFixed(2); // negative delay → immediate fill
+                const color  = Math.random() < 0.62 ? winnerColor
+                                                     : ACCENT[Math.floor(Math.random() * ACCENT.length)];
+                const spin   = ((Math.random() < 0.5 ? 1 : -1) * (200 + Math.random() * 380)).toFixed(0);
+
+                span.style.cssText =
+                    `left:${x.toFixed(1)}px;` +
+                    `font-size:${size.toFixed(1)}px;` +
+                    `color:${color};` +
+                    `text-shadow:0 0 ${Math.round(size * 0.55)}px ${color};` +
+                    `animation-duration:${dur.toFixed(2)}s;` +
+                    `animation-delay:-${phase}s;` +
+                    `--vfall:${(H + 60).toFixed(0)}px;` +
+                    `--vspin:${spin}deg;`;
+                wrap.appendChild(span);
+            }
+        }
+
+        function stopVictoryStars() {
+            document.getElementById('victory-stars')?.remove();
         }
 
         /** Parse a #rrggbb hex colour into [r, g, b] components (0–255 each). */
