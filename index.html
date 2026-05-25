@@ -682,7 +682,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.118</div>
+    <div id="version-number">v1.5.119</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2257,9 +2257,9 @@
                 bgTintG += (tg - bgTintG) * 0.08;
                 bgTintB += (tb - bgTintB) * 0.08;
                 // Drive the page background-color to a vivid version of the leader's colour
-                const pr = Math.round(bgTintR * 0.90);
-                const pg = Math.round(bgTintG * 0.90);
-                const pb = Math.round(bgTintB * 0.90);
+                const pr = Math.round(bgTintR * 0.50);
+                const pg = Math.round(bgTintG * 0.50);
+                const pb = Math.round(bgTintB * 0.50);
                 document.body.style.backgroundColor = `rgb(${pr},${pg},${pb})`;
                 // Vignette on the canvas edges
                 const grad = ctx.createRadialGradient(
