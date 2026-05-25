@@ -686,7 +686,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.131</div>
+    <div id="version-number">v1.5.132</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2134,6 +2134,7 @@
             bgTintR = bgTintG = bgTintB = 0; // reset so leader tint fades in fresh each round
             document.body.style.backgroundColor = '#000000';
             stopVictoryStars();
+            stopWinnerLap();
 
             // Always build a local grid so drawMaze has a valid 2D array.
             // For networked play this placeholder is overwritten by the first onStateChange.
@@ -2207,6 +2208,7 @@
 
         function returnToMenu() {
             stopVictoryStars();
+            stopWinnerLap();
             document.body.style.backgroundColor = '#000000';
             window.electronAPI?.closeSteamLobby();
             window.electronAPI?.setRichPresence('In Menu');
@@ -3590,12 +3592,13 @@
                         postMatchLayer.style.setProperty('--winner-color', wColor);
                         postMatchLayer.classList.add('winner-pulse');
                         postMatchLayer.classList.remove('hidden');
-                        pmTitle.innerText = `${wId} Wins the Match!`;
-                        pmTitle.style.textShadow = `0 0 20px ${wColor}, 0 0 40px ${wColor}`;
+                        pmTitle.innerText = '';
+                        pmTitle.style.textShadow = '';
                         pmSubtitle.innerHTML = `${wId} won the Best-of-3!`;
                         document.getElementById('pm-round-times').innerHTML = '';
                         startMatchEndTimer();
                         startVictoryStars(wColor);
+                        startWinnerLap(wColor);
                     } else {
                         gameState = 'ROUND_OVER_COUNTDOWN';
                         currentWinner = blazers.find(b => b.id === wId) || { id: wId, color: wColor };
@@ -3645,8 +3648,9 @@
                     startVictoryStars(winnerColor);
 
                     const fastestRoundTime = Math.min(...roundTimes.map(rt => rt.time));
-                    pmTitle.innerText = `${winnerId} Wins the Match!`;
-                    pmTitle.style.textShadow = `0 0 20px ${winnerColor}, 0 0 40px ${winnerColor}`;
+                    pmTitle.innerText = '';
+                    pmTitle.style.textShadow = '';
+                    startWinnerLap(winnerColor);
 
                     const isLocalWinner = winnerBlazer?.isLocal;
                     if (isLocalWinner) {
@@ -3726,6 +3730,7 @@
                     postMatchLayer.classList.add('hidden');
                     postMatchLayer.classList.remove('winner-pulse');
                     stopVictoryStars();
+                    stopWinnerLap();
                     initRound();
                 } else {
                     // Player didn't opt in — return to menu
@@ -3854,6 +3859,131 @@
          * Spawn falling stars along the left and right viewport margins.
          * Uses fixed positioning so it works whether the menu is absolute or fixed.
          */
+        // --- WINNER LAP ---
+        // Blazer zooms around the game-container perimeter with a trailing star comet
+        let _winnerLapRAF = null;
+        let _winnerLapCanvas = null;
+
+        function startWinnerLap(color) {
+            stopWinnerLap();
+            const cvs = document.createElement('canvas');
+            cvs.id = 'winner-lap-canvas';
+            cvs.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:10001;';
+            cvs.width  = window.devicePixelRatio * window.innerWidth  | 0;
+            cvs.height = window.devicePixelRatio * window.innerHeight | 0;
+            document.body.appendChild(cvs);
+            _winnerLapCanvas = cvs;
+            const c = cvs.getContext('2d');
+            c.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+            const SPEED      = 0.50;  // laps per second
+            const TRAIL_LEN  = 45;    // number of trail stars
+            const BLAZER_R   = 14;    // px
+            const MAX_STAR_R = 22;    // px — largest trail star
+
+            let t = 0, hue = 0, trail = [], last = performance.now();
+
+            function getRect() {
+                return document.getElementById('game-container').getBoundingClientRect();
+            }
+
+            function perimPos(t) {
+                const r = getRect();
+                const perim = 2 * (r.width + r.height);
+                let d = (((t % 1) + 1) % 1) * perim;
+                if (d <= r.width)  return { x: r.left + d,              y: r.top };
+                d -= r.width;
+                if (d <= r.height) return { x: r.right,                 y: r.top  + d };
+                d -= r.height;
+                if (d <= r.width)  return { x: r.right - d,             y: r.bottom };
+                d -= r.width;
+                                   return { x: r.left,                  y: r.bottom - d };
+            }
+
+            function drawTrailStar(cx, cy, outerR, starHue, alpha) {
+                if (outerR < 1) return;
+                const innerR = outerR * 0.42;
+                c.save();
+                c.translate(cx, cy);
+                c.rotate(starHue * 0.025); // vary orientation by hue
+                c.globalAlpha = alpha;
+                c.beginPath();
+                for (let i = 0; i < 10; i++) {
+                    const a = i * Math.PI / 5 - Math.PI / 2;
+                    const r = i % 2 === 0 ? outerR : innerR;
+                    i === 0 ? c.moveTo(Math.cos(a)*r, Math.sin(a)*r)
+                            : c.lineTo(Math.cos(a)*r, Math.sin(a)*r);
+                }
+                c.closePath();
+                c.fillStyle = '#040412';
+                c.fill();
+                c.strokeStyle = `hsl(${starHue},100%,62%)`;
+                c.lineWidth = Math.max(1, outerR * 0.13);
+                c.shadowBlur  = outerR * 1.4;
+                c.shadowColor = `hsl(${starHue},100%,62%)`;
+                c.stroke();
+                c.shadowBlur = 0;
+                // central spark
+                c.beginPath();
+                c.arc(0, 0, outerR * 0.16, 0, Math.PI * 2);
+                c.fillStyle = '#ffffff';
+                c.shadowBlur  = outerR * 0.6;
+                c.shadowColor = `hsl(${starHue},100%,80%)`;
+                c.fill();
+                c.shadowBlur = 0;
+                c.globalAlpha = 1;
+                c.restore();
+            }
+
+            function frame(now) {
+                const dt = Math.min(now - last, 50);
+                last = now;
+                t   += dt / 1000 * SPEED;
+                hue  = (hue + dt * 0.28) % 360;
+
+                const pos = perimPos(t);
+                trail.unshift({ x: pos.x, y: pos.y, hue });
+                if (trail.length > TRAIL_LEN) trail.pop();
+
+                c.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+                // Trail — stars shrink and fade toward the tail
+                trail.forEach((tp, i) => {
+                    const frac  = 1 - i / TRAIL_LEN;
+                    drawTrailStar(tp.x, tp.y, MAX_STAR_R * frac, tp.hue, frac * 0.92);
+                });
+
+                // Blazer circle
+                c.save();
+                c.translate(pos.x, pos.y);
+                for (let pass = 0; pass < 2; pass++) {
+                    c.beginPath();
+                    c.arc(0, 0, BLAZER_R, 0, Math.PI * 2);
+                    c.fillStyle  = color;
+                    c.shadowBlur  = pass === 0 ? 40 : 18;
+                    c.shadowColor = color;
+                    c.fill();
+                }
+                c.beginPath();
+                c.arc(0, 0, BLAZER_R * 0.38, 0, Math.PI * 2);
+                c.fillStyle  = '#ffffff';
+                c.shadowBlur  = 12;
+                c.shadowColor = '#ffffff';
+                c.fill();
+                c.shadowBlur = 0;
+                c.restore();
+
+                _winnerLapRAF = requestAnimationFrame(frame);
+            }
+            _winnerLapRAF = requestAnimationFrame(frame);
+        }
+
+        function stopWinnerLap() {
+            if (_winnerLapRAF) { cancelAnimationFrame(_winnerLapRAF); _winnerLapRAF = null; }
+            document.getElementById('winner-lap-canvas')?.remove();
+            _winnerLapCanvas = null;
+        }
+
         function startVictoryStars(winnerColor) {
             stopVictoryStars();
             const wrap = document.createElement('div');
