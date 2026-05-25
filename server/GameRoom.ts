@@ -129,10 +129,11 @@ export class GameRoom extends Room<{ state: GameState }> {
         const reservedCells = 1 + 8; // goal + 8 spawn corners/edges
         const availableCells = this.cols * this.rows - reservedCells;
         const maxPuPerType = Math.max(0, Math.floor(availableCells * 0.35));
-        options.puOpp    = Math.min(isNaN(Number(options.puOpp))    ? 10 : Number(options.puOpp),    maxPuPerType);
-        options.puSelf   = Math.min(isNaN(Number(options.puSelf))   ? 10 : Number(options.puSelf),   maxPuPerType);
-        options.puRocket = Math.min(isNaN(Number(options.puRocket)) ? 0  : Number(options.puRocket), maxPuPerType);
-        options.puMirror = Math.min(isNaN(Number(options.puMirror)) ? 0  : Number(options.puMirror), maxPuPerType);
+        options.puOpp     = Math.min(isNaN(Number(options.puOpp))     ? 10 : Number(options.puOpp),     maxPuPerType);
+        options.puSelf    = Math.min(isNaN(Number(options.puSelf))    ? 10 : Number(options.puSelf),    maxPuPerType);
+        options.puRocket  = Math.min(isNaN(Number(options.puRocket))  ? 0  : Number(options.puRocket),  maxPuPerType);
+        options.puMirror  = Math.min(isNaN(Number(options.puMirror))  ? 0  : Number(options.puMirror),  maxPuPerType);
+        options.puMystery = Math.min(isNaN(Number(options.puMystery)) ? 0  : Number(options.puMystery), maxPuPerType);
 
         this.spawnOptions = options;
         this.setState(state);
