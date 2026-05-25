@@ -682,7 +682,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.123</div>
+    <div id="version-number">v1.5.124</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2813,8 +2813,8 @@
             blazers.sort((a, b) => (a.isPlayer === b.isPlayer) ? 0 : a.isPlayer ? 1 : -1);
             blazers.forEach(blazer => { blazer.update(dt); blazer.draw(); });
 
-            // 3 countdown pulses: big → mid → small, each shrinking to the blazer
-            // Pulse 1 fills the full ROUND_START_MS/3, pulse 3 finishes exactly when movement unlocks
+            // 3 countdown pulses: big → mid → small, each expanding outward from the blazer
+            // Pulse 3 finishes exactly when movement unlocks; blazer briefly flashes white at that moment
             if (roundRingTime !== null) {
                 const ringElapsed = now - roundRingTime;
                 const ringDuration = ROUND_START_MS;
@@ -2823,19 +2823,19 @@
                     const pulseDur = ringDuration / PULSE_COUNT;
                     const pulseIdx = Math.min(PULSE_COUNT - 1, Math.floor(ringElapsed / pulseDur)); // 0,1,2
                     const pulseT = (ringElapsed - pulseIdx * pulseDur) / pulseDur; // 0→1 within pulse
-                    // Each pulse starts smaller: big=1.0, mid≈0.67, small≈0.33 of max radius
-                    const startFrac = 1 - pulseIdx / PULSE_COUNT;
-                    // Ease-in collapse — ring snaps shut quickly at the end of each pulse
-                    const shrink = Math.pow(1 - pulseT, 0.65);
-                    // Fade out over the second half of each pulse
-                    const alpha = 0.9 * (1 - Math.pow(pulseT, 2));
+                    // Each pulse reaches a smaller max: big=1.0, mid≈0.67, small≈0.33 of max radius
+                    const endFrac = 1 - pulseIdx / PULSE_COUNT;
+                    // Ease-out expand — fast burst then settles at the edge
+                    const expand = 1 - Math.pow(1 - pulseT, 2);
+                    // Fade out as the ring reaches full size
+                    const alpha = 0.9 * (1 - pulseT);
                     ctx.save();
                     blazers.forEach(b => {
                         if (!b.isLocal) return;
                         const { x: goalPx, y: goalPy } = gridToPixel(goal.x, goal.y);
                         const dx = goalPx - b.pixelX, dy = goalPy - b.pixelY;
                         const maxRadius = Math.sqrt(dx * dx + dy * dy);
-                        const radius = maxRadius * startFrac * shrink;
+                        const radius = maxRadius * endFrac * expand;
                         if (radius < 2) return;
                         ctx.beginPath();
                         ctx.arc(b.pixelX, b.pixelY, radius, 0, Math.PI * 2);
@@ -2850,6 +2850,8 @@
                     ctx.shadowBlur = 0;
                     ctx.restore();
                 } else {
+                    // Final pulse just finished — flash all local blazers white (movement now unlocked)
+                    blazers.forEach(b => { if (b.isLocal) b.flashTimer = 1.0; });
                     roundRingTime = null;
                 }
             }
