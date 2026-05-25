@@ -656,7 +656,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.108</div>
+    <div id="version-number">v1.5.109</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1281,8 +1281,8 @@
 
                 // Smooth visual following
                 const target = gridToPixel(this.gridX, this.gridY);
-                this.pixelX += (target.x - this.pixelX) * 0.4;
-                this.pixelY += (target.y - this.pixelY) * 0.4;
+                this.pixelX += (target.x - this.pixelX) * 0.52;
+                this.pixelY += (target.y - this.pixelY) * 0.52;
 
                 if (this.moveTimer >= this.moveInterval) {
                     this.moveTimer = 0;
@@ -1427,8 +1427,8 @@
                     this.lastPixelX = targetX;
                     this.lastPixelY = targetY;
                 } else {
-                    this.pixelX += (targetX - this.pixelX) * 0.4;
-                    this.pixelY += (targetY - this.pixelY) * 0.4;
+                    this.pixelX += (targetX - this.pixelX) * 0.52;
+                    this.pixelY += (targetY - this.pixelY) * 0.52;
                 }
             }
 
