@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.144</div>
+    <div id="version-number">v1.5.145</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1000,6 +1000,7 @@
         let roundFlashStart = null; // performance.now() timestamp when white flash begins
         let bestTime = parseFloat(localStorage.getItem('blazeTheMazeBestTime')) || null;
         let worstTime = parseFloat(localStorage.getItem('blazeTheMazeWorstTime')) || null;
+        let achRoundRocketHit = false; // local player's rocket hit someone this round
 
         let goal = { x: Math.floor(cols / 2), y: Math.floor(rows / 2) };
 
@@ -1455,6 +1456,7 @@
                             for(let i=0; i<15; i++) particles.push(new Particle(this.pixelX, this.pixelY, this.color));
                             // Report to server — server teleports authoritatively; onStateChange drives the visual
                             if (room) room.send("rocket_hit", { rocketId: this.id, targetSessionId: b.sessionId });
+                            if (this.ownerSessionId === room?.sessionId) achRoundRocketHit = true;
                         }
                     });
                 }
@@ -2043,6 +2045,10 @@
         }
 
         // --- MATCH & ROUND LOGIC ---
+        function unlockAchievement(apiName) {
+            window.electronAPI?.unlockAchievement?.(apiName);
+        }
+
         function formatTime(ms) {
             let totalSeconds = Math.floor(ms / 1000);
             let minutes = Math.floor(totalSeconds / 60);
@@ -3672,9 +3678,16 @@
 
                     const isLocalWinner = winnerBlazer?.isLocal;
                     if (isLocalWinner) {
+                        const prevBest = bestTime;
                         if (bestTime === null || matchTime < bestTime) { bestTime = matchTime; localStorage.setItem('blazeTheMazeBestTime', bestTime); }
                         if (worstTime === null || matchTime > worstTime) { worstTime = matchTime; localStorage.setItem('blazeTheMazeWorstTime', worstTime); }
                         pmSubtitle.innerHTML = `You won the Best-of-3!<br>Match Time: ${formatTime(matchTime)}<br>Fastest Round: ${formatTime(fastestRoundTime)}<br>Best Match Ever: ${formatTime(bestTime)} | Worst: ${formatTime(worstTime)}`;
+
+                        unlockAchievement('ACH_WIN_ROUND');
+                        unlockAchievement('ACH_WIN_MATCH');
+                        if (roundTimes.length === 3 && roundTimes.every(rt => rt.winnerId === winnerId)) unlockAchievement('ACH_HATRICK');
+                        if (achRoundRocketHit) unlockAchievement('ACH_ROCKET_WIN');
+                        if (prevBest === null || matchTime < prevBest) unlockAchievement('ACH_PERSONAL_BEST');
                     } else {
                         pmSubtitle.innerHTML = `${winnerId} won the Best-of-3!<br>Match Time: ${formatTime(matchTime)}<br>Fastest Round: ${formatTime(fastestRoundTime)}`;
                     }
@@ -3693,6 +3706,13 @@
                     currentWinner = winnerBlazer || { id: winnerId, color: winnerColor };
                     roundCountdown = 3000;
                     startVictoryStars(winnerColor);
+
+                    if (winnerBlazer?.isLocal) {
+                        unlockAchievement('ACH_WIN_ROUND');
+                        if (currentRoundTime < 12000) unlockAchievement('ACH_SPEED_DEMON');
+                        if (achRoundRocketHit) unlockAchievement('ACH_ROCKET_WIN');
+                    }
+                    achRoundRocketHit = false;
 
                     animatingScoreIds.add(winnerId);
 
@@ -3733,6 +3753,7 @@
                 currentWinner = null;
                 roundTimes = [];
                 matchTime = 0;
+                achRoundRocketHit = false;
                 blazers.forEach(b => {
                     b.state = 'normal';
                     b.stateTimer = 0;

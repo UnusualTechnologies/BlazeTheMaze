@@ -121,3 +121,13 @@ ipcMain.handle('steam:set-rich-presence', (_event, status) => {
     console.warn('Failed to set rich presence:', e.message)
   }
 })
+
+ipcMain.handle('steam:unlock-achievement', (_event, apiName) => {
+  if (!steamClient) return
+  try {
+    steamClient.achievement.activate(apiName)
+    console.log('Achievement unlocked:', apiName)
+  } catch (e) {
+    console.warn('Failed to unlock achievement:', apiName, e.message)
+  }
+})
