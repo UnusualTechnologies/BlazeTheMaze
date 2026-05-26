@@ -4,14 +4,12 @@ on:
   push:
     branches: [master]
 
-permissions:
-  contents: read
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.2.2
+      - name: Clone repo (public, no token needed)
+        run: git clone https://github.com/UnusualTechnologies/BlazeTheMaze.git .
 
       - name: Package game
         run: zip blaze-the-maze.zip index.html assets -r
