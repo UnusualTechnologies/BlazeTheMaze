@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blaze the Maze</title>
+    <script src="https://browser.sentry-cdn.com/7.60.0/bundle.min.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/@colyseus/sdk@0.17.0/dist/colyseus.js"></script>
     <style>
         * {
@@ -686,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.135</div>
+    <div id="version-number">v1.5.136</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -833,6 +834,12 @@
     </div>
 
     <script>
+        // --- ERROR MONITORING ---
+        Sentry.init({
+            dsn: 'https://26e32c9a0c7a4f6e857f255d14fe9cb2@glitchtip.unusualtechnologies.com/15',
+            tracesSampleRate: 0.2,   // capture 20% of transactions for performance tracing
+        });
+
         // --- BULLETPROOF AUDIO SYSTEM ---
         const Synth = {
             ctx: { state: 'running', resume: () => {} }, // Keep dummy for legacy UI code
