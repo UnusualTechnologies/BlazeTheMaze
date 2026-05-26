@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.148</div>
+    <div id="version-number">v1.5.149</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -4286,9 +4286,9 @@
                 try {
                     newRoom = await withTimeout(client.joinOrCreate("game", settings), 10000);
                 } catch (joinErr) {
-                    // Stale seat reservation (zombie room being torn down) — retry with a fresh create
+                    // All existing rooms are full, or stale seat reservation — create a fresh room
                     const msg = colyseusErrorText(joinErr).toLowerCase();
-                    if (msg.includes('seat reservation')) {
+                    if (msg.includes('seat reservation') || msg.includes('room_full') || msg.includes('full')) {
                         newRoom = await withTimeout(client.create("game", settings), 10000);
                     } else {
                         throw joinErr;
