@@ -674,9 +674,9 @@ export class GameRoom extends Room<{ state: GameState }> {
         spawnFrom(deadEnds,  puSelf,    "self");
         spawnFrom(deadEnds,  puRocket,  "rocket");
         spawnFrom(corridors, puMirror,  "mirror");  // on the critical path — players run into these naturally
-        spawnFrom(corridors, puMystery, "mystery"); // mid-path so players encounter them during the race
+        spawnFrom(deadEnds,  puMystery, "mystery"); // dead-ends — must be sought out
         spawnFrom(deadEnds,  puFreeze,  "freeze");  // dead-ends — powerful, should be sought out
-        spawnFrom(corridors, puBeacon,  "beacon");  // corridors — encountered naturally on the way to goal
+        spawnFrom(deadEnds,  puBeacon,  "beacon");  // dead-ends — reward for exploration
     }
 
     // --- Collision & Teleport ---
@@ -720,7 +720,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                 });
                 this.broadcast("freeze", { collectorSessionId: sessionId, duration: 3000 });
             } else if (pu.type === "beacon") {
-                this.broadcast("beacon", { collectorSessionId: sessionId, duration: 8000 });
+                this.broadcast("beacon", { collectorSessionId: sessionId, duration: 4000 });
             } else if (pu.type === "mystery") {
                 const MYSTERY_TYPES = ["opponents", "self", "rocket", "mirror", "freeze", "beacon"] as const;
                 const resolvedType = MYSTERY_TYPES[Math.floor(Date.now() / 200) % MYSTERY_TYPES.length];
@@ -750,7 +750,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                     });
                     this.broadcast("freeze", { collectorSessionId: sessionId, duration: 3000 });
                 } else if (resolvedType === "beacon") {
-                    this.broadcast("beacon", { collectorSessionId: sessionId, duration: 8000 });
+                    this.broadcast("beacon", { collectorSessionId: sessionId, duration: 4000 });
                 }
                 // "rocket" — no server-side action; client handles it via mystery_resolved
 
