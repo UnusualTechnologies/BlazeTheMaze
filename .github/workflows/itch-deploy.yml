@@ -11,13 +11,15 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Package game
-        run: zip blaze-the-maze.zip index.html
+        run: zip blaze-the-maze.zip index.html assets -r
 
-      - name: Upload to itch.io
-        uses: josephbmanley/butler-publish-itchio-action@master
+      - name: Download Butler
+        run: |
+          curl -L -o butler.zip https://broth.itch.ovh/butler/linux-amd64/LATEST/archive/default
+          unzip butler.zip
+          chmod +x butler
+
+      - name: Push to itch.io
+        run: ./butler push blaze-the-maze.zip unusual-technologies/blaze-the-maze:html5
         env:
-          BUTLER_CREDENTIALS: ${{ secrets.BUTLER_CREDENTIALS }}
-          CHANNEL: html5
-          ITCH_GAME: blaze-the-maze
-          ITCH_USER: unusual-technologies
-          PACKAGE: blaze-the-maze.zip
+          BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
