@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.146</div>
+    <div id="version-number">v1.5.147</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3528,10 +3528,10 @@
                     const isLocal = sessionId === room.sessionId;
                     // Secondary local: an AI-held 'local' slot that this client owns (co-op on same machine)
                     const slotIndex = playerState.slotIndex;
-                    const isSecondaryLocal = !isLocal && playerState.isAI &&
-                        Object.prototype.hasOwnProperty.call(localSlotSchemes, slotIndex);
+                    const secondaryScheme = localSlotSchemes[slotIndex] ?? pendingOwnerSlotSchemes[slotIndex];
+                    const isSecondaryLocal = !isLocal && playerState.isAI && secondaryScheme !== undefined;
                     const effectiveScheme = isLocal ? localControlScheme
-                        : isSecondaryLocal ? localSlotSchemes[slotIndex] : 'WASD';
+                        : isSecondaryLocal ? secondaryScheme : 'WASD';
 
                     if (!blazer) {
                         // Create new blazer for joined player
@@ -3550,10 +3550,11 @@
                         blazers.push(blazer);
                         updateDpad();
                     } else {
-                        // Ensure isLocal and isPlayer status is always correct
+                        // Ensure isLocal, isPlayer, and controlScheme are always correct
                         blazer.isLocal = isLocal || isSecondaryLocal;
                         blazer.isSecondaryLocal = isSecondaryLocal;
                         blazer.isPlayer = !playerState.isAI || isSecondaryLocal;
+                        blazer.controlScheme = effectiveScheme;
 
                         // Freeze position updates during round-over countdown — server is frozen too,
                         // so any position change here would be the reset teleport arriving early.
