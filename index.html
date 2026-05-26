@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.147</div>
+    <div id="version-number">v1.5.148</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -4889,8 +4889,8 @@
             resizeCanvas();
             updateGridSizeInputLimits();
 
-            gridSizeInput.addEventListener('input', clampGridSizeInput);
-            gridSizeInput.addEventListener('change', () => { gridSizeManualFlag = true; });
+            gridSizeInput.addEventListener('blur', clampGridSizeInput);
+            gridSizeInput.addEventListener('change', () => { gridSizeManualFlag = true; clampGridSizeInput(); });
         };
     </script>
 </body>
