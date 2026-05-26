@@ -19,8 +19,19 @@ jobs:
           curl -L -o butler.zip https://broth.itch.ovh/butler/linux-amd64/LATEST/archive/default
           unzip butler.zip
           chmod +x butler
+          ./butler --version
+
+      - name: Check API key is set
+        run: |
+          if [ -z "$BUTLER_API_KEY" ]; then
+            echo "ERROR: BUTLER_CREDENTIALS secret is missing or empty"
+            exit 1
+          fi
+          echo "API key is set (length: ${#BUTLER_API_KEY})"
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
 
       - name: Push to itch.io
-        run: ./butler push blaze-the-maze.zip unusual-technologies/blaze-the-maze:html5
+        run: ./butler push blaze-the-maze.zip unusual-technologies/blaze-the-maze:html5 --verbose
         env:
           BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
