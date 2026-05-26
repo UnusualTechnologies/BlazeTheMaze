@@ -686,7 +686,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.133</div>
+    <div id="version-number">v1.5.134</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3922,14 +3922,6 @@
                 c.shadowBlur  = outerR * 1.4;
                 c.shadowColor = `hsl(${starHue},100%,62%)`;
                 c.stroke();
-                c.shadowBlur = 0;
-                // central spark
-                c.beginPath();
-                c.arc(0, 0, outerR * 0.16, 0, Math.PI * 2);
-                c.fillStyle = '#ffffff';
-                c.shadowBlur  = outerR * 0.6;
-                c.shadowColor = `hsl(${starHue},100%,80%)`;
-                c.fill();
                 c.shadowBlur = 0;
                 c.globalAlpha = 1;
                 c.restore();
