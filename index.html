@@ -686,7 +686,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.134</div>
+    <div id="version-number">v1.5.135</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -785,6 +785,10 @@
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <input type="checkbox" id="orb-leader-toggle" checked style="width: 20px; height: 20px; cursor: pointer;">
                         <label for="orb-leader-toggle" style="font-size: 1.2rem; cursor: pointer; user-select: none;">Teleport Other: Target Leader Only</label>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <input type="checkbox" id="tap-only-toggle" style="width: 20px; height: 20px; cursor: pointer;">
+                        <label for="tap-only-toggle" style="font-size: 1.2rem; cursor: pointer; user-select: none;">Tap Only Controls</label>
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                         <label for="pu-rocket-input" style="font-size: 1.2rem;">Rockets:</label>
@@ -927,6 +931,7 @@
         const puFreezeInput   = document.getElementById('pu-freeze-input');
         const puBeaconInput   = document.getElementById('pu-beacon-input');
         const orbLeaderToggle = document.getElementById('orb-leader-toggle');
+        const tapOnlyToggle   = document.getElementById('tap-only-toggle');
         const pmNextGameBtn   = document.getElementById('pm-next-game-btn');
 
         let width, height;
@@ -1223,6 +1228,7 @@
                 puBeacon:      puBeaconInput.value,
                 collisions:    document.getElementById('collisions-toggle').checked,
                 orbLeader:     orbLeaderToggle.checked,
+                tapOnly:       tapOnlyToggle.checked,
                 slots:         lobbySlots.map(s => ({
                     mode:        s.typeSelect.value,
                     control:     s.controlSelect.value,
@@ -1270,6 +1276,7 @@
             puBeaconInput.value  = s.puBeacon;
             document.getElementById('collisions-toggle').checked = s.collisions;
             orbLeaderToggle.checked = s.orbLeader;
+            tapOnlyToggle.checked   = s.tapOnly ?? false;
             // 4. Restore the actual manual-flag state (not the all-locked state from step 1)
             puManualFlags      = new Set(s.puManualFlags);
             gridSizeManualFlag = s.gridSizeManual;
@@ -1629,7 +1636,9 @@
                                 const idx = this.heldDirections.indexOf(this.turnIntent.dir);
                                 if (idx > -1) {
                                     this.heldDirections.splice(idx, 1);
-                                    this.heldDirections.unshift(this.turnIntent.dir);
+                                    if (!tapOnlyToggle.checked) {
+                                        this.heldDirections.unshift(this.turnIntent.dir);
+                                    }
                                 }
 
                                 this.turnIntent = null; // consume intent
@@ -1646,9 +1655,11 @@
                                     this.executeMove(dx, dy);
                                     moved = true;
 
-                                    // Deprioritize the successfully executed direction by moving it to the start of the array
+                                    // In tap-only mode, consume the direction so the key must be re-pressed
                                     this.heldDirections.splice(i, 1);
-                                    this.heldDirections.unshift(rawDir);
+                                    if (!tapOnlyToggle.checked) {
+                                        this.heldDirections.unshift(rawDir);
+                                    }
                                     break;
                                 }
                             }
