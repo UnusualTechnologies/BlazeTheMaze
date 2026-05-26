@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.145</div>
+    <div id="version-number">v1.5.146</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -835,10 +835,12 @@
 
     <script>
         // --- ERROR MONITORING ---
-        Sentry.init({
-            dsn: 'https://26e32c9a0c7a4f6e857f255d14fe9cb2@glitchtip.unusualtechnologies.com/15',
-            tracesSampleRate: 0.2,   // capture 20% of transactions for performance tracing
-        });
+        if (typeof Sentry !== 'undefined') {
+            Sentry.init({
+                dsn: 'https://26e32c9a0c7a4f6e857f255d14fe9cb2@glitchtip.unusualtechnologies.com/15',
+                tracesSampleRate: 0.2,
+            });
+        }
 
         // --- BULLETPROOF AUDIO SYSTEM ---
         const Synth = {
