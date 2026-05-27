@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.159</div>
+    <div id="version-number">v1.5.166</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -719,7 +719,7 @@
                 <div class="pm-buttons-vertical">
                     <button class="action-btn" id="pm-next-game-btn" disabled
                             style="display:none; opacity:0.4; cursor:not-allowed;">
-                        30 until next game starts
+                        Next game starting in 30
                     </button>
                     <button class="action-btn secondary-btn" id="menu-btn">Main Menu</button>
                 </div>
@@ -747,7 +747,7 @@
                 </div>
                 <h1 id="menu-title">BLAZE THE MAZE</h1>
                 <canvas id="menu-mini-canvas" width="550" height="150"></canvas>
-                <button class="action-btn" id="quick-start-btn">Race!</button>
+                <button class="action-btn" id="quick-start-btn">Blaze!</button>
 
                 <button class="action-btn tertiary-btn" id="custom-settings-btn">Custom</button>
 
@@ -815,14 +815,14 @@
 
                 <div class="btn-group">
                     <button class="action-btn secondary-btn" id="lobby-back-btn">Back</button>
-                    <button class="action-btn" id="start-btn">Race!</button>
+                    <button class="action-btn" id="start-btn">Blaze!</button>
                 </div>
             </div>
         </div>
 
         <!-- Bottom controls: timer + scoreboard (left) | dpad (right, spans both rows) -->
         <div id="hud" class="hidden">
-            <div id="timer">00:00.000</div>
+            <div id="timer">00:00.0</div>
             <div id="scoreboard"></div>
             <div id="dpad" class="hidden">
                 <button class="dpad-btn" data-dir="up">▲</button>
@@ -2073,7 +2073,7 @@
             let minutes = Math.floor(totalSeconds / 60);
             let seconds = totalSeconds % 60;
             let millis = Math.floor(ms % 1000);
-            return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${millis.toString().padStart(3, '0')}`;
+            return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${Math.floor(millis / 100)}`;
         }
 
         function updateScoreboard() {
@@ -2208,15 +2208,15 @@
         // Called when a match ends; drives the countdown button until match_reset arrives.
         function startMatchEndTimer() {
             const MATCH_END_WAIT = 30000;
-            const JOIN_UNLOCK_MS  = 25000; // unlock room at 25 s → 5 s remaining
+            const JOIN_ACTIVE_MS = 5000; // join window: first 5 s after game ends
             pmJoinIntent = false;
             const btn = pmNextGameBtn;
             if (btn) {
                 btn.style.display = '';
-                btn.disabled = true;
-                btn.style.opacity = '0.4';
-                btn.style.cursor = 'not-allowed';
-                btn.textContent = '30 until next game starts';
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+                btn.textContent = 'Game available - Join now (5)';
                 btn.onclick = () => {
                     if (btn.disabled) return;
                     pmJoinIntent = true;
@@ -2231,15 +2231,16 @@
                 const elapsed  = Date.now() - startTime;
                 const secsLeft = Math.max(0, Math.ceil((MATCH_END_WAIT - elapsed) / 1000));
                 if (btn && !pmJoinIntent) {
-                    if (elapsed >= JOIN_UNLOCK_MS) {
-                        if (btn.disabled) {
-                            btn.disabled = false;
-                            btn.style.opacity = '1';
-                            btn.style.cursor = 'pointer';
-                        }
-                        btn.textContent = `${secsLeft} until next game — Click now to join it`;
+                    if (elapsed < JOIN_ACTIVE_MS) {
+                        const joinSecs = Math.ceil((JOIN_ACTIVE_MS - elapsed) / 1000);
+                        btn.textContent = `Game available - Join now (${joinSecs})`;
                     } else {
-                        btn.textContent = `${secsLeft} until next game starts`;
+                        if (!btn.disabled) {
+                            btn.disabled = true;
+                            btn.style.opacity = '0.4';
+                            btn.style.cursor = 'not-allowed';
+                        }
+                        btn.textContent = `Next game starting in ${secsLeft}`;
                     }
                 }
                 if (elapsed >= MATCH_END_WAIT) {
@@ -2976,14 +2977,14 @@
                 ctx.shadowBlur = 20;
                 ctx.shadowColor = currentWinner.color;
                 ctx.fillStyle = currentWinner.color;
-                ctx.fillText(`${currentWinner.id} Wins Round!`, width / 2, height / 2 - titleSize * 0.2);
+                ctx.fillText(`${currentWinner.id} Wins the Round!`, width / 2, height / 2 - titleSize * 0.2);
 
                 ctx.fillStyle = "#fff";
                 ctx.font = `bold ${subSize}px monospace`;
                 ctx.shadowColor = "#000";
                 ctx.shadowBlur = 5;
                 if (secondsLeft > 0) {
-                    ctx.fillText(`${secondsLeft} second${secondsLeft !== 1 ? 's' : ''} to next round...`, width / 2, height / 2 + subSize * 1.5);
+                    ctx.fillText(`Next round in ${secondsLeft}...`, width / 2, height / 2 + subSize * 1.5);
                 } else {
                     ctx.fillText(`Next round starting...`, width / 2, height / 2 + subSize * 1.5);
                 }
@@ -3950,12 +3951,13 @@
             const c = cvs.getContext('2d');
             c.scale(window.devicePixelRatio, window.devicePixelRatio);
 
-            const SPEED      = 0.25;  // laps per second
-            const TRAIL_LEN  = 45;    // number of trail stars
-            const BLAZER_R   = 14;    // px
-            const MAX_STAR_R = 22;    // px — largest trail star
+            const SPEED    = 0.25; // laps per second
+            const BLAZER_R = 14;   // px
+            const STAR_R   = 10;   // px — trailing star radius
+            // Lag offsets (fractions of a lap) for the 3 trailing stars
+            const STAR_LAGS = [0.055, 0.115, 0.195];
 
-            let t = 0, hue = 0, trail = [], last = performance.now();
+            let t = 0, hue = 0, last = performance.now();
 
             function getRect() {
                 return document.getElementById('game-container').getBoundingClientRect();
@@ -4008,35 +4010,34 @@
                 hue  = (hue + dt * 0.28) % 360;
 
                 const pos = perimPos(t);
-                trail.unshift({ x: pos.x, y: pos.y, hue });
-                if (trail.length > TRAIL_LEN) trail.pop();
 
                 c.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
-                // Trail — stars shrink and fade toward the tail
-                trail.forEach((tp, i) => {
-                    const frac  = 1 - i / TRAIL_LEN;
-                    drawTrailStar(tp.x, tp.y, MAX_STAR_R * frac, tp.hue, frac * 0.92);
+                // 3 trailing stars — each at a fixed lag behind the blazer
+                STAR_LAGS.forEach((lag, i) => {
+                    const sp = perimPos(t - lag);
+                    drawTrailStar(sp.x, sp.y, STAR_R, (hue - i * 40 + 360) % 360, 0.9 - i * 0.15);
                 });
 
-                // Blazer circle
+                // Blazer — triple-pass bloom matching in-game appearance
                 c.save();
                 c.translate(pos.x, pos.y);
-                for (let pass = 0; pass < 2; pass++) {
+                const bloomPasses = [
+                    { blur: 80, alpha: 0.75 },
+                    { blur: 40, alpha: 0.75 },
+                    { blur: 15, alpha: 0.75 },
+                ];
+                for (const { blur, alpha } of bloomPasses) {
                     c.beginPath();
                     c.arc(0, 0, BLAZER_R, 0, Math.PI * 2);
-                    c.fillStyle  = color;
-                    c.shadowBlur  = pass === 0 ? 40 : 18;
+                    c.fillStyle   = color;
+                    c.shadowBlur  = blur;
                     c.shadowColor = color;
+                    c.globalAlpha = alpha;
                     c.fill();
                 }
-                c.beginPath();
-                c.arc(0, 0, BLAZER_R * 0.38, 0, Math.PI * 2);
-                c.fillStyle  = '#ffffff';
-                c.shadowBlur  = 12;
-                c.shadowColor = '#ffffff';
-                c.fill();
-                c.shadowBlur = 0;
+                c.shadowBlur  = 0;
+                c.globalAlpha = 1;
                 c.restore();
 
                 _winnerLapRAF = requestAnimationFrame(frame);
@@ -4133,6 +4134,29 @@
                 })),
                 ...overrides
             };
+        }
+
+        // buildDefaultSettings: like buildLobbySettings but ignores all custom PU/grid values.
+        // Always applies the auto-scale formula for the current slot count.
+        function buildDefaultSettings(overrides = {}) {
+            const n = lobbySlots.filter(s => {
+                const v = s.typeSelect.value;
+                return v !== 'inactive' && v !== 'friend_only';
+            }).length;
+            const gridSize = Math.min(28, Math.max(20, 20 + Math.round((n - 2) * 4 / 3)));
+            return buildLobbySettings({
+                cols:          gridSize,
+                rows:          gridSize,
+                puOpp:         Math.max(0, 7 - (n - 1)),
+                puSelf:        Math.max(0, 7 - (n - 1)),
+                puRocket:      Math.max(0, 4 - Math.floor((n - 1) / 2)),
+                puMirror:      0,
+                puMystery:     0,
+                puFreeze:      3,
+                puBeacon:      0,
+                orbLeaderOnly: true,
+                ...overrides
+            });
         }
 
         /**
@@ -4309,8 +4333,8 @@
             const _slowTimer1 = setTimeout(showSlowConnectionToast, 5000);
             try {
                 if (!client) throw new Error('Colyseus client not initialised — check your connection.');
-                // Build settings from the lobby UI so Quick Start respects the player's configured slots
-                const settings = buildLobbySettings();
+                // Race always uses default settings regardless of custom menu state
+                const settings = buildDefaultSettings();
                 initControlSchemeState();
 
                 gameState = 'CONNECTING';
@@ -4901,10 +4925,8 @@
         window.onload = () => {
             buildLobby();
 
-            // Restore manually-saved PU values from a previous session.
-            // loadPuFromLocalStorage flags them so auto-scaling won't overwrite them
-            // until the player re-enters the custom menu (which clears puManualFlags).
-            loadPuFromLocalStorage();
+            // Custom settings always start at defaults on launch; within-session
+            // persistence is handled by savedLobbyState (in-memory only).
             updatePowerUpDefaults();
 
             // Flag any input the player edits and persist the value
