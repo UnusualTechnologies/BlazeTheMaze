@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.170</div>
+    <div id="version-number">v1.5.171</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2445,27 +2445,24 @@
                 ctx.fillRect(0, 0, width, height);
                 ctx.globalAlpha = 1.0;
 
-                // Chromatic aberration: red/cyan edge fringing when match point is close
-                if (aboutToWin && tension > 0.45 && pulse > 0.3) {
-                    const strength = tension * pulse * 5;
+                // Chromatic aberration: red/cyan vertical edge bars when on match point
+                if (aboutToWin && tension > 0.3) {
+                    const edgeAlpha = tension * pulse * 0.55;
+                    const edgeWidth = width * (0.12 + tension * 0.10);
                     ctx.save();
                     ctx.globalCompositeOperation = 'screen';
-                    const redGrad = ctx.createRadialGradient(
-                        width / 2 + strength, height / 2, Math.min(width, height) * 0.15,
-                        width / 2 + strength, height / 2, Math.max(width, height) * 0.85
-                    );
-                    redGrad.addColorStop(0, 'rgba(0,0,0,0)');
-                    redGrad.addColorStop(1, `rgba(255,0,0,${tension * pulse * 0.18})`);
-                    ctx.fillStyle = redGrad;
-                    ctx.fillRect(0, 0, width, height);
-                    const cyanGrad = ctx.createRadialGradient(
-                        width / 2 - strength, height / 2, Math.min(width, height) * 0.15,
-                        width / 2 - strength, height / 2, Math.max(width, height) * 0.85
-                    );
-                    cyanGrad.addColorStop(0, 'rgba(0,0,0,0)');
-                    cyanGrad.addColorStop(1, `rgba(0,255,255,${tension * pulse * 0.18})`);
-                    ctx.fillStyle = cyanGrad;
-                    ctx.fillRect(0, 0, width, height);
+                    // Cyan bleeds in from the left
+                    const leftGrad = ctx.createLinearGradient(0, 0, edgeWidth, 0);
+                    leftGrad.addColorStop(0, `rgba(0,255,255,${edgeAlpha})`);
+                    leftGrad.addColorStop(1, 'rgba(0,255,255,0)');
+                    ctx.fillStyle = leftGrad;
+                    ctx.fillRect(0, 0, edgeWidth, height);
+                    // Red bleeds in from the right
+                    const rightGrad = ctx.createLinearGradient(width - edgeWidth, 0, width, 0);
+                    rightGrad.addColorStop(0, 'rgba(255,0,0,0)');
+                    rightGrad.addColorStop(1, `rgba(255,0,0,${edgeAlpha})`);
+                    ctx.fillStyle = rightGrad;
+                    ctx.fillRect(width - edgeWidth, 0, edgeWidth, height);
                     ctx.restore();
                 }
             }
