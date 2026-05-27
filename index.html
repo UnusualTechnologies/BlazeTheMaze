@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.174</div>
+    <div id="version-number">v1.5.175</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2508,14 +2508,12 @@
             }
             ctx.stroke();
 
-            // Wall glow: walls within ~1.25 cells of any blazer light up in their colour
+            // Wall glow: only the walls of the blazer's current cell light up in their colour
             if (blazers.length > 0) {
-                const glowRange = 1.25;
                 blazers.forEach(blazer => {
-                    const minGX = Math.max(0, Math.floor(blazer.gridX - glowRange));
-                    const maxGX = Math.min(cols - 1, Math.ceil(blazer.gridX + glowRange));
-                    const minGY = Math.max(0, Math.floor(blazer.gridY - glowRange));
-                    const maxGY = Math.min(rows - 1, Math.ceil(blazer.gridY + glowRange));
+                    const wcell = grid[blazer.gridX]?.[blazer.gridY];
+                    if (!wcell?.walls) return;
+                    const wcx = blazer.gridX * cellSize, wcy = blazer.gridY * cellSize;
                     ctx.save();
                     ctx.strokeStyle = blazer.color;
                     ctx.lineWidth = Math.max(1, cellSize * 0.12);
@@ -2524,18 +2522,10 @@
                     ctx.shadowColor = blazer.color;
                     ctx.globalAlpha = 0.38;
                     ctx.beginPath();
-                    for (let wx = minGX; wx <= maxGX; wx++) {
-                        for (let wy = minGY; wy <= maxGY; wy++) {
-                            const wcell = grid[wx]?.[wy];
-                            if (!wcell?.walls) continue;
-                            if (Math.hypot(wx - blazer.gridX, wy - blazer.gridY) > glowRange) continue;
-                            const wcx = wx * cellSize, wcy = wy * cellSize;
-                            if (wcell.walls[0]) { ctx.moveTo(wcx, wcy); ctx.lineTo(wcx + cellSize, wcy); }
-                            if (wcell.walls[1]) { ctx.moveTo(wcx + cellSize, wcy); ctx.lineTo(wcx + cellSize, wcy + cellSize); }
-                            if (wcell.walls[2]) { ctx.moveTo(wcx, wcy + cellSize); ctx.lineTo(wcx + cellSize, wcy + cellSize); }
-                            if (wcell.walls[3]) { ctx.moveTo(wcx, wcy); ctx.lineTo(wcx, wcy + cellSize); }
-                        }
-                    }
+                    if (wcell.walls[0]) { ctx.moveTo(wcx,            wcy);            ctx.lineTo(wcx + cellSize, wcy);            }
+                    if (wcell.walls[1]) { ctx.moveTo(wcx + cellSize, wcy);            ctx.lineTo(wcx + cellSize, wcy + cellSize); }
+                    if (wcell.walls[2]) { ctx.moveTo(wcx,            wcy + cellSize); ctx.lineTo(wcx + cellSize, wcy + cellSize); }
+                    if (wcell.walls[3]) { ctx.moveTo(wcx,            wcy);            ctx.lineTo(wcx,            wcy + cellSize); }
                     ctx.stroke();
                     ctx.restore();
                 });
