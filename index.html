@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.154</div>
+    <div id="version-number">v1.5.155</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -792,16 +792,16 @@
                         <label for="tap-only-toggle" style="font-size: 1.2rem; cursor: pointer; user-select: none;">Tap Only Controls</label>
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                        <label for="pu-rocket-input" style="font-size: 1.2rem;">Rockets:</label>
+                        <label for="pu-rocket-input" style="font-size: 1.2rem;">Homing Missiles:</label>
                         <input type="number" id="pu-rocket-input" value="5" min="0" max="20" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                         <label for="pu-mirror-input" style="font-size: 1.2rem;">Mirror Controls:</label>
-                        <input type="number" id="pu-mirror-input" value="5" min="0" max="20" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
+                        <input type="number" id="pu-mirror-input" value="0" min="0" max="20" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                         <label for="pu-mystery-input" style="font-size: 1.2rem;">Mystery:</label>
-                        <input type="number" id="pu-mystery-input" value="3" min="0" max="20" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
+                        <input type="number" id="pu-mystery-input" value="0" min="0" max="20" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                         <label for="pu-freeze-input" style="font-size: 1.2rem;">Freeze:</label>
@@ -809,7 +809,7 @@
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                         <label for="pu-beacon-input" style="font-size: 1.2rem;">Path Guide:</label>
-                        <input type="number" id="pu-beacon-input" value="3" min="0" max="20" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
+                        <input type="number" id="pu-beacon-input" value="0" min="0" max="20" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
                     </div>
                 </div>
 
@@ -1192,8 +1192,8 @@
         // ── Auto-scale power-up counts and grid size to player count ─────────
         // Formulas (n = number of active players):
         //   Teleport Other / Self : 10 − (n−1)         [−1 per extra player]
-        //   Rockets               : 4  − ⌊(n−1)/2⌋    [−1 per 2 extra players]
-        //   Mirror Controls       : 9  − (n−1)         [−1 per extra player]
+        //   Homing Missiles       : 4  − ⌊(n−1)/2⌋    [−1 per 2 extra players]
+        //   Mirror Controls       : 0  (off by default)
         //   Grid Size             : 20 → 28 over 2–8p  [20 + round((n−2)×4/3)]
         // Inputs that were manually edited (puManualFlags / gridSizeManualFlag) are left unchanged.
         function updatePowerUpDefaults() {
@@ -1206,10 +1206,10 @@
                 opp:     Math.max(0, 10 - (n - 1)),
                 self:    Math.max(0, 10 - (n - 1)),
                 rocket:  Math.max(0, 4  - Math.floor((n - 1) / 2)),
-                mirror:  Math.max(0, 9  - (n - 1)),
-                mystery: 3, // flat — wildcard power-up count doesn't scale with player count
+                mirror:  0,
+                mystery: 0, // off by default
                 freeze:  3, // flat — more players = more satisfying freeze, keep count constant
-                beacon:  3, // flat — path guide; useful regardless of player count
+                beacon:  0, // off by default
             };
 
             PU_KEYS.forEach(k => {
@@ -1397,7 +1397,7 @@
                 this.id = id;
                 this.ownerSessionId = ownerSessionId; // activator — immune to their own rocket
                 this.moveTimer = 0;
-                this.moveInterval = 100; // Zooms at 100ms per square
+                this.moveInterval = 50; // Zooms at 50ms per square
                 this.life = true;
                 this.angle = 0;
                 this.stepsTaken = 0;
