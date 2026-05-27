@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.151</div>
+    <div id="version-number">v1.5.152</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1528,6 +1528,8 @@
                 this.heldDirections = [];
                 this.turnIntent = null;
                 this.swipeIntent = null;
+                this.dirKeyDownTimes = {}; // dir → performance.now() when key was pressed
+                this.dirMoveFired = {};    // dir → true once first move fires this press
 
                 this.state = 'normal'; 
                 this.stateTimer = 0;
@@ -1640,15 +1642,17 @@
                             const { dx, dy } = dirToDxDy(this.turnIntent.dir);
 
                             if (this.canMove(dx, dy)) {
+                                const intentDir = this.turnIntent.dir; // save before nulling
                                 this.executeMove(dx, dy);
                                 moved = true;
+                                this.dirMoveFired[intentDir] = true;
 
                                 // Sync buffer with held directions to preserve alternating behavior
-                                const idx = this.heldDirections.indexOf(this.turnIntent.dir);
+                                const idx = this.heldDirections.indexOf(intentDir);
                                 if (idx > -1) {
                                     this.heldDirections.splice(idx, 1);
                                     if (!tapOnlyToggle.checked) {
-                                        this.heldDirections.unshift(this.turnIntent.dir);
+                                        this.heldDirections.unshift(intentDir);
                                     }
                                 }
 
@@ -1657,14 +1661,27 @@
                         }
 
                         // 2. Check currently held directions (incorporates original fast-turn / zigzag logic)
+                        // TAP_REPEAT_DELAY: after the first move fires, a second move in the same direction
+                        // only fires if the key has been held for at least this long. This means a quick
+                        // tap (< 200 ms) always moves exactly 1 cell; a genuine hold gets auto-repeat.
+                        const TAP_REPEAT_DELAY_MS = 200;
                         if (!moved) {
                             for (let i = this.heldDirections.length - 1; i >= 0; i--) {
                                 const rawDir = this.heldDirections[i];
                                 const { dx, dy } = dirToDxDy(rawDir);
 
+                                // Skip repeat if first move already fired and key not held long enough.
+                                // Only applies to keyboard (dirKeyDownTimes is set on keydown, not for gamepad).
+                                if (this.dirMoveFired[rawDir] &&
+                                    rawDir in this.dirKeyDownTimes &&
+                                    now - this.dirKeyDownTimes[rawDir] < TAP_REPEAT_DELAY_MS) {
+                                    continue;
+                                }
+
                                 if (this.canMove(dx, dy)) {
                                     this.executeMove(dx, dy);
                                     moved = true;
+                                    this.dirMoveFired[rawDir] = true;
 
                                     // In tap-only mode, consume the direction so the key must be re-pressed
                                     this.heldDirections.splice(i, 1);
@@ -3175,6 +3192,8 @@
                 if (dir) {
                     if (!blazer.heldDirections.includes(dir)) {
                         blazer.heldDirections.push(dir);
+                        blazer.dirKeyDownTimes[dir] = performance.now();
+                        delete blazer.dirMoveFired[dir];
                         // Buffer the intent so early presses turn seamlessly, ONLY on initial keydown to avoid OS repeat bugs
                         blazer.turnIntent = { dir: dir, time: performance.now() };
                     }
@@ -3203,7 +3222,13 @@
                 if (dir) {
                     const index = blazer.heldDirections.indexOf(dir);
                     if (index > -1) blazer.heldDirections.splice(index, 1);
-                    if (blazer.turnIntent && blazer.turnIntent.dir === dir) {
+                    const holdMs = blazer.dirKeyDownTimes[dir]
+                        ? performance.now() - blazer.dirKeyDownTimes[dir] : Infinity;
+                    delete blazer.dirKeyDownTimes[dir];
+                    delete blazer.dirMoveFired[dir];
+                    // For quick taps (<120 ms) keep turnIntent alive so the move still fires
+                    // at the next cooldown tick even if the key was released before it expired.
+                    if (holdMs >= 120 && blazer.turnIntent && blazer.turnIntent.dir === dir) {
                         blazer.turnIntent = null;
                     }
                 }
@@ -3763,6 +3788,8 @@
                     b.heldDirections = [];
                     b.turnIntent = null;
                     b.swipeIntent = null;
+                    b.dirKeyDownTimes = {};
+                    b.dirMoveFired = {};
                 });
 
                 if (pmJoinIntent) {
@@ -3864,6 +3891,8 @@
                     blazer.heldDirections = [];
                     blazer.turnIntent = null;
                     blazer.swipeIntent = null;
+                    blazer.dirKeyDownTimes = {};
+                    blazer.dirMoveFired = {};
                     blazer.bonkTimer = 0;
                     blazer.bonkDx = 0;
                     blazer.bonkDy = 0;
