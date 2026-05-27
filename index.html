@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.169</div>
+    <div id="version-number">v1.5.170</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2257,8 +2257,48 @@
         // Starts the 30-second SVG ring countdown shown on the post-match overlay.
         // Called when a match ends; drives the countdown button until match_reset arrives.
         function startMatchEndTimer() {
+            const isSolo = typeof room === 'undefined' || !room;
+
+            if (isSolo) {
+                // Solo: "Play Again" is immediately enabled with a 10-second auto-return countdown.
+                const SOLO_WAIT = 10000;
+                pmJoinIntent = false;
+                const btn = pmNextGameBtn;
+                if (btn) {
+                    btn.style.display = '';
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.style.cursor = 'pointer';
+                    btn.textContent = `Play Again (10)`;
+                    btn.onclick = () => {
+                        clearInterval(matchEndTimerInterval);
+                        matchEndTimerInterval = null;
+                        btn.style.display = 'none';
+                        postMatchLayer.classList.add('hidden');
+                        postMatchLayer.classList.remove('winner-pulse');
+                        stopVictoryStars();
+                        stopWinnerLap();
+                        initMatch();
+                    };
+                }
+                clearInterval(matchEndTimerInterval);
+                const startTime = Date.now();
+                matchEndTimerInterval = setInterval(() => {
+                    const elapsed  = Date.now() - startTime;
+                    const secsLeft = Math.max(0, Math.ceil((SOLO_WAIT - elapsed) / 1000));
+                    if (btn) btn.textContent = `Play Again (${secsLeft})`;
+                    if (elapsed >= SOLO_WAIT) {
+                        clearInterval(matchEndTimerInterval);
+                        matchEndTimerInterval = null;
+                        returnToMenu();
+                    }
+                }, 100);
+                return;
+            }
+
+            // Networked: wait for server match_reset (up to 30 s); button unlocks in last 5 s.
             const MATCH_END_WAIT = 30000;
-            const JOIN_UNLOCK_MS = 25000; // join window opens in last 5 s
+            const JOIN_UNLOCK_MS = 25000;
             pmJoinIntent = false;
             const btn = pmNextGameBtn;
             if (btn) {
@@ -4156,8 +4196,8 @@
             c.scale(window.devicePixelRatio, window.devicePixelRatio);
 
             const SPEED    = 0.25; // laps per second
-            const BLAZER_R = 14;   // px
-            const STAR_R   = 10;   // px — trailing star radius
+            const BLAZER_R = Math.max(5, cellSize * 0.216); // match in-game proportion
+            const STAR_R   = Math.max(3, BLAZER_R * 0.72);  // px — trailing star radius
             // Lag offsets (fractions of a lap) for the 3 trailing stars
             const STAR_LAGS = [0.055, 0.115, 0.195];
 
