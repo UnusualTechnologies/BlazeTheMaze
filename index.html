@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.172</div>
+    <div id="version-number">v1.5.173</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3700,6 +3700,7 @@
 
             // Listen for server state changes
             room.onStateChange((state) => {
+                if (!room) return; // room was cleared between event dispatch and callback execution
                 // Ensure room code display reflects state (handles first-patch timing)
                 _updateRoomCodeDisplay(state.roomCode);
 
