@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.175</div>
+    <div id="version-number">v1.5.176</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -4417,13 +4417,21 @@
          * Set isCreator=false when joining an existing room (skips pendingOwnerSlotSchemes).
          */
         function initControlSchemeState({ isCreator = true } = {}) {
-            const localSlot = lobbySlots.find(s => s.typeSelect.value === 'local');
-            localControlScheme = localSlot ? localSlot.controlSelect.value : 'WASD';
+            // The FIRST local slot belongs to the owner themselves (their own player).
+            // Secondary local slots (all others marked 'local') are co-op slots driven
+            // by the same machine. Only the secondary ones go into pendingOwnerSlotSchemes —
+            // if the primary slot is included, its AI replacement would be incorrectly
+            // treated as a co-op player (isSecondaryLocal=true), causing the WASD label
+            // and client-side prediction to fire on an AI blazer.
+            const primaryLocalIdx = lobbySlots.findIndex(s => s.typeSelect.value === 'local');
+            localControlScheme = primaryLocalIdx >= 0 ? lobbySlots[primaryLocalIdx].controlSelect.value : 'WASD';
             localSlotSchemes = {};
             pendingOwnerSlotSchemes = {};
             if (isCreator) {
                 lobbySlots.forEach((s, i) => {
-                    if (s.typeSelect.value === 'local') pendingOwnerSlotSchemes[i] = s.controlSelect.value;
+                    if (s.typeSelect.value === 'local' && i !== primaryLocalIdx) {
+                        pendingOwnerSlotSchemes[i] = s.controlSelect.value;
+                    }
                 });
             }
         }
