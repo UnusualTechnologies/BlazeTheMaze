@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.152</div>
+    <div id="version-number">v1.5.153</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3813,7 +3813,7 @@
                     showNetworkNotification('Removed from Room', 'You were removed to make space for a friend-code player.', () => location.reload());
                 } else if (code === 4003) {
                     gameState = 'MENU';
-                    showNetworkNotification('Kicked for Inactivity', 'You were removed for being idle. Click Race! to join again.', () => {});
+                    showNetworkNotification('Kicked for Inactivity', 'You were removed for being idle. Return to menu and start a new game.', () => {});
                 } else if (leavingIntentionally) {
                     // Player clicked menu / Play Again / closed the window — no reconnect
                     leavingIntentionally = false;
