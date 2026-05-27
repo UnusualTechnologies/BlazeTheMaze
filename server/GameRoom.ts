@@ -2,12 +2,44 @@ import { Room } from "colyseus";
 import { type Client } from "@colyseus/core";
 import { GameState, Player, Cell, PowerUp, Slot } from "./GameState.js";
 
+/** Typed lobby options sent by the client when creating a room. */
+interface SlotConfig {
+    mode?: string;
+    id?: string;
+    color?: string;
+    aiBehavior?: string;
+    controlScheme?: string;
+    aiSpeed?: string;
+    aiCustomSpeed?: number;
+}
+
+interface LobbyOptions {
+    desiredRoomId?: string;
+    cols?: number;
+    rows?: number;
+    collisions?: boolean;
+    orbLeaderOnly?: boolean;
+    slots?: SlotConfig[];
+    puOpp?: number;
+    puSelf?: number;
+    puRocket?: number;
+    puMirror?: number;
+    puMystery?: number;
+    puFreeze?: number;
+    puBeacon?: number;
+    isPrivate?: boolean;
+}
+
+interface JoinOptions {
+    joinedViaCode?: boolean;
+}
+
 export class GameRoom extends Room<{ state: GameState }> {
     maxClients = 8;
     cols = 20;
     rows = 20;
     collisions = true;
-    spawnOptions: any = {};
+    spawnOptions: LobbyOptions = {};
 
     // BFS distance map from goal — flat array indexed by idx(x, y)
     distanceMap: number[] = [];
@@ -38,7 +70,8 @@ export class GameRoom extends Room<{ state: GameState }> {
 
     // --- Constants ---
 
-    static readonly IDLE_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
+    static readonly WINS_TO_MATCH   = 3;               // rounds needed to win a match
+    static readonly IDLE_TIMEOUT_MS = 3 * 60 * 1000;  // 3 minutes
     static readonly MOVE_LOCK_MS    = 3000;            // movement blocked at round start — matches client pulse-3 unlock (4500ms * 2/3)
     static readonly RATE_LIMIT_MS   = 50;              // minimum ms between accepted moves (max 20/sec)
 
@@ -52,7 +85,7 @@ export class GameRoom extends Room<{ state: GameState }> {
 
     // --- Lifecycle ---
 
-    onCreate(options: any) {
+    onCreate(options: LobbyOptions) {
         // Use an unambiguous uppercase-only room ID; accept a desired ID from the client
         const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
         const desired = options.desiredRoomId;
@@ -63,8 +96,8 @@ export class GameRoom extends Room<{ state: GameState }> {
             for (let i = 0; i < 9; i++) customId += chars.charAt(Math.floor(Math.random() * chars.length));
             this.roomId = customId;
         }
-        this.cols = Math.max(5, Number(options.cols) || 20);
-        this.rows = Math.max(5, Number(options.rows) || 20);
+        this.cols = Math.max(5, Math.min(100, Number(options.cols) || 20));
+        this.rows = Math.max(5, Math.min(100, Number(options.rows) || 20));
         this.collisions = options.collisions !== false; // default true
         this.orbLeaderOnly = options.orbLeaderOnly === true;
 
@@ -137,9 +170,9 @@ export class GameRoom extends Room<{ state: GameState }> {
         options.puBeacon  = Math.min(isNaN(Number(options.puBeacon))  ? 0  : Number(options.puBeacon),  maxPuPerType);
 
         this.spawnOptions = options;
+        state.roomCode = this.roomId;
         this.setState(state);
         this.roundStartMs = Date.now();
-        state.roomCode = this.roomId;
         this.generateMaze();
         this.distanceMap = this.computeDistanceMap(state.goalX, state.goalY);
         this.spawnPowerUps(options);
@@ -220,7 +253,12 @@ export class GameRoom extends Room<{ state: GameState }> {
                 if (Date.now() - this.roundStartMs < GameRoom.MOVE_LOCK_MS) return;
                 if (client.sessionId !== this.ownerSessionId) return;
                 const { slotIndex, x, y } = message;
-                if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) {
+                if (
+                    typeof x !== 'number' || typeof y !== 'number' ||
+                    !Number.isFinite(x) || !Number.isFinite(y) ||
+                    x < 0 || x >= this.cols ||
+                    y < 0 || y >= this.rows
+                ) {
                     console.warn(`Invalid move_secondary from ${client.sessionId}:`, message);
                     return;
                 }
@@ -271,7 +309,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         console.log(`Room created: ${this.roomId}`);
     }
 
-    onJoin(client: Client, options: any) {
+    onJoin(client: Client, options: JoinOptions) {
         console.log(`Client ${client.sessionId} joining...`);
 
         const joinedViaCode = !!options.joinedViaCode;
@@ -452,13 +490,15 @@ export class GameRoom extends Room<{ state: GameState }> {
 
     // --- AI Navigation ---
 
-    /** BFS from (goalX, goalY) through the maze; returns flat distance array indexed by idx(x, y). */
+    /** BFS from (goalX, goalY) through the maze; returns flat distance array indexed by idx(x, y).
+     *  Uses a head-index pointer instead of Array.shift() to keep BFS O(n) rather than O(n²). */
     computeDistanceMap(goalX: number, goalY: number): number[] {
         const map = new Array(this.cols * this.rows).fill(Infinity);
         map[this.idx(goalX, goalY)] = 0;
         const queue: { x: number; y: number }[] = [{ x: goalX, y: goalY }];
-        while (queue.length > 0) {
-            const curr = queue.shift()!;
+        let head = 0;
+        while (head < queue.length) {
+            const curr = queue[head++];
             const cell = this.state.grid[this.idx(curr.x, curr.y)];
             const currDist = map[this.idx(curr.x, curr.y)];
             for (const d of GameRoom.DIRS) {
@@ -613,7 +653,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         }
     }
 
-    spawnPowerUps(options: any = {}) {
+    spawnPowerUps(options: Partial<LobbyOptions> = {}) {
         this.state.powerUps.clear();
         this.usedRocketHits.clear();
         const playerCount = this.state.players.size;
@@ -701,80 +741,57 @@ export class GameRoom extends Room<{ state: GameState }> {
 
     // --- Collision & Teleport ---
 
+    /** Apply a power-up effect for the given collector. Shared by direct pickup and mystery resolution. */
+    private applyPowerUpEffect(type: string, sessionId: string, player: Player): void {
+        if (type === "opponents") {
+            if (this.orbLeaderOnly) {
+                let leaderSid: string | null = null;
+                let minDist = Infinity;
+                this.state.players.forEach((p, sid) => {
+                    if (sid === sessionId) return;
+                    const d = this.getDistance(p.x, p.y);
+                    if (d < minDist) { minDist = d; leaderSid = sid; }
+                });
+                const leaderPlayer = leaderSid ? this.state.players.get(leaderSid) : null;
+                if (leaderPlayer) this.teleportPlayer(leaderPlayer);
+            } else {
+                this.state.players.forEach((p, sid) => {
+                    if (sid !== sessionId) this.teleportPlayer(p);
+                });
+            }
+        } else if (type === "self") {
+            this.teleportPlayer(player);
+        } else if (type === "rocket") {
+            // Rocket pickup: nothing to do server-side on collection.
+            // All clients detect the power-up disappearing from state and spawn a local Rocket.
+        } else if (type === "mirror") {
+            const targetClient = this.clients.find(c => c.sessionId === sessionId);
+            if (targetClient) targetClient.send("mirror_controls", { duration: 3000, collectorSessionId: sessionId });
+        } else if (type === "freeze") {
+            const freezeUntil = Date.now() + 3000;
+            this.state.players.forEach((_p, sid) => {
+                if (sid !== sessionId) this.frozenPlayers.set(sid, freezeUntil);
+            });
+            this.broadcast("freeze", { collectorSessionId: sessionId, duration: 3000 });
+        } else if (type === "beacon") {
+            this.broadcast("beacon", { collectorSessionId: sessionId, duration: 4000 });
+        }
+    }
+
     checkCollisions(player: Player, sessionId: string) {
         // Power-up pickup (always active)
         const puIndex = this.state.powerUps.findIndex(pu => pu.x === player.x && pu.y === player.y);
         if (puIndex !== -1) {
             const pu = this.state.powerUps[puIndex];
             this.state.powerUps.splice(puIndex, 1);
-            if (pu.type === "opponents") {
-                if (this.orbLeaderOnly) {
-                    let leaderSid: string | null = null;
-                    let minDist = Infinity;
-                    this.state.players.forEach((p, sid) => {
-                        if (sid === sessionId) return;
-                        const d = this.getDistance(p.x, p.y);
-                        if (d < minDist) { minDist = d; leaderSid = sid; }
-                    });
-                    if (leaderSid) {
-                        const leaderPlayer = this.state.players.get(leaderSid);
-                        if (leaderPlayer) this.teleportPlayer(leaderPlayer);
-                    }
-                } else {
-                    this.state.players.forEach((p, sid) => {
-                        if (sid !== sessionId) this.teleportPlayer(p);
-                    });
-                }
-            } else if (pu.type === "self") {
-                this.teleportPlayer(player);
-            } else if (pu.type === "rocket") {
-                // Rocket pickup: nothing to do server-side on collection.
-                // All clients detect the power-up disappearing from state and spawn a local Rocket.
-            } else if (pu.type === "mirror") {
-                const targetClient = this.clients.find(c => c.sessionId === sessionId);
-                if (targetClient) targetClient.send("mirror_controls", { duration: 3000, collectorSessionId: sessionId });
-            } else if (pu.type === "freeze") {
-                const freezeUntil = Date.now() + 3000;
-                this.state.players.forEach((_p, sid) => {
-                    if (sid !== sessionId) this.frozenPlayers.set(sid, freezeUntil);
-                });
-                this.broadcast("freeze", { collectorSessionId: sessionId, duration: 3000 });
-            } else if (pu.type === "beacon") {
-                this.broadcast("beacon", { collectorSessionId: sessionId, duration: 4000 });
-            } else if (pu.type === "mystery") {
+
+            if (pu.type === "mystery") {
                 const MYSTERY_TYPES = ["opponents", "self", "rocket", "mirror", "freeze", "beacon"] as const;
                 const resolvedType = MYSTERY_TYPES[Math.floor(Date.now() / 200) % MYSTERY_TYPES.length];
-
-                if (resolvedType === "opponents") {
-                    if (this.orbLeaderOnly) {
-                        let leaderSid: string | null = null, minDist = Infinity;
-                        this.state.players.forEach((p, sid) => {
-                            if (sid === sessionId) return;
-                            const d = this.getDistance(p.x, p.y);
-                            if (d < minDist) { minDist = d; leaderSid = sid; }
-                        });
-                        const lp = leaderSid ? this.state.players.get(leaderSid) : null;
-                        if (lp) this.teleportPlayer(lp);
-                    } else {
-                        this.state.players.forEach((p, sid) => { if (sid !== sessionId) this.teleportPlayer(p); });
-                    }
-                } else if (resolvedType === "self") {
-                    this.teleportPlayer(player);
-                } else if (resolvedType === "mirror") {
-                    const tc = this.clients.find(c => c.sessionId === sessionId);
-                    if (tc) tc.send("mirror_controls", { duration: 3000, collectorSessionId: sessionId });
-                } else if (resolvedType === "freeze") {
-                    const freezeUntil = Date.now() + 3000;
-                    this.state.players.forEach((_p, sid) => {
-                        if (sid !== sessionId) this.frozenPlayers.set(sid, freezeUntil);
-                    });
-                    this.broadcast("freeze", { collectorSessionId: sessionId, duration: 3000 });
-                } else if (resolvedType === "beacon") {
-                    this.broadcast("beacon", { collectorSessionId: sessionId, duration: 4000 });
-                }
-                // "rocket" — no server-side action; client handles it via mystery_resolved
-
+                this.applyPowerUpEffect(resolvedType, sessionId, player);
                 this.broadcast("mystery_resolved", { x: pu.x, y: pu.y, resolvedType, collectorSessionId: sessionId });
+            } else {
+                this.applyPowerUpEffect(pu.type, sessionId, player);
             }
         }
 
@@ -792,7 +809,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         if (player.x === this.state.goalX && player.y === this.state.goalY) {
             this.roundOver = true; // Freeze the game immediately
             player.score++;
-            const isMatchWon = player.score >= 3;
+            const isMatchWon = player.score >= GameRoom.WINS_TO_MATCH;
             // Persist winner info in synced state so late joiners catch up via onStateChange
             this.state.roundOver = true;
             this.state.matchOver = isMatchWon;

@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.173</div>
+    <div id="version-number">v1.5.174</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -844,7 +844,6 @@
 
         // --- BULLETPROOF AUDIO SYSTEM ---
         const Synth = {
-            ctx: { state: 'running', resume: () => {} }, // Keep dummy for legacy UI code
             isMusicMuted: true,
             isSfxMuted: true,
             bgMusic: new Audio('./assets/audio/music.ogg'),
@@ -943,9 +942,11 @@
         const tapOnlyToggle   = document.getElementById('tap-only-toggle');
         const pmNextGameBtn   = document.getElementById('pm-next-game-btn');
 
+        const WINS_TO_MATCH = 3; // must stay in sync with GameRoom.WINS_TO_MATCH on the server
+
         let width, height;
-        let cols = 20; 
-        let rows = 20; 
+        let cols = 20;
+        let rows = 20;
         let cellSize;
         
         let grid = [];
@@ -991,6 +992,7 @@
         let savedLobbyState = null;        // in-memory snapshot of last custom lobby config
         // Smoothly lerped RGB components of the current leader's colour — drives bg tint
         let bgTintR = 0, bgTintG = 0, bgTintB = 0;
+        let lastBgR = -1, lastBgG = -1, lastBgB = -1; // track last written body background to avoid redundant style writes
         let matchTime = 0;
         let roundStartTime = 0;
         let roundCountdown = 0;
@@ -1544,12 +1546,14 @@
                 this.mirrorUntil = 0; // Date.now() timestamp until mirror controls expire for this blazer
                 this.frozenUntil = 0; // Date.now() timestamp until freeze expires for this blazer
                 this.beaconUntil = 0; // Date.now() timestamp until path-guide beacon expires
+                this._beaconPathCache = [];        // cached path for beacon rendering
+                this._beaconPathCacheX = -1;       // gridX when path was last computed
+                this._beaconPathCacheY = -1;       // gridY when path was last computed
                 
                 this.bonkDx = 0;
                 this.bonkDy = 0;
                 this.bonkTimer = 0;
 
-                this.radius = 0;
                 this.updatePixelPos(true);
             }
 
@@ -1746,11 +1750,7 @@
                         this.state = 'normal';
                         // Float the player's name briefly at the arrival point
                         floatLabels.push({ x: this.pixelX, y: this.pixelY, color: this.color, scheme: this.controlScheme, startTime: performance.now() });
-                        // Wipe explorer memory so it doesn't get confused by the teleport
-                        if (!this.isPlayer && this.aiBehavior === 'explorer') {
-                            this.explorerLastX = null;
-                            this.explorerLastY = null;
-                        }
+                        // Explorer AI memory is reset server-side on teleport
                     }
                     return; 
                 }
@@ -2120,7 +2120,7 @@
             const groups = [[], [], []];
             sorted.forEach(b => {
                 if (scoreHiddenIds.has(b.id)) return; // flying — hide from all columns
-                const w = Math.min(scores[b.id] ?? 0, 2);
+                const w = Math.min(scores[b.id] ?? 0, WINS_TO_MATCH - 1);
                 const num = b.id.replace(/\D/g, '');
                 groups[w].push(`<span style="color:${b.color}">P${num}</span>`);
             });
@@ -2174,6 +2174,20 @@
             }));
 
             return el;
+        }
+
+        /** Reset all input and transient animation state on a blazer between rounds/matches. */
+        function resetBlazerInputState(blazer) {
+            blazer.state = 'normal';
+            blazer.stateTimer = 0;
+            blazer.heldDirections = [];
+            blazer.turnIntent = null;
+            blazer.swipeIntent = null;
+            blazer.dirKeyDownTimes = {};
+            blazer.dirMoveFired = {};
+            blazer.bonkTimer = 0;
+            blazer.bonkDx = 0;
+            blazer.bonkDy = 0;
         }
 
         function initMatch() {
@@ -2416,11 +2430,16 @@
                 bgTintR += (tr - bgTintR) * 0.08;
                 bgTintG += (tg - bgTintG) * 0.08;
                 bgTintB += (tb - bgTintB) * 0.08;
-                // Drive the page background-color to a vivid version of the leader's colour
+                // Drive the page background-color to a vivid version of the leader's colour.
+                // Only write the style when the rounded values actually change to avoid
+                // triggering a style recalculation every animation frame.
                 const pr = Math.round(bgTintR * 0.25);
                 const pg = Math.round(bgTintG * 0.25);
                 const pb = Math.round(bgTintB * 0.25);
-                document.body.style.backgroundColor = `rgb(${pr},${pg},${pb})`;
+                if (pr !== lastBgR || pg !== lastBgG || pb !== lastBgB) {
+                    lastBgR = pr; lastBgG = pg; lastBgB = pb;
+                    document.body.style.backgroundColor = `rgb(${pr},${pg},${pb})`;
+                }
                 // Vignette on the canvas edges
                 const grad = ctx.createRadialGradient(
                     width / 2, height / 2, Math.min(width, height) * 0.22,
@@ -2435,7 +2454,7 @@
             // Tension pulse: trigger scales with both maze dims so large mazes still get tension
             if (closestBlazer && minDist <= cols + rows && gameState === 'PLAYING') {
                 const tension = Math.pow(1 - minDist / (cols + rows), 3);
-                const aboutToWin = (scores[closestBlazer.id] ?? 0) >= 2;
+                const aboutToWin = (scores[closestBlazer.id] ?? 0) >= WINS_TO_MATCH - 1;
                 const maxAlpha = aboutToWin ? 0.80 : 0.58;
                 // Pulse rate accelerates as blazer closes in (120ms → 55ms)
                 const pulseSpeed = aboutToWin ? 55 : Math.max(55, 120 - tension * 65);
@@ -2682,7 +2701,13 @@
                 const timeLeft = (b.beaconUntil - now) / 1000;
                 const fadeAlpha = Math.min(1, timeLeft / 1.5); // fade out over last 1.5 s
                 const pulse = 0.28 + 0.07 * Math.sin(now / 150);
-                const path = getPathToGoal(b.gridX, b.gridY);
+                // Recompute path only when the blazer has moved to a new cell
+                if (b.gridX !== b._beaconPathCacheX || b.gridY !== b._beaconPathCacheY) {
+                    b._beaconPathCache = getPathToGoal(b.gridX, b.gridY);
+                    b._beaconPathCacheX = b.gridX;
+                    b._beaconPathCacheY = b.gridY;
+                }
+                const path = b._beaconPathCache;
                 const pathLen = path.length;
                 if (pathLen === 0) return;
 
@@ -3684,6 +3709,7 @@
             }
             window.electronAPI?.setRichPresence('In Lobby');
             let gridCompatChecked = false;
+            let gridNeedsSync = true; // set true on connect and after each round/match reset
 
             // Update HUD to show the actual room code (prefer state.roomCode; falls back to room.roomId)
             const _updateRoomCodeDisplay = (code) => {
@@ -3711,8 +3737,10 @@
                 goal.x = state.goalX;
                 goal.y = state.goalY;
 
-                // Sync Maze Grid
-                if (state.grid && state.grid.length > 0) {
+                // Sync Maze Grid — only when the grid has actually changed (new round/connect),
+                // not on every 100ms timer tick which fires onStateChange unnecessarily.
+                if (gridNeedsSync && state.grid && state.grid.length > 0) {
+                    gridNeedsSync = false;
                     if (isCodeJoin && !gridCompatChecked) {
                         gridCompatChecked = true;
                         const { min, max } = getMazeLimits();
@@ -4013,6 +4041,7 @@
 
             // Server resets the match after 30 s (room was already unlocked at 25 s).
             room.onMessage("match_reset", () => {
+                gridNeedsSync = true; // new maze incoming with next state patch
                 clearInterval(matchEndTimerInterval);
                 matchEndTimerInterval = null;
 
@@ -4024,15 +4053,7 @@
                 roundTimes = [];
                 matchTime = 0;
                 achRoundRocketHit = false;
-                blazers.forEach(b => {
-                    b.state = 'normal';
-                    b.stateTimer = 0;
-                    b.heldDirections = [];
-                    b.turnIntent = null;
-                    b.swipeIntent = null;
-                    b.dirKeyDownTimes = {};
-                    b.dirMoveFired = {};
-                });
+                blazers.forEach(resetBlazerInputState);
 
                 if (pmJoinIntent) {
                     // Player clicked the join button — drop straight into the new game
@@ -4125,21 +4146,9 @@
             });
 
             room.onMessage("round_reset", () => {
+                gridNeedsSync = true; // new maze incoming with next state patch
                 if (roundFlashStart === null) roundFlashStart = performance.now(); // failsafe if msg arrives before countdown
-                blazers.forEach(blazer => {
-                    // Clear teleport animations
-                    blazer.state = 'normal';
-                    blazer.stateTimer = 0;
-                    // Clear all input state so no ghost directions carry into the new round
-                    blazer.heldDirections = [];
-                    blazer.turnIntent = null;
-                    blazer.swipeIntent = null;
-                    blazer.dirKeyDownTimes = {};
-                    blazer.dirMoveFired = {};
-                    blazer.bonkTimer = 0;
-                    blazer.bonkDx = 0;
-                    blazer.bonkDy = 0;
-                });
+                blazers.forEach(resetBlazerInputState);
                 initRound();
             });
         }
@@ -5041,14 +5050,8 @@
             }
 
             // ── Draw: smoke puffs — matches main game drawSmokePuffs() ────────
-            const CLOUD_OFFSETS = [
-                { dx:  0.00, dy:  0.00, rs: 1.00 },
-                { dx:  0.45, dy: -0.30, rs: 0.72 },
-                { dx: -0.40, dy: -0.25, rs: 0.68 },
-                { dx:  0.20, dy:  0.42, rs: 0.65 },
-                { dx: -0.30, dy:  0.38, rs: 0.60 },
-                { dx:  0.05, dy: -0.50, rs: 0.55 },
-            ];
+            // Reuse the cloudOffsets defined in the outer scope — keep both in sync
+            const CLOUD_OFFSETS = cloudOffsets;
 
             function drawPuffs(now) {
                 const PUFF_MS = 1000;
