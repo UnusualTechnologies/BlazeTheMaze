@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.166</div>
+    <div id="version-number">v1.5.167</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2208,15 +2208,15 @@
         // Called when a match ends; drives the countdown button until match_reset arrives.
         function startMatchEndTimer() {
             const MATCH_END_WAIT = 30000;
-            const JOIN_ACTIVE_MS = 5000; // join window: first 5 s after game ends
+            const JOIN_UNLOCK_MS = 25000; // join window opens in last 5 s
             pmJoinIntent = false;
             const btn = pmNextGameBtn;
             if (btn) {
                 btn.style.display = '';
-                btn.disabled = false;
-                btn.style.opacity = '1';
-                btn.style.cursor = 'pointer';
-                btn.textContent = 'Game available - Join now (5)';
+                btn.disabled = true;
+                btn.style.opacity = '0.4';
+                btn.style.cursor = 'default';
+                btn.textContent = 'Next game starting in 30';
                 btn.onclick = () => {
                     if (btn.disabled) return;
                     pmJoinIntent = true;
@@ -2231,16 +2231,15 @@
                 const elapsed  = Date.now() - startTime;
                 const secsLeft = Math.max(0, Math.ceil((MATCH_END_WAIT - elapsed) / 1000));
                 if (btn && !pmJoinIntent) {
-                    if (elapsed < JOIN_ACTIVE_MS) {
-                        const joinSecs = Math.ceil((JOIN_ACTIVE_MS - elapsed) / 1000);
-                        btn.textContent = `Game available - Join now (${joinSecs})`;
-                    } else {
-                        if (!btn.disabled) {
-                            btn.disabled = true;
-                            btn.style.opacity = '0.4';
-                            btn.style.cursor = 'not-allowed';
-                        }
+                    if (elapsed < JOIN_UNLOCK_MS) {
                         btn.textContent = `Next game starting in ${secsLeft}`;
+                    } else {
+                        if (btn.disabled) {
+                            btn.disabled = false;
+                            btn.style.opacity = '1';
+                            btn.style.cursor = 'pointer';
+                        }
+                        btn.textContent = `Game available - Join now (${secsLeft})`;
                     }
                 }
                 if (elapsed >= MATCH_END_WAIT) {
@@ -2984,7 +2983,7 @@
                 ctx.shadowColor = "#000";
                 ctx.shadowBlur = 5;
                 if (secondsLeft > 0) {
-                    ctx.fillText(`Next round in ${secondsLeft}...`, width / 2, height / 2 + subSize * 1.5);
+                    ctx.fillText(`Next round in ${secondsLeft}`, width / 2, height / 2 + subSize * 1.5);
                 } else {
                     ctx.fillText(`Next round starting...`, width / 2, height / 2 + subSize * 1.5);
                 }
@@ -3978,11 +3977,12 @@
 
             function drawTrailStar(cx, cy, outerR, starHue, alpha) {
                 if (outerR < 1) return;
-                const innerR = outerR * 0.42;
+                const innerR = outerR * 0.407; // matches in-game ratio (0.22/0.54)
                 c.save();
                 c.translate(cx, cy);
-                c.rotate(starHue * 0.025); // vary orientation by hue
+                c.rotate(starHue * 0.025);
                 c.globalAlpha = alpha;
+                // Star body — dark fill with coloured glow outline
                 c.beginPath();
                 for (let i = 0; i < 10; i++) {
                     const a = i * Math.PI / 5 - Math.PI / 2;
@@ -3991,14 +3991,21 @@
                             : c.lineTo(Math.cos(a)*r, Math.sin(a)*r);
                 }
                 c.closePath();
-                c.fillStyle = '#040412';
+                c.fillStyle = '#050510';
                 c.fill();
                 c.strokeStyle = `hsl(${starHue},100%,62%)`;
-                c.lineWidth = Math.max(1, outerR * 0.13);
+                c.lineWidth = Math.max(1, outerR * 0.14);
                 c.shadowBlur  = outerR * 1.4;
                 c.shadowColor = `hsl(${starHue},100%,62%)`;
                 c.stroke();
-                c.shadowBlur = 0;
+                // Central bright spark matching in-game star
+                c.shadowBlur  = outerR * 1.2;
+                c.shadowColor = `hsl(${starHue},100%,70%)`;
+                c.fillStyle   = '#ffffff';
+                c.beginPath();
+                c.arc(0, 0, outerR * 0.12, 0, Math.PI * 2);
+                c.fill();
+                c.shadowBlur  = 0;
                 c.globalAlpha = 1;
                 c.restore();
             }
@@ -4013,9 +4020,13 @@
 
                 c.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
-                // 3 trailing stars — each at a fixed lag behind the blazer
-                STAR_LAGS.forEach((lag, i) => {
-                    const sp = perimPos(t - lag);
+                // Compute per-frame lag so stars are always physically touching
+                const _pr = gameContainer.getBoundingClientRect();
+                const _perim = 2 * (_pr.width + _pr.height);
+                const _gap = (STAR_R * 2) / _perim; // one star-diameter in lap-fraction
+                STAR_LAGS.forEach((_, i) => {
+                    const lag = _gap * (i + 1);
+                    const sp  = perimPos(t - lag);
                     drawTrailStar(sp.x, sp.y, STAR_R, (hue - i * 40 + 360) % 360, 0.9 - i * 0.15);
                 });
 
