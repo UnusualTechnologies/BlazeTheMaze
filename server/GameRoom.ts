@@ -71,8 +71,6 @@ export class GameRoom extends Room<{ state: GameState }> {
         const state = new GameState();
         state.cols = this.cols;
         state.rows = this.rows;
-        state.puOpp = options.puOpp !== undefined ? Math.min(Number(options.puOpp), 100) : 10;
-        state.puSelf = options.puSelf !== undefined ? Math.min(Number(options.puSelf), 100) : 10;
         state.goalX = Math.floor(this.cols / 2);
         state.goalY = Math.floor(this.rows / 2);
 
@@ -143,10 +141,8 @@ export class GameRoom extends Room<{ state: GameState }> {
         this.roundStartMs = Date.now();
         state.roomCode = this.roomId;
         this.generateMaze();
-        this.spawnPowerUps(options);
-
-        // BFS distance map must be computed after maze is generated
         this.distanceMap = this.computeDistanceMap(state.goalX, state.goalY);
+        this.spawnPowerUps(options);
 
         // Pre-compute guesser targets for any guesser AI slots
         state.players.forEach((player, sid) => {
@@ -644,15 +640,35 @@ export class GameRoom extends Room<{ state: GameState }> {
                 else if (openCount >= 2) corridors.push({ x, y });
             }
         }
-        // Fisher-Yates shuffle both lists
+        // Fisher-Yates shuffle for corridors
         const shuffle = (arr: { x: number; y: number }[]) => {
             for (let i = arr.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [arr[i], arr[j]] = [arr[j], arr[i]];
             }
         };
-        shuffle(deadEnds);
         shuffle(corridors);
+
+        // Weighted sort for dead ends: farther from goal = 2× more likely than closest.
+        // Uses Efraimidis-Spirakis: key = U^(1/w), sort descending, take top N.
+        {
+            const dMap = this.distanceMap;
+            const rawDists = deadEnds.map(({ x, y }) => {
+                const d = dMap ? dMap[this.idx(x, y)] : Infinity;
+                return isFinite(d) ? d : 0;
+            });
+            const minD = Math.min(...rawDists);
+            const maxD = Math.max(...rawDists);
+            const range = maxD - minD;
+            const keyed = deadEnds.map((cell, i) => {
+                const t = range > 0 ? (rawDists[i] - minD) / range : 0;
+                const w = 1 + t; // 1.0 at closest, 2.0 at farthest
+                return { cell, key: Math.random() ** (1 / w) };
+            });
+            keyed.sort((a, b) => b.key - a.key);
+            deadEnds.length = 0;
+            for (const { cell } of keyed) deadEnds.push(cell);
+        }
 
         // Spawn power-ups from a given cell list
         const spawnFrom = (cells: { x: number; y: number }[], count: number, type: string) => {
@@ -670,12 +686,16 @@ export class GameRoom extends Room<{ state: GameState }> {
             }
         };
 
+        // All cells combined (shuffled) for power-ups that can appear anywhere
+        const allCells = [...corridors, ...deadEnds];
+        shuffle(allCells);
+
         spawnFrom(deadEnds,  puOpp,     "opponents");
         spawnFrom(deadEnds,  puSelf,    "self");
         spawnFrom(deadEnds,  puRocket,  "rocket");
         spawnFrom(corridors, puMirror,  "mirror");  // on the critical path — players run into these naturally
         spawnFrom(deadEnds,  puMystery, "mystery"); // dead-ends — must be sought out
-        spawnFrom(deadEnds,  puFreeze,  "freeze");  // dead-ends — powerful, should be sought out
+        spawnFrom(allCells,  puFreeze,  "freeze");  // anywhere — ambush encounters on path and off
         spawnFrom(deadEnds,  puBeacon,  "beacon");  // dead-ends — reward for exploration
     }
 

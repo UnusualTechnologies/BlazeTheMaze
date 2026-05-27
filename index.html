@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.155</div>
+    <div id="version-number">v1.5.159</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -773,7 +773,7 @@
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <label for="pu-opp-input" style="font-size: 1.2rem;">Teleport Other:</label>
-                        <input type="number" id="pu-opp-input" value="5" min="0" max="100" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
+                        <input type="number" id="pu-opp-input" value="6" min="0" max="100" inputmode="numeric" style="font-size: 1.1rem; padding: 5px; width: 80px; text-align: center;">
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <label for="pu-self-input" style="font-size: 1.2rem;">Teleport Self:</label>
@@ -1191,7 +1191,7 @@
 
         // ── Auto-scale power-up counts and grid size to player count ─────────
         // Formulas (n = number of active players):
-        //   Teleport Other / Self : 10 − (n−1)         [−1 per extra player]
+        //   Teleport Other / Self : 7 − (n−1)          [−1 per extra player, base 6 at 1p]
         //   Homing Missiles       : 4  − ⌊(n−1)/2⌋    [−1 per 2 extra players]
         //   Mirror Controls       : 0  (off by default)
         //   Grid Size             : 20 → 28 over 2–8p  [20 + round((n−2)×4/3)]
@@ -1203,7 +1203,7 @@
             }).length;
 
             const auto = {
-                opp:     Math.max(0, 10 - (n - 1)),
+                opp:     Math.max(0, 7 - (n - 1)),
                 self:    Math.max(0, 10 - (n - 1)),
                 rocket:  Math.max(0, 4  - Math.floor((n - 1) / 2)),
                 mirror:  0,
@@ -2037,7 +2037,7 @@
             
             let isValidDestination = false;
             let attempts = 0;
-            while (!isValidDestination) { 
+            while (!isValidDestination && attempts < 500) {
                 rx = Math.floor(Math.random() * cols); 
                 ry = Math.floor(Math.random() * rows); 
                 isValidDestination = true;
@@ -2323,10 +2323,9 @@
                 ctx.fillRect(0, 0, width, height);
             }
 
-            // Tension pulse: scales with maze size — starts cols cells away, dramatic by 10% of cols
-            if (closestBlazer && minDist <= cols && gameState === 'PLAYING') {
-                // Cubic curve: barely visible far out, rockets up in the final 10% of distance
-                const tension = Math.pow(1 - minDist / cols, 3);
+            // Tension pulse: trigger scales with both maze dims so large mazes still get tension
+            if (closestBlazer && minDist <= cols + rows && gameState === 'PLAYING') {
+                const tension = Math.pow(1 - minDist / (cols + rows), 3);
                 const aboutToWin = (scores[closestBlazer.id] ?? 0) >= 2;
                 const maxAlpha = aboutToWin ? 0.80 : 0.58;
                 // Pulse rate accelerates as blazer closes in (120ms → 55ms)
@@ -2339,9 +2338,9 @@
             }
 
             ctx.strokeStyle = colors.wall;
-            ctx.lineWidth = 4;
+            ctx.lineWidth = Math.max(1, cellSize * 0.12);
             ctx.lineCap = 'square';
-            
+
             ctx.beginPath();
             if (grid && grid.length > 0) {
                 for (let x = 0; x < cols; x++) {
@@ -2520,7 +2519,7 @@
                 const timeLeft = (b.beaconUntil - now) / 1000;
                 const fadeAlpha = Math.min(1, timeLeft / 1.5); // fade out over last 1.5 s
                 const pulse = 0.28 + 0.07 * Math.sin(now / 150);
-                const path = getPathToGoal(b.gridX, b.gridY).slice(0, cols);
+                const path = getPathToGoal(b.gridX, b.gridY);
                 const pathLen = path.length;
                 if (pathLen === 0) return;
 
@@ -4115,7 +4114,7 @@
             return {
                 cols: parseInt(gridSizeInput.value, 10) || 20,
                 rows: parseInt(gridSizeInput.value, 10) || 20,
-                puOpp:   (v => isNaN(v) ? 5 : v)(parseInt(puOppInput.value,  10)),
+                puOpp:   (v => isNaN(v) ? 6 : v)(parseInt(puOppInput.value,  10)),
                 puSelf:  (v => isNaN(v) ? 5 : v)(parseInt(puSelfInput.value, 10)),
                 puRocket: parseInt(puRocketInput.value, 10) || 0,
                 puMirror:  parseInt(puMirrorInput.value,  10) || 0,
