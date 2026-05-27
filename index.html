@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.171</div>
+    <div id="version-number">v1.5.172</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2290,7 +2290,7 @@
                     if (elapsed >= SOLO_WAIT) {
                         clearInterval(matchEndTimerInterval);
                         matchEndTimerInterval = null;
-                        returnToMenu();
+                        if (btn) btn.style.display = 'none';
                     }
                 }, 100);
                 return;
