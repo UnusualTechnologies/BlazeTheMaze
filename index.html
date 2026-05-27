@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.153</div>
+    <div id="version-number">v1.5.154</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3812,7 +3812,8 @@
                 if (code === 4001) {
                     showNetworkNotification('Removed from Room', 'You were removed to make space for a friend-code player.', () => location.reload());
                 } else if (code === 4003) {
-                    gameState = 'MENU';
+                    room = null; // server already closed the connection — no need to call leave()
+                    returnToMenu();
                     showNetworkNotification('Kicked for Inactivity', 'You were removed for being idle. Return to menu and start a new game.', () => {});
                 } else if (leavingIntentionally) {
                     // Player clicked menu / Play Again / closed the window — no reconnect
