@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.168</div>
+    <div id="version-number">v1.5.169</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1745,7 +1745,7 @@
                     if (this.stateTimer <= 0) {
                         this.state = 'normal';
                         // Float the player's name briefly at the arrival point
-                        floatLabels.push({ x: this.pixelX, y: this.pixelY, color: this.color, id: this.id, startTime: performance.now() });
+                        floatLabels.push({ x: this.pixelX, y: this.pixelY, color: this.color, scheme: this.controlScheme, startTime: performance.now() });
                         // Wipe explorer memory so it doesn't get confused by the teleport
                         if (!this.isPlayer && this.aiBehavior === 'explorer') {
                             this.explorerLastX = null;
@@ -2234,8 +2234,8 @@
                     y: Math.random() * height,
                     vx: (Math.random() - 0.5) * 0.18,
                     vy: (Math.random() - 0.5) * 0.18,
-                    size: Math.random() * 1.4 + 0.3,
-                    alpha: Math.random() * 0.12 + 0.03,
+                    size: Math.random() * 2.5 + 1.0,
+                    alpha: Math.random() * 0.22 + 0.12,
                     hue: Math.random() * 360
                 });
             }
@@ -2341,19 +2341,21 @@
             ctx.fillStyle = colors.bg;
             ctx.fillRect(0, 0, width, height);
 
-            // Subtle floor grid — sci-fi tile feel
+            // Subtle floor grid — sub-cell lines drawn at half-cellSize so they're
+            // visible inside cells rather than hidden behind walls on cell boundaries
             ctx.save();
             ctx.strokeStyle = '#ffffff';
-            ctx.globalAlpha = 0.035;
+            ctx.globalAlpha = 0.07;
             ctx.lineWidth = 0.5;
             ctx.beginPath();
-            for (let gx = 0; gx <= cols; gx++) {
-                ctx.moveTo(gx * cellSize, 0);
-                ctx.lineTo(gx * cellSize, height);
+            const halfCell = cellSize * 0.5;
+            for (let gx = 0; gx <= cols * 2; gx++) {
+                ctx.moveTo(gx * halfCell, 0);
+                ctx.lineTo(gx * halfCell, height);
             }
-            for (let gy = 0; gy <= rows; gy++) {
-                ctx.moveTo(0, gy * cellSize);
-                ctx.lineTo(width, gy * cellSize);
+            for (let gy = 0; gy <= rows * 2; gy++) {
+                ctx.moveTo(0, gy * halfCell);
+                ctx.lineTo(width, gy * halfCell);
             }
             ctx.stroke();
             ctx.restore();
@@ -2450,9 +2452,9 @@
             }
             ctx.stroke();
 
-            // Wall glow: walls within ~2.5 cells of any blazer light up in their colour
+            // Wall glow: walls within ~1.25 cells of any blazer light up in their colour
             if (blazers.length > 0) {
-                const glowRange = 2.5;
+                const glowRange = 1.25;
                 blazers.forEach(blazer => {
                     const minGX = Math.max(0, Math.floor(blazer.gridX - glowRange));
                     const maxGX = Math.min(cols - 1, Math.ceil(blazer.gridX + glowRange));
@@ -3138,8 +3140,8 @@
                     ctx.shadowBlur = 14;
                     ctx.shadowColor = fl.color;
                     ctx.fillStyle = fl.color;
-                    const num = fl.id.replace(/\D/g, '');
-                    ctx.fillText(`P${num}`, fl.x, fl.y + yOff);
+                    const floatLabel = schemeNames[fl.scheme] || (fl.scheme || '?').replace(/_/g, ' ');
+                    ctx.fillText(floatLabel, fl.x, fl.y + yOff);
                     return true;
                 });
                 ctx.globalAlpha = 1;
