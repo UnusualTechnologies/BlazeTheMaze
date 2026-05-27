@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.167</div>
+    <div id="version-number">v1.5.168</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -967,6 +967,10 @@
         let shockwaves = [];
         let particles = [];
         let rockets = []; // Store active homing rockets
+        let goalRipples = [];      // expanding rings from goal
+        let lastGoalRippleTime = 0;
+        let floatLabels = [];      // player-name floats on respawn
+        let dustParticles = [];    // ambient background dust
         
         let localControlScheme = 'WASD'; // captured from lobby before connecting
         let localSlotSchemes = {}; // slotIndex → controlScheme for secondary local (co-op) slots
@@ -996,6 +1000,7 @@
         let pmJoinIntent = false; // true when user clicks the "join next game" button
         const ROUND_START_MS = 4500;   // total ring animation duration — pulse 3 fires at exactly 3s (4500 * 2/3 = 3000ms)
         let roundRingTime = null;      // set every round; drives ring, labels, and movement lock
+        let roundSonarsFired = 0;      // how many goal-sonar pings have fired this round-start
         let roundMoveLockEnd = 0;      // performance.now() value until which movement is locked
         let roundUnlockFlashFired = false; // true once the unlock flash has been triggered this round
 
@@ -1739,6 +1744,8 @@
                     this.stateTimer -= dt * 0.003;
                     if (this.stateTimer <= 0) {
                         this.state = 'normal';
+                        // Float the player's name briefly at the arrival point
+                        floatLabels.push({ x: this.pixelX, y: this.pixelY, color: this.color, id: this.id, startTime: performance.now() });
                         // Wipe explorer memory so it doesn't get confused by the teleport
                         if (!this.isPlayer && this.aiBehavior === 'explorer') {
                             this.explorerLastX = null;
@@ -1775,9 +1782,10 @@
                 if (this.trail.length > 1) {
                     ctx.save();
                     for (let i = 1; i < this.trail.length; i++) {
-                        const alpha = i / this.trail.length;
+                        const frac = i / this.trail.length; // 0=tail, 1=head
+                        ctx.lineWidth = Math.max(0.5, size * (0.22 + frac * 0.58));
                         ctx.strokeStyle = isMirrored ? '#ffffff' : this.color;
-                        ctx.globalAlpha = alpha * 0.5;
+                        ctx.globalAlpha = frac * 0.5;
                         ctx.beginPath();
                         ctx.moveTo(this.trail[i-1].x, this.trail[i-1].y);
                         ctx.lineTo(this.trail[i].x, this.trail[i].y);
@@ -1825,6 +1833,32 @@
                     }
                     ctx.shadowBlur  = 0;
                     ctx.globalAlpha = 1;
+                }
+
+                // Speed streaks: radial lines pointing backward when moving fast
+                if (this.speedBlur > 0.28 && (this.lastDx !== 0 || this.lastDy !== 0)) {
+                    const backAngle = Math.atan2(-this.lastDy, -this.lastDx);
+                    const streakLen = cellSize * (0.55 + this.speedBlur * 0.7);
+                    ctx.save();
+                    ctx.strokeStyle = bodyColor;
+                    ctx.lineCap = 'round';
+                    for (let s = 0; s < 7; s++) {
+                        const spread = (Math.random() - 0.5) * 0.55;
+                        const ang = backAngle + spread;
+                        const startDist = size * (0.9 + Math.random() * 0.4);
+                        const len = streakLen * (0.4 + Math.random() * 0.6);
+                        ctx.lineWidth = Math.max(0.5, size * 0.08);
+                        ctx.globalAlpha = this.speedBlur * 0.18 * Math.random();
+                        ctx.shadowBlur = 6;
+                        ctx.shadowColor = bodyColor;
+                        ctx.beginPath();
+                        ctx.moveTo(Math.cos(ang) * startDist, Math.sin(ang) * startDist);
+                        ctx.lineTo(Math.cos(ang) * (startDist + len), Math.sin(ang) * (startDist + len));
+                        ctx.stroke();
+                    }
+                    ctx.shadowBlur = 0;
+                    ctx.globalAlpha = 1;
+                    ctx.restore();
                 }
 
                 ctx.fillStyle = bodyColor;
@@ -2190,6 +2224,21 @@
             powerUpBursts = [];
             powerUps = []; // Will be repopulated by server state
             screenShake = 0;
+            goalRipples = [];
+            lastGoalRippleTime = 0;
+            floatLabels = [];
+            dustParticles = [];
+            for (let i = 0; i < 28; i++) {
+                dustParticles.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    vx: (Math.random() - 0.5) * 0.18,
+                    vy: (Math.random() - 0.5) * 0.18,
+                    size: Math.random() * 1.4 + 0.3,
+                    alpha: Math.random() * 0.12 + 0.03,
+                    hue: Math.random() * 360
+                });
+            }
             
             resizeCanvas(); // Safe to resize and draw now that the new maze grid is generated!
             
@@ -2201,6 +2250,7 @@
             roundRingTime = performance.now();
             roundMoveLockEnd = performance.now() + ROUND_START_MS * (2 / 3); // unlock at start of pulse 3
             roundUnlockFlashFired = false;
+            roundSonarsFired = 0;
             Synth.muffle(false);
         }
 
@@ -2291,6 +2341,23 @@
             ctx.fillStyle = colors.bg;
             ctx.fillRect(0, 0, width, height);
 
+            // Subtle floor grid — sci-fi tile feel
+            ctx.save();
+            ctx.strokeStyle = '#ffffff';
+            ctx.globalAlpha = 0.035;
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            for (let gx = 0; gx <= cols; gx++) {
+                ctx.moveTo(gx * cellSize, 0);
+                ctx.lineTo(gx * cellSize, height);
+            }
+            for (let gy = 0; gy <= rows; gy++) {
+                ctx.moveTo(0, gy * cellSize);
+                ctx.lineTo(width, gy * cellSize);
+            }
+            ctx.stroke();
+            ctx.restore();
+
             // Find the leader (closest blazer to goal by BFS distance) — always, from round start
             let closestBlazer = null;
             let minDist = Infinity;
@@ -2335,6 +2402,30 @@
                 ctx.globalAlpha = tension * pulse * maxAlpha;
                 ctx.fillRect(0, 0, width, height);
                 ctx.globalAlpha = 1.0;
+
+                // Chromatic aberration: red/cyan edge fringing when match point is close
+                if (aboutToWin && tension > 0.45 && pulse > 0.3) {
+                    const strength = tension * pulse * 5;
+                    ctx.save();
+                    ctx.globalCompositeOperation = 'screen';
+                    const redGrad = ctx.createRadialGradient(
+                        width / 2 + strength, height / 2, Math.min(width, height) * 0.15,
+                        width / 2 + strength, height / 2, Math.max(width, height) * 0.85
+                    );
+                    redGrad.addColorStop(0, 'rgba(0,0,0,0)');
+                    redGrad.addColorStop(1, `rgba(255,0,0,${tension * pulse * 0.18})`);
+                    ctx.fillStyle = redGrad;
+                    ctx.fillRect(0, 0, width, height);
+                    const cyanGrad = ctx.createRadialGradient(
+                        width / 2 - strength, height / 2, Math.min(width, height) * 0.15,
+                        width / 2 - strength, height / 2, Math.max(width, height) * 0.85
+                    );
+                    cyanGrad.addColorStop(0, 'rgba(0,0,0,0)');
+                    cyanGrad.addColorStop(1, `rgba(0,255,255,${tension * pulse * 0.18})`);
+                    ctx.fillStyle = cyanGrad;
+                    ctx.fillRect(0, 0, width, height);
+                    ctx.restore();
+                }
             }
 
             ctx.strokeStyle = colors.wall;
@@ -2358,7 +2449,40 @@
                 }
             }
             ctx.stroke();
-            
+
+            // Wall glow: walls within ~2.5 cells of any blazer light up in their colour
+            if (blazers.length > 0) {
+                const glowRange = 2.5;
+                blazers.forEach(blazer => {
+                    const minGX = Math.max(0, Math.floor(blazer.gridX - glowRange));
+                    const maxGX = Math.min(cols - 1, Math.ceil(blazer.gridX + glowRange));
+                    const minGY = Math.max(0, Math.floor(blazer.gridY - glowRange));
+                    const maxGY = Math.min(rows - 1, Math.ceil(blazer.gridY + glowRange));
+                    ctx.save();
+                    ctx.strokeStyle = blazer.color;
+                    ctx.lineWidth = Math.max(1, cellSize * 0.12);
+                    ctx.lineCap = 'square';
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = blazer.color;
+                    ctx.globalAlpha = 0.38;
+                    ctx.beginPath();
+                    for (let wx = minGX; wx <= maxGX; wx++) {
+                        for (let wy = minGY; wy <= maxGY; wy++) {
+                            const wcell = grid[wx]?.[wy];
+                            if (!wcell?.walls) continue;
+                            if (Math.hypot(wx - blazer.gridX, wy - blazer.gridY) > glowRange) continue;
+                            const wcx = wx * cellSize, wcy = wy * cellSize;
+                            if (wcell.walls[0]) { ctx.moveTo(wcx, wcy); ctx.lineTo(wcx + cellSize, wcy); }
+                            if (wcell.walls[1]) { ctx.moveTo(wcx + cellSize, wcy); ctx.lineTo(wcx + cellSize, wcy + cellSize); }
+                            if (wcell.walls[2]) { ctx.moveTo(wcx, wcy + cellSize); ctx.lineTo(wcx + cellSize, wcy + cellSize); }
+                            if (wcell.walls[3]) { ctx.moveTo(wcx, wcy); ctx.lineTo(wcx, wcy + cellSize); }
+                        }
+                    }
+                    ctx.stroke();
+                    ctx.restore();
+                });
+            }
+
             const { x: gx, y: gy } = gridToPixel(goal.x, goal.y);
             const time = performance.now() / 500;
             
@@ -2836,6 +2960,53 @@
             drawBeaconPaths(); // lit path cells drawn beneath power-ups and blazers
             drawPowerUps();
 
+            // Ambient dust particles — slow drifting specks
+            ctx.save();
+            dustParticles.forEach(d => {
+                d.x += d.vx; d.y += d.vy;
+                if (d.x < 0) d.x = width; if (d.x > width) d.x = 0;
+                if (d.y < 0) d.y = height; if (d.y > height) d.y = 0;
+                ctx.globalAlpha = d.alpha;
+                ctx.fillStyle = `hsl(${d.hue}, 70%, 70%)`;
+                ctx.beginPath();
+                ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1;
+            ctx.restore();
+
+            // Goal ripple rings — emit every 2s, expand outward and fade
+            {
+                const rippleNow = performance.now();
+                if (gameState === 'PLAYING' && rippleNow - lastGoalRippleTime > 2000) {
+                    goalRipples.push({ startTime: rippleNow, sonar: false });
+                    lastGoalRippleTime = rippleNow;
+                }
+                if (goalRipples.length > 0) {
+                    const { x: grpx, y: grpy } = gridToPixel(goal.x, goal.y);
+                    ctx.save();
+                    goalRipples = goalRipples.filter(rip => {
+                        const t = (rippleNow - rip.startTime) / (rip.sonar ? 1000 : 1500);
+                        if (t >= 1) return false;
+                        const radius = t * cellSize * (rip.sonar ? 4.5 : 3.2);
+                        const alpha = (1 - t) * (rip.sonar ? 0.7 : 0.4);
+                        const hue = (rippleNow / 5) % 360;
+                        ctx.beginPath();
+                        ctx.arc(grpx, grpy, radius, 0, Math.PI * 2);
+                        ctx.strokeStyle = `hsl(${hue}, 100%, 65%)`;
+                        ctx.globalAlpha = alpha;
+                        ctx.lineWidth = Math.max(0.5, cellSize * (rip.sonar ? 0.09 : 0.05));
+                        ctx.shadowBlur = rip.sonar ? 14 : 8;
+                        ctx.shadowColor = `hsl(${hue}, 100%, 65%)`;
+                        ctx.stroke();
+                        return true;
+                    });
+                    ctx.globalAlpha = 1;
+                    ctx.shadowBlur = 0;
+                    ctx.restore();
+                }
+            }
+
             for (let i = shockwaves.length - 1; i >= 0; i--) {
                 const sw = shockwaves[i];
                 if (sw.update(dt)) sw.draw(); else shockwaves.splice(i, 1);
@@ -2858,6 +3029,11 @@
                     if (pulseIdx === 2 && !roundUnlockFlashFired) {
                         blazers.forEach(b => { if (b.isLocal) b.flashTimer = 1.0; });
                         roundUnlockFlashFired = true;
+                    }
+                    // Sonar ping from goal at the start of each pulse (3-2-1 countdown feel)
+                    while (roundSonarsFired <= pulseIdx) {
+                        goalRipples.push({ startTime: roundRingTime + roundSonarsFired * pulseDur, sonar: true });
+                        roundSonarsFired++;
                     }
                     // Each pulse reaches a smaller max: big=1.0, mid≈0.67, small≈0.33 of max radius
                     const endFrac = 1 - pulseIdx / PULSE_COUNT;
@@ -2942,6 +3118,33 @@
                     ctx.shadowBlur = 0;
                     ctx.restore();
                 }
+            }
+
+            // Floating player-name labels on teleport arrival
+            if (floatLabels.length > 0) {
+                const floatNow = performance.now();
+                const FLOAT_MS = 1100;
+                const floatFontSize = Math.round(cellSize * 0.48);
+                ctx.save();
+                ctx.font = `bold ${floatFontSize}px monospace`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                floatLabels = floatLabels.filter(fl => {
+                    const t = (floatNow - fl.startTime) / FLOAT_MS;
+                    if (t >= 1) return false;
+                    const alpha = t < 0.25 ? t / 0.25 : 1 - (t - 0.25) / 0.75;
+                    const yOff = -t * cellSize * 1.8;
+                    ctx.globalAlpha = alpha;
+                    ctx.shadowBlur = 14;
+                    ctx.shadowColor = fl.color;
+                    ctx.fillStyle = fl.color;
+                    const num = fl.id.replace(/\D/g, '');
+                    ctx.fillText(`P${num}`, fl.x, fl.y + yOff);
+                    return true;
+                });
+                ctx.globalAlpha = 1;
+                ctx.shadowBlur = 0;
+                ctx.restore();
             }
 
             drawSmokePuffs();
