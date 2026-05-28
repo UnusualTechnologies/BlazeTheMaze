@@ -73,7 +73,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     static readonly WINS_TO_MATCH   = 3;               // rounds needed to win a match
     static readonly IDLE_TIMEOUT_MS = 3 * 60 * 1000;  // 3 minutes
     static readonly MOVE_LOCK_MS    = 3000;            // movement blocked at round start — matches client pulse-3 unlock (4500ms * 2/3)
-    static readonly RATE_LIMIT_MS   = 50;              // minimum ms between accepted moves (max 20/sec)
+    static readonly RATE_LIMIT_MS   = 0;               // no rate limit — client moves at display frame rate
 
     /** Navigation directions with wall indices and their opposites. */
     private static readonly DIRS = [
