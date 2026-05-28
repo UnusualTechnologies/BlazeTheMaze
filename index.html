@@ -586,6 +586,36 @@
 
         #dpad.hidden { display: none; }
 
+        /* Popup joystick */
+        #joystick-container {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 1000;
+            display: none;
+        }
+        #joystick-base {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: 3px solid rgba(0, 255, 255, 0.45);
+            background: rgba(0, 0, 0, 0.25);
+            box-shadow: 0 0 24px rgba(0, 255, 255, 0.15);
+            transform: translate(-50%, -50%);
+        }
+        #joystick-knob {
+            position: absolute;
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            background: rgba(0, 255, 255, 0.7);
+            box-shadow: 0 0 14px rgba(0, 255, 255, 0.55);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
         .dpad-btn {
             display: flex;
             align-items: center;
@@ -687,7 +717,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.193</div>
+    <div id="version-number">v1.5.194</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -830,6 +860,12 @@
                 <button class="dpad-btn" data-dir="down">▼</button>
                 <button class="dpad-btn" data-dir="right">▶</button>
             </div>
+        </div>
+    </div>
+
+    <div id="joystick-container">
+        <div id="joystick-base">
+            <div id="joystick-knob"></div>
         </div>
     </div>
 
@@ -3439,47 +3475,81 @@
             });
         });
 
-        // Touch / Mouse handling
-        let touchStartX = 0, touchStartY = 0;
-        let mouseStartX = 0, mouseStartY = 0;
+        // Touch / Mouse — popup joystick
+        const joystickContainer = document.getElementById('joystick-container');
+        const joystickBase      = document.getElementById('joystick-base');
+        const joystickKnob      = document.getElementById('joystick-knob');
+        const JOYSTICK_RADIUS   = 52; // px from centre to edge of base
+        const JOYSTICK_DEAD     = 12; // px dead zone before a direction registers
 
-        function getSwipeTarget() {
+        let joystickPid  = null;  // active pointer id
+        let joystickOX   = 0;     // origin X in client coords
+        let joystickOY   = 0;     // origin Y in client coords
+        let joystickDir  = null;  // currently held direction string
+
+        function getJoystickTarget() {
             return blazers.find(b => b.controlScheme === 'TouchMouse' && b.isLocal);
         }
 
-        function applySwipe(dx, dy, threshold) {
-            if (Math.abs(dx) < threshold && Math.abs(dy) < threshold) return;
-            const target = getSwipeTarget();
-            if (!target) return;
-            let intentDx = 0, intentDy = 0;
-            if (Math.abs(dx) > Math.abs(dy)) intentDx = dx > 0 ? 1 : -1;
-            else intentDy = dy > 0 ? 1 : -1;
-            target.swipeIntent = { dx: intentDx, dy: intentDy, time: performance.now() };
+        function joystickShow(x, y) {
+            joystickOX = x;
+            joystickOY = y;
+            joystickBase.style.left = x + 'px';
+            joystickBase.style.top  = y + 'px';
+            joystickKnob.style.transform = 'translate(-50%, -50%)';
+            joystickContainer.style.display = 'block';
         }
 
-        canvas.addEventListener('touchstart', (e) => {
-            touchStartX = e.changedTouches[0].clientX;
-            touchStartY = e.changedTouches[0].clientY;
-        }, {passive: true});
+        function joystickHide() {
+            joystickContainer.style.display = 'none';
+            if (joystickDir) { dpadRelease(joystickDir); joystickDir = null; }
+            joystickPid = null;
+        }
 
-        canvas.addEventListener('touchend', (e) => {
+        function joystickMove(cx, cy) {
+            const dx   = cx - joystickOX;
+            const dy   = cy - joystickOY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const clamp = Math.min(dist, JOYSTICK_RADIUS);
+            const angle = Math.atan2(dy, dx);
+            const kx = dist > 0 ? Math.cos(angle) * clamp : 0;
+            const ky = dist > 0 ? Math.sin(angle) * clamp : 0;
+            joystickKnob.style.transform = `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`;
+
+            const newDir = dist < JOYSTICK_DEAD ? null
+                : Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'right' : 'left')
+                : (dy > 0 ? 'down' : 'up');
+
+            if (newDir !== joystickDir) {
+                if (joystickDir) dpadRelease(joystickDir);
+                joystickDir = newDir;
+                if (newDir && gameState === 'PLAYING') dpadPress(newDir);
+            }
+        }
+
+        canvas.addEventListener('pointerdown', (e) => {
             if (!room && gameState === 'ROUND_OVER_COUNTDOWN') { roundCountdown = 0; return; }
-            if (gameState !== 'PLAYING') return;
-            applySwipe(
-                e.changedTouches[0].clientX - touchStartX,
-                e.changedTouches[0].clientY - touchStartY,
-                30
-            );
-        }, {passive: true});
-
-        canvas.addEventListener('mousedown', (e) => {
-            mouseStartX = e.clientX;
-            mouseStartY = e.clientY;
+            if (joystickPid !== null) return;
+            if (!getJoystickTarget()) return;
+            e.preventDefault();
+            canvas.setPointerCapture(e.pointerId);
+            joystickPid = e.pointerId;
+            joystickShow(e.clientX, e.clientY);
         });
 
-        canvas.addEventListener('mouseup', (e) => {
-            if (gameState !== 'PLAYING') return;
-            applySwipe(e.clientX - mouseStartX, e.clientY - mouseStartY, 15);
+        canvas.addEventListener('pointermove', (e) => {
+            if (e.pointerId !== joystickPid) return;
+            joystickMove(e.clientX, e.clientY);
+        });
+
+        canvas.addEventListener('pointerup', (e) => {
+            if (e.pointerId !== joystickPid) return;
+            joystickHide();
+        });
+
+        canvas.addEventListener('pointercancel', (e) => {
+            if (e.pointerId !== joystickPid) return;
+            joystickHide();
         });
 
         // D-pad
@@ -3526,8 +3596,7 @@
         });
 
         function updateDpad() {
-            const show = blazers.some(b => b.controlScheme === 'TouchMouse' && b.isLocal);
-            dpadEl.classList.toggle('hidden', !show);
+            dpadEl.classList.add('hidden');
         }
 
 
