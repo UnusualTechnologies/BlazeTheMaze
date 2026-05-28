@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.180</div>
+    <div id="version-number">v1.5.181</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2787,9 +2787,9 @@
                     const rocketPath = () => {
                         ctx.beginPath();
                         ctx.moveTo(0, rTip);
-                        ctx.lineTo( cellSize * 0.18, rBot);
+                        ctx.lineTo( cellSize * 0.24, rBot);
                         ctx.lineTo(0, cellSize * 0.06);
-                        ctx.lineTo(-cellSize * 0.18, rBot);
+                        ctx.lineTo(-cellSize * 0.24, rBot);
                         ctx.closePath();
                     };
                     // Base: full rocket in current colour
@@ -2801,7 +2801,7 @@
                     // Chase strip: next colour clipped to the filled bottom portion
                     ctx.save();
                     ctx.beginPath();
-                    ctx.rect(-cellSize * 0.24, fillY, cellSize * 0.48, rBot - fillY + 1);
+                    ctx.rect(-cellSize * 0.30, fillY, cellSize * 0.60, rBot - fillY + 1);
                     ctx.clip();
                     rocketPath();
                     ctx.fillStyle = nextColor;
@@ -2812,21 +2812,19 @@
                     // Snap instantly between normal and flipped every ~1.2s
                     const flipped = Math.floor(time * 0.5) % 2 === 1;
                     const flipAngle = flipped ? Math.PI : 0;
-                    const spH = cellSize * 0.17;
-                    const spV = cellSize * 0.075;
-                    const ar  = cellSize * 0.13;
+                    const spD = cellSize * 0.12;
+                    const ar  = cellSize * 0.18; // spD + ar = 0.30 — all tips touch self circle
                     ctx.fillStyle = '#ffffff';
                     ctx.strokeStyle = '#ff0000';
-                    ctx.lineWidth = Math.max(1, cellSize * 0.055);
+                    ctx.lineWidth = Math.max(1, cellSize * 0.045);
                     ctx.lineJoin = 'round';
                     ctx.shadowColor = '#ffffff';
                     ctx.shadowBlur = 10;
-                    // WASD cross: [up] barely above [left][down][right]
                     const arrows = [
-                        { ax:   0,  ay: -spV, base: -Math.PI / 2 }, // up
-                        { ax: -spH, ay:  spV, base:  Math.PI     }, // left
-                        { ax:   0,  ay:  spV, base:  Math.PI / 2 }, // down
-                        { ax:  spH, ay:  spV, base:  0           }, // right
+                        { ax:    0, ay: -spD, base: -Math.PI / 2 }, // up
+                        { ax: -spD, ay:    0, base:  Math.PI     }, // left
+                        { ax:    0, ay:  spD, base:  Math.PI / 2 }, // down
+                        { ax:  spD, ay:    0, base:  0           }, // right
                     ];
                     arrows.forEach(({ ax, ay, base }) => {
                         ctx.save();
@@ -2849,7 +2847,7 @@
                     const MYSTERY_COLORS = ['#ffff00', '#00ffff', '#ff6600', '#ff00ff', '#00aaff', '#ffcc00']; // opp/self/rocket/mirror/freeze/beacon
                     const cycleIdx = Math.floor(performance.now() / 200) % MYSTERY_COLORS.length;
                     const mColor   = MYSTERY_COLORS[cycleIdx];
-                    const r        = cellSize * 0.30;
+                    const r        = cellSize * 0.212; // r×√2 = 0.30 — corners touch self circle
 
                     // Spinning diamond outline
                     ctx.save();
@@ -2874,7 +2872,7 @@
                 } else if (p.type === 'freeze') {
                     // 6-point snowflake, scaled to fill the same space as the self circle
                     const pulse    = (Math.sin(performance.now() / 350) + 1) / 2;
-                    const spokeLen = cellSize * 0.27;
+                    const spokeLen = cellSize * 0.30;
                     const barLen   = spokeLen * 0.38;
                     ctx.lineWidth  = Math.max(1, cellSize * 0.055);
                     ctx.lineCap    = 'round';
