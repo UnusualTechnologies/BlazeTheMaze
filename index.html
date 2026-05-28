@@ -761,7 +761,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.197</div>
+    <div id="version-number">v1.5.198</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1648,6 +1648,8 @@
                 this.moveCooldown = 70;
 
                 this.lastMoveTime = 0;
+                this.lastCellX = this.gridX;
+                this.lastCellY = this.gridY;
                 this.lastDx = 0;
                 this.lastDy = 0;
                 this.dirStreak = 0;  // consecutive cells in the same direction
@@ -1733,9 +1735,11 @@
                 }
                 this.dirStreak++; // 1 on first step in a direction, 3+ = max blur
 
+                this.lastCellX = this.gridX;
+                this.lastCellY = this.gridY;
                 this.gridX += dx;
                 this.gridY += dy;
-                this.lastMoveTime = performance.now();
+                this.lastMoveTime = Math.min(this.lastMoveTime + this.moveCooldown, performance.now());
                 
                 // Authoritative local check for sending moves to server
                 const isActuallyLocal = (room && room.sessionId) ? (this.sessionId === room.sessionId) : this.isLocal;
@@ -1816,6 +1820,36 @@
                                 this.executeMove(sdx, sdy);
                                 this.swipeIntent = null;
                                 moved = true;
+                            }
+                        }
+
+                        // 4. Single-cell snap-back: if all directions failed but the desired turn
+                        //    would have worked from the previous cell (exactly 1 cell back), snap
+                        //    back and execute. This corrects the rare case where a straight move fires
+                        //    1–2ms before the turn keypress arrives at a junction.
+                        if (!moved) {
+                            let snapDir = null;
+                            if (this.turnIntent && now - this.turnIntent.time < 300) {
+                                snapDir = this.turnIntent.dir;
+                            } else if (this.heldDirections.length > 0) {
+                                snapDir = this.heldDirections[this.heldDirections.length - 1];
+                            }
+                            if (snapDir) {
+                                const dist = Math.abs(this.gridX - this.lastCellX) + Math.abs(this.gridY - this.lastCellY);
+                                if (dist === 1) {
+                                    const { dx: sdx, dy: sdy } = dirToDxDy(snapDir);
+                                    const savedX = this.gridX, savedY = this.gridY;
+                                    this.gridX = this.lastCellX;
+                                    this.gridY = this.lastCellY;
+                                    if (this.canMove(sdx, sdy)) {
+                                        this.executeMove(sdx, sdy);
+                                        if (this.turnIntent && this.turnIntent.dir === snapDir) this.turnIntent = null;
+                                        moved = true;
+                                    } else {
+                                        this.gridX = savedX;
+                                        this.gridY = savedY;
+                                    }
+                                }
                             }
                         }
 
@@ -2272,6 +2306,8 @@
             blazer.bonkTimer = 0;
             blazer.bonkDx = 0;
             blazer.bonkDy = 0;
+            blazer.lastCellX = blazer.gridX;
+            blazer.lastCellY = blazer.gridY;
         }
 
         function initMatch() {
@@ -3523,7 +3559,7 @@
                         blazer.turnIntent = { dir: dir, time: performance.now() };
                         // Expire the cooldown now so the very next RAF frame fires the move
                         // (≤16ms lag, imperceptible) and all subsequent moves keep the same rhythm.
-                        blazer.lastMoveTime = performance.now() - blazer.moveCooldown;
+                        blazer.lastMoveTime = e.timeStamp - blazer.moveCooldown;
                     }
                 }
             });
