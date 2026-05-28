@@ -717,7 +717,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.194</div>
+    <div id="version-number">v1.5.195</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2216,10 +2216,12 @@
             blazers = [];
             updateScoreboard();
 
-            initRound();
+            // Skip the movement lock when joining a game that's already in progress
+            const roundAlreadyRunning = !!room && room.state && room.state.timer > 0;
+            initRound(roundAlreadyRunning);
         }
 
-        function initRound() {
+        function initRound(skipMoveLock = false) {
             gameState = 'INITIALIZING'; // Temporarily change state to block draw() recursion
             bgTintR = bgTintG = bgTintB = 0; // reset so leader tint fades in fresh each round
             document.body.style.backgroundColor = '#000000';
@@ -2261,8 +2263,8 @@
             lastTime = performance.now();
             roundStartTime = performance.now();
             roundRingTime = performance.now();
-            roundMoveLockEnd = performance.now() + ROUND_START_MS * (2 / 3); // unlock at start of pulse 3
-            roundUnlockFlashFired = false;
+            roundMoveLockEnd = skipMoveLock ? 0 : performance.now() + ROUND_START_MS * (2 / 3);
+            roundUnlockFlashFired = skipMoveLock; // no unlock flash if movement was never locked
             roundSonarsFired = 0;
             Synth.muffle(false);
         }
