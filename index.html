@@ -761,7 +761,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.198</div>
+    <div id="version-number">v1.5.199</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1825,8 +1825,8 @@
 
                         // 4. Single-cell snap-back: if all directions failed but the desired turn
                         //    would have worked from the previous cell (exactly 1 cell back), snap
-                        //    back and execute. This corrects the rare case where a straight move fires
-                        //    1–2ms before the turn keypress arrives at a junction.
+                        //    back and execute. Only activates for direction CHANGES (not continuing
+                        //    straight) to avoid oscillation when pressing against a wall.
                         if (!moved) {
                             let snapDir = null;
                             if (this.turnIntent && now - this.turnIntent.time < 300) {
@@ -1838,16 +1838,21 @@
                                 const dist = Math.abs(this.gridX - this.lastCellX) + Math.abs(this.gridY - this.lastCellY);
                                 if (dist === 1) {
                                     const { dx: sdx, dy: sdy } = dirToDxDy(snapDir);
-                                    const savedX = this.gridX, savedY = this.gridY;
-                                    this.gridX = this.lastCellX;
-                                    this.gridY = this.lastCellY;
-                                    if (this.canMove(sdx, sdy)) {
-                                        this.executeMove(sdx, sdy);
-                                        if (this.turnIntent && this.turnIntent.dir === snapDir) this.turnIntent = null;
-                                        moved = true;
-                                    } else {
-                                        this.gridX = savedX;
-                                        this.gridY = savedY;
+                                    // Skip if continuing same direction as last move — that's a wall press, not an overshoot.
+                                    const lastMoveDx = this.gridX - this.lastCellX;
+                                    const lastMoveDy = this.gridY - this.lastCellY;
+                                    if (sdx !== lastMoveDx || sdy !== lastMoveDy) {
+                                        const savedX = this.gridX, savedY = this.gridY;
+                                        this.gridX = this.lastCellX;
+                                        this.gridY = this.lastCellY;
+                                        if (this.canMove(sdx, sdy)) {
+                                            this.executeMove(sdx, sdy);
+                                            if (this.turnIntent && this.turnIntent.dir === snapDir) this.turnIntent = null;
+                                            moved = true;
+                                        } else {
+                                            this.gridX = savedX;
+                                            this.gridY = savedY;
+                                        }
                                     }
                                 }
                             }
