@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.179</div>
+    <div id="version-number">v1.5.180</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2740,16 +2740,16 @@
                     ctx.fillStyle = colors.bg;
                     ctx.fill();
                     ctx.lineWidth = 2;
-                    const oppCol = playerColors[Math.floor(performance.now() / 300) % playerColors.length] || '#ffff00';
-                    ctx.strokeStyle = oppCol;
+                    ctx.strokeStyle = colors.powerupSelf;
                     ctx.setLineDash([5, 5]);
                     ctx.shadowBlur = 10;
-                    ctx.shadowColor = oppCol;
+                    ctx.shadowColor = colors.powerupSelf;
                     ctx.stroke();
                     ctx.setLineDash([]);
                     ctx.shadowBlur = 0;
                     // Undo circle rotation for the "1" label so it stays upright
                     ctx.rotate(time);
+                    const oppCol = playerColors[Math.floor(performance.now() / 300) % playerColors.length] || '#ffff00';
                     ctx.font = `bold ${Math.round(cellSize * 0.32)}px monospace`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
