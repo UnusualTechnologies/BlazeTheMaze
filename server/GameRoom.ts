@@ -936,6 +936,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     teleportPlayer(player: Player) {
         const startX = player.x, startY = player.y;
         let x = startX, y = startY;
+        const minDist = Math.max(5, Math.floor(Math.min(this.cols, this.rows) / 3));
         const maxAttempts = this.cols * this.rows * 4;
         let attempts = 0;
         do {
@@ -945,7 +946,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         } while (
             attempts < maxAttempts &&
             (
-                (x === startX && y === startY) ||
+                Math.abs(x - startX) + Math.abs(y - startY) < minDist ||  // too close to current position
                 this.isReservedCell(x, y) ||
                 this.getDistance(x, y) <= 10 ||   // keep players away from the goal area
                 this.state.powerUps.some((pu: PowerUp) => pu.x === x && pu.y === y) ||
