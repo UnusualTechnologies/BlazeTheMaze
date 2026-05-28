@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.191</div>
+    <div id="version-number">v1.5.192</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1524,10 +1524,9 @@
                 this.trail = [];
                 this.maxTrail = 25;
                 this.moveTimer = 0;
-                this.moveCooldown = 50;
+                this.moveCooldown = 70;
 
                 this.lastMoveTime = 0;
-                this.predictedPositions = []; // recent client-predicted grid positions (for server desync check)
                 this.lastDx = 0;
                 this.lastDy = 0;
                 this.dirStreak = 0;  // consecutive cells in the same direction
@@ -1616,10 +1615,6 @@
                 this.gridX += dx;
                 this.gridY += dy;
                 this.lastMoveTime = performance.now();
-                if (this.isActuallyLocal()) {
-                    this.predictedPositions.push({ x: this.gridX, y: this.gridY });
-                    if (this.predictedPositions.length > 15) this.predictedPositions.shift();
-                }
                 
                 // Authoritative local check for sending moves to server
                 const isActuallyLocal = (room && room.sessionId) ? (this.sessionId === room.sessionId) : this.isLocal;
@@ -3399,33 +3394,13 @@
 
                 if (dir) {
                     if (!blazer.heldDirections.includes(dir)) {
-                        const now = performance.now();
                         blazer.heldDirections.push(dir);
-                        blazer.dirKeyDownTimes[dir] = now;
-                        blazer.turnIntent = { dir: dir, time: now };
-
-                        // Attempt synchronous first move at T=0 (no RAF delay)
-                        const cooldownExpired = now - blazer.lastMoveTime >= blazer.moveCooldown;
-                        if (blazer.state === 'normal' && now >= roundMoveLockEnd && Date.now() >= blazer.frozenUntil && cooldownExpired) {
-                            const mirrored = blazer.mirrorUntil > 0 && Date.now() < blazer.mirrorUntil;
-                            const eDir = mirrored ? mirrorDir(dir) : dir;
-                            const dx = eDir === 'right' ? 1 : eDir === 'left' ? -1 : 0;
-                            const dy = eDir === 'down' ? 1 : eDir === 'up' ? -1 : 0;
-                            if (blazer.canMove(dx, dy)) {
-                                blazer.executeMove(dx, dy);
-                                blazer.updatePixelPos(true);
-                                blazer.turnIntent = null; // consumed — prevent update() double-fire
-                                const idx = blazer.heldDirections.indexOf(dir);
-                                if (idx > -1) blazer.heldDirections.splice(idx, 1);
-                                if (!tapOnlyToggle.checked) blazer.heldDirections.unshift(dir);
-                            } else {
-                                // Wall — pre-expire so next RAF fires the bonk
-                                blazer.lastMoveTime = now - blazer.moveCooldown;
-                            }
-                        } else {
-                            // Not ready (frozen, lock, mid-cooldown) — pre-expire so next RAF fires within ≤16ms
-                            blazer.lastMoveTime = now - blazer.moveCooldown;
-                        }
+                        blazer.dirKeyDownTimes[dir] = performance.now();
+                        // Buffer the intent so early presses turn seamlessly, ONLY on initial keydown to avoid OS repeat bugs
+                        blazer.turnIntent = { dir: dir, time: performance.now() };
+                        // Expire the cooldown now so the very next RAF frame fires the move
+                        // (≤16ms lag, imperceptible) and all subsequent moves keep the same rhythm.
+                        blazer.lastMoveTime = performance.now() - blazer.moveCooldown;
                     }
                 }
             });
@@ -3818,10 +3793,8 @@
                         // so any position change here would be the reset teleport arriving early.
                         if (gameState === 'ROUND_OVER_COUNTDOWN') return;
 
-                        // If player position changed drastically AND wasn't client-predicted, trigger teleport animation.
-                        // Predicted positions guard against false triggers when client is ahead of server by 2+ cells.
-                        const wasClientPredicted = blazer.predictedPositions?.some(p => p.x === playerState.x && p.y === playerState.y);
-                        if (!wasClientPredicted && (Math.abs(blazer.gridX - playerState.x) > 1 || Math.abs(blazer.gridY - playerState.y) > 1)) {
+                        // If player position changed drastically, trigger teleport animation
+                        if (Math.abs(blazer.gridX - playerState.x) > 1 || Math.abs(blazer.gridY - playerState.y) > 1) {
                             if (blazer.state === 'normal') {
                                 // Smoke puff at departure point, drifting toward destination
                                 smokePuffs.push({
