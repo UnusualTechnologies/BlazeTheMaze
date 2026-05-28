@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.192</div>
+    <div id="version-number">v1.5.193</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1061,10 +1061,10 @@
                 if (i === 0) defaultType = 'local';
                 else if (i < 4) defaultType = 'ai_online';
 
-                let defaultControl = (i === 0 && isMobile) ? 'TouchMouse' : 'WASD';
-                if (i === 1) defaultControl = 'TFGH';
-                else if (i === 2) defaultControl = 'IJKL';
-                else if (i === 3) defaultControl = 'Arrows';
+                let defaultControl = (i === 0 && isMobile) ? 'TouchMouse' : 'Arrows';
+                if (i === 1) defaultControl = 'WASD';
+                else if (i === 2) defaultControl = 'TFGH';
+                else if (i === 3) defaultControl = 'IJKL';
                 else if (i >= 4) defaultControl = 'Numpad';
 
                 slotDiv.innerHTML = `
