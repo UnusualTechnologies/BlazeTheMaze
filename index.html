@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.190</div>
+    <div id="version-number">v1.5.191</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1534,7 +1534,7 @@
                 this.speedBlur = 0;  // 0–1 smoothed, drives motion-blur ghost opacity
 
                 this.heldDirections = [];
-                this.moveQueue = []; // { dir, time } FIFO — preserves rapid multi-tap inputs in order
+                this.turnIntent = null;
                 this.swipeIntent = null;
                 this.dirKeyDownTimes = {}; // dir → performance.now() when key was pressed
 
@@ -1650,23 +1650,26 @@
                             return { dx: 0, dy: 0 };
                         };
 
-                        // 1. Drain move queue (FIFO — preserves rapid multi-tap inputs in order)
-                        while (this.moveQueue.length > 0 && now - this.moveQueue[0].time > 300) {
-                            this.moveQueue.shift(); // expire stale entries
-                        }
-                        if (!moved && this.moveQueue.length > 0) {
-                            const { dx, dy } = dirToDxDy(this.moveQueue[0].dir);
+                        // 1. Check Input Intent Buffer (if player pressed turn slightly before intersection)
+                        if (this.turnIntent && now - this.turnIntent.time < 300) {
+                            const { dx, dy } = dirToDxDy(this.turnIntent.dir);
+
                             if (this.canMove(dx, dy)) {
-                                const intentDir = this.moveQueue.shift().dir;
+                                const intentDir = this.turnIntent.dir; // save before nulling
                                 this.executeMove(dx, dy);
                                 moved = true;
+
+                                // Sync buffer with held directions to preserve alternating behavior
                                 const idx = this.heldDirections.indexOf(intentDir);
                                 if (idx > -1) {
                                     this.heldDirections.splice(idx, 1);
-                                    if (!tapOnlyToggle.checked) this.heldDirections.unshift(intentDir);
+                                    if (!tapOnlyToggle.checked) {
+                                        this.heldDirections.unshift(intentDir);
+                                    }
                                 }
+
+                                this.turnIntent = null; // consume intent
                             }
-                            // if can't move: leave at head, retry next tick or expire
                         }
 
                         // 2. Check currently held directions
@@ -1704,8 +1707,8 @@
                             this.updatePixelPos(true); // snap immediately — no lerp inertia for local player
                         } else {
                             let bonkDx = 0, bonkDy = 0;
-                            if (this.moveQueue.length > 0 && now - this.moveQueue[0].time < 300) {
-                                const { dx, dy } = dirToDxDy(this.moveQueue[0].dir);
+                            if (this.turnIntent && now - this.turnIntent.time < 300) {
+                                const { dx, dy } = dirToDxDy(this.turnIntent.dir);
                                 bonkDx = dx; bonkDy = dy;
                             } else if (this.heldDirections.length > 0) {
                                 const { dx, dy } = dirToDxDy(this.heldDirections[this.heldDirections.length - 1]);
@@ -2147,7 +2150,7 @@
             blazer.state = 'normal';
             blazer.stateTimer = 0;
             blazer.heldDirections = [];
-            blazer.moveQueue = [];
+            blazer.turnIntent = null;
             blazer.swipeIntent = null;
             blazer.dirKeyDownTimes = {};
             blazer.bonkTimer = 0;
@@ -3278,7 +3281,7 @@
                 const blazer = blazers.find(b => b.isPlayer && b.controlScheme === scheme && b.isActuallyLocal());
 
                 if (!gp || !blazer) {
-                    if (!gp && blazer) { blazer.heldDirections = []; blazer.moveQueue = []; }
+                    if (!gp && blazer) { blazer.heldDirections = []; blazer.turnIntent = null; }
                     gamepadPrevState[gpIdx] = { up: false, right: false, down: false, left: false };
                     gamepadABtnPrev[gpIdx] = false;
                     continue;
@@ -3297,14 +3300,12 @@
                     if (curr[dir] && !prev[dir]) {
                         if (!blazer.heldDirections.includes(dir)) {
                             blazer.heldDirections.push(dir);
-                            if (gameState === 'PLAYING' && blazer.moveQueue.length < 5) {
-                                blazer.moveQueue.push({ dir, time: performance.now() });
-                            }
+                            if (gameState === 'PLAYING') blazer.turnIntent = { dir, time: performance.now() };
                         }
                     } else if (!curr[dir] && prev[dir]) {
                         const idx = blazer.heldDirections.indexOf(dir);
                         if (idx > -1) blazer.heldDirections.splice(idx, 1);
-                        if (blazer.moveQueue.length > 0 && blazer.moveQueue[0].dir === dir) blazer.moveQueue.shift();
+                        if (blazer.turnIntent?.dir === dir) blazer.turnIntent = null;
                     }
                 });
                 gamepadPrevState[gpIdx] = curr;
@@ -3401,6 +3402,7 @@
                         const now = performance.now();
                         blazer.heldDirections.push(dir);
                         blazer.dirKeyDownTimes[dir] = now;
+                        blazer.turnIntent = { dir: dir, time: now };
 
                         // Attempt synchronous first move at T=0 (no RAF delay)
                         const cooldownExpired = now - blazer.lastMoveTime >= blazer.moveCooldown;
@@ -3412,17 +3414,17 @@
                             if (blazer.canMove(dx, dy)) {
                                 blazer.executeMove(dx, dy);
                                 blazer.updatePixelPos(true);
+                                blazer.turnIntent = null; // consumed — prevent update() double-fire
                                 const idx = blazer.heldDirections.indexOf(dir);
                                 if (idx > -1) blazer.heldDirections.splice(idx, 1);
                                 if (!tapOnlyToggle.checked) blazer.heldDirections.unshift(dir);
-                                // Move fired instantly — nothing to queue
                             } else {
-                                // Wall or mid-cooldown: queue for next available tick
-                                if (blazer.moveQueue.length < 5) blazer.moveQueue.push({ dir, time: now });
+                                // Wall — pre-expire so next RAF fires the bonk
+                                blazer.lastMoveTime = now - blazer.moveCooldown;
                             }
                         } else {
-                            // Not ready (frozen, lock, mid-cooldown): queue for next available tick
-                            if (blazer.moveQueue.length < 5) blazer.moveQueue.push({ dir, time: now });
+                            // Not ready (frozen, lock, mid-cooldown) — pre-expire so next RAF fires within ≤16ms
+                            blazer.lastMoveTime = now - blazer.moveCooldown;
                         }
                     }
                 }
@@ -3453,10 +3455,10 @@
                     const holdMs = blazer.dirKeyDownTimes[dir]
                         ? performance.now() - blazer.dirKeyDownTimes[dir] : Infinity;
                     delete blazer.dirKeyDownTimes[dir];
-                    // For quick taps (<120ms) keep the queue entry alive so the move fires at next tick.
-                    // For long holds (>=120ms), heldDirections drove movement — clear any stale queue head.
-                    if (holdMs >= 120 && blazer.moveQueue.length > 0 && blazer.moveQueue[0].dir === dir) {
-                        blazer.moveQueue.shift();
+                    // For quick taps (<120 ms) keep turnIntent alive so the move still fires
+                    // at the next cooldown tick even if the key was released before it expired.
+                    if (holdMs >= 120 && blazer.turnIntent && blazer.turnIntent.dir === dir) {
+                        blazer.turnIntent = null;
                     }
                 }
             });
@@ -3513,7 +3515,7 @@
             if (!blazer) return;
             if (!blazer.heldDirections.includes(dir)) {
                 blazer.heldDirections.push(dir);
-                if (blazer.moveQueue.length < 5) blazer.moveQueue.push({ dir, time: performance.now() });
+                blazer.turnIntent = { dir, time: performance.now() };
             }
         }
 
@@ -3522,7 +3524,7 @@
             if (!blazer) return;
             const idx = blazer.heldDirections.indexOf(dir);
             if (idx > -1) blazer.heldDirections.splice(idx, 1);
-            if (blazer.moveQueue.length > 0 && blazer.moveQueue[0].dir === dir) blazer.moveQueue.shift();
+            if (blazer.turnIntent?.dir === dir) blazer.turnIntent = null;
         }
 
         dpadEl.addEventListener('pointerdown', (e) => {
