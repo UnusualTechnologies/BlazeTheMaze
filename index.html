@@ -761,7 +761,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.200</div>
+    <div id="version-number">v1.5.201</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1752,6 +1752,11 @@
                 const now = performance.now();
 
                 if (this.isPlayer && this.state === 'normal' && this.isActuallyLocal() && now >= roundMoveLockEnd && Date.now() >= this.frozenUntil) {
+                    // If the schedule fell more than 2 periods behind (frozen, locked, tab hidden, etc.),
+                    // reset it so at most one move fires immediately — no catch-up burst.
+                    if (now - this.lastMoveTime > this.moveCooldown * 2) {
+                        this.lastMoveTime = now - this.moveCooldown;
+                    }
                     if (now - this.lastMoveTime >= this.moveCooldown) {
                         let moved = false;
                         const mirrored = this.mirrorUntil > 0 && Date.now() < this.mirrorUntil;
