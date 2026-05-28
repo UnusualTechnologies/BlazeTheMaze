@@ -640,8 +640,8 @@
         }
         #joystick-base {
             position: absolute;
-            width: 120px;
-            height: 120px;
+            width: 88px;
+            height: 88px;
             border-radius: 50%;
             border: 3px solid rgba(0, 255, 255, 0.45);
             background: rgba(0, 0, 0, 0.25);
@@ -650,8 +650,8 @@
         }
         #joystick-knob {
             position: absolute;
-            width: 46px;
-            height: 46px;
+            width: 38px;
+            height: 38px;
             border-radius: 50%;
             background: rgba(0, 255, 255, 0.7);
             box-shadow: 0 0 14px rgba(0, 255, 255, 0.55);
@@ -761,7 +761,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.211</div>
+    <div id="version-number">v1.5.213</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3695,13 +3695,15 @@
         const joystickContainer = document.getElementById('joystick-container');
         const joystickBase      = document.getElementById('joystick-base');
         const joystickKnob      = document.getElementById('joystick-knob');
-        const JOYSTICK_RADIUS   = 52; // px from centre to edge of base
-        const JOYSTICK_DEAD     = 12; // px dead zone before a direction registers
+        const JOYSTICK_RADIUS   = 34; // px from centre to edge of base
+        const JOYSTICK_DEAD     =  8; // px dead zone before a direction registers
+        const JOYSTICK_DIAG     = 0.33; // secondary axis fraction threshold for diagonal assist
 
         let joystickPid  = null;  // active pointer id
         let joystickOX   = 0;     // origin X in client coords
         let joystickOY   = 0;     // origin Y in client coords
-        let joystickDir  = null;  // currently held direction string
+        let joystickDir  = null;  // primary held direction
+        let joystickDir2 = null;  // secondary (diagonal) held direction
 
         function getJoystickTarget() {
             return blazers.find(b => b.controlScheme === 'TouchMouse' && b.isLocal);
@@ -3718,28 +3720,59 @@
 
         function joystickHide() {
             joystickContainer.style.display = 'none';
-            if (joystickDir) { dpadRelease(joystickDir); joystickDir = null; }
+            if (joystickDir)  { dpadRelease(joystickDir);  joystickDir  = null; }
+            if (joystickDir2) { dpadRelease(joystickDir2); joystickDir2 = null; }
             joystickPid = null;
         }
 
         function joystickMove(cx, cy) {
-            const dx   = cx - joystickOX;
-            const dy   = cy - joystickOY;
-            const dist = Math.sqrt(dx * dx + dy * dy);
+            const dx    = cx - joystickOX;
+            const dy    = cy - joystickOY;
+            const dist  = Math.sqrt(dx * dx + dy * dy);
             const clamp = Math.min(dist, JOYSTICK_RADIUS);
             const angle = Math.atan2(dy, dx);
             const kx = dist > 0 ? Math.cos(angle) * clamp : 0;
             const ky = dist > 0 ? Math.sin(angle) * clamp : 0;
             joystickKnob.style.transform = `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`;
 
-            const newDir = dist < JOYSTICK_DEAD ? null
-                : Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'right' : 'left')
+            if (dist < JOYSTICK_DEAD) {
+                // Dead zone — release everything
+                if (joystickDir)  { dpadRelease(joystickDir);  joystickDir  = null; }
+                if (joystickDir2) { dpadRelease(joystickDir2); joystickDir2 = null; }
+                return;
+            }
+
+            // Primary direction: dominant axis
+            const primaryDir = Math.abs(dx) >= Math.abs(dy)
+                ? (dx > 0 ? 'right' : 'left')
                 : (dy > 0 ? 'down' : 'up');
 
-            if (newDir !== joystickDir) {
+            // Secondary direction: if both axes are significant (diagonal zone),
+            // also hold the minor-axis direction so the player can slide into
+            // corridors that aren't perfectly aligned with their swipe.
+            let secondaryDir = null;
+            if (dist >= JOYSTICK_DEAD) {
+                const fx = Math.abs(dx) / dist;
+                const fy = Math.abs(dy) / dist;
+                if (fx > JOYSTICK_DIAG && fy > JOYSTICK_DIAG) {
+                    secondaryDir = (primaryDir === 'up' || primaryDir === 'down')
+                        ? (dx > 0 ? 'right' : 'left')
+                        : (dy > 0 ? 'down' : 'up');
+                }
+            }
+
+            // Update primary
+            if (primaryDir !== joystickDir) {
                 if (joystickDir) dpadRelease(joystickDir);
-                joystickDir = newDir;
-                if (newDir && gameState === 'PLAYING') dpadPress(newDir);
+                joystickDir = primaryDir;
+                if (gameState === 'PLAYING') dpadPress(primaryDir);
+            }
+
+            // Update secondary
+            if (secondaryDir !== joystickDir2) {
+                if (joystickDir2) dpadRelease(joystickDir2);
+                joystickDir2 = secondaryDir;
+                if (secondaryDir && gameState === 'PLAYING') dpadPress(secondaryDir);
             }
         }
 
