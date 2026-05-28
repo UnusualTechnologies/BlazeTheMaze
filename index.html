@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.176</div>
+    <div id="version-number">v1.5.177</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3452,6 +3452,25 @@
                         delete blazer.dirMoveFired[dir];
                         // Buffer the intent so early presses turn seamlessly, ONLY on initial keydown to avoid OS repeat bugs
                         blazer.turnIntent = { dir: dir, time: performance.now() };
+
+                        // Instant first-move: fire immediately in the keydown handler so
+                        // there is zero frame-delay before the player enters the next cell.
+                        const now = performance.now();
+                        if (blazer.state === 'normal' &&
+                            now >= roundMoveLockEnd &&
+                            Date.now() >= blazer.frozenUntil &&
+                            now - blazer.lastMoveTime >= blazer.moveCooldown) {
+                            const mirrored = blazer.mirrorUntil > 0 && Date.now() < blazer.mirrorUntil;
+                            const mDir = mirrored ? mirrorDir(dir) : dir;
+                            const dx = mDir === 'right' ? 1 : mDir === 'left' ? -1 : 0;
+                            const dy = mDir === 'down'  ? 1 : mDir === 'up'   ? -1 : 0;
+                            if (blazer.canMove(dx, dy)) {
+                                blazer.executeMove(dx, dy);
+                                blazer.updatePixelPos(true); // snap pixel position — no lerp lag
+                                blazer.dirMoveFired[dir] = true;
+                                blazer.turnIntent = null; // consumed
+                            }
+                        }
                     }
                 }
             });
