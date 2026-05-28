@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.181</div>
+    <div id="version-number">v1.5.182</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1698,7 +1698,9 @@
                             }
                         }
 
-                        if (!moved) {
+                        if (moved) {
+                            this.updatePixelPos(true); // snap immediately — no lerp inertia for local player
+                        } else {
                             let bonkDx = 0, bonkDy = 0;
                             if (this.turnIntent && now - this.turnIntent.time < 300) {
                                 const { dx, dy } = dirToDxDy(this.turnIntent.dir);
@@ -1710,7 +1712,7 @@
                                 bonkDx = mirrored ? -this.swipeIntent.dx : this.swipeIntent.dx;
                                 bonkDy = mirrored ? -this.swipeIntent.dy : this.swipeIntent.dy;
                             }
-                            
+
                             if (bonkDx !== 0 || bonkDy !== 0) {
                                 this.triggerBonk(bonkDx, bonkDy);
                             }
