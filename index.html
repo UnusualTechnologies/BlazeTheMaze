@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.178</div>
+    <div id="version-number">v1.5.179</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2733,25 +2733,31 @@
                 ctx.save();
                 ctx.translate(px, py);
                 if (p.type === 'opponents') {
-                    const n = playerColors.length;
-                    const r = cellSize * 0.21;
-                    const sliceAngle = (Math.PI * 2) / n;
-                    const gapAngle = sliceAngle * 0.12; // proportional gap — stays visible at all cell sizes
-                    const arcAngle = sliceAngle - gapAngle;
+                    // Dashed circle (same as self) + "1" in cycling player colours
+                    ctx.rotate(-time);
+                    ctx.beginPath();
+                    ctx.arc(0, 0, cellSize * 0.3, 0, Math.PI * 2);
+                    ctx.fillStyle = colors.bg;
+                    ctx.fill();
+                    ctx.lineWidth = 2;
+                    const oppCol = playerColors[Math.floor(performance.now() / 300) % playerColors.length] || '#ffff00';
+                    ctx.strokeStyle = oppCol;
+                    ctx.setLineDash([5, 5]);
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = oppCol;
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.shadowBlur = 0;
+                    // Undo circle rotation for the "1" label so it stays upright
                     ctx.rotate(time);
-                    playerColors.forEach((col, i) => {
-                        const startA = i * sliceAngle + gapAngle / 2;
-                        for (let pass = 0; pass < 3; pass++) {
-                            ctx.beginPath();
-                            ctx.arc(0, 0, r, startA, startA + arcAngle);
-                            ctx.lineWidth = 2;
-                            ctx.strokeStyle = col;
-                            ctx.shadowBlur = [60, 30, 12][pass];
-                            ctx.shadowColor = col;
-                            ctx.stroke();
-                        }
-                        ctx.shadowBlur = 0;
-                    });
+                    ctx.font = `bold ${Math.round(cellSize * 0.32)}px monospace`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.shadowBlur = 12;
+                    ctx.shadowColor = oppCol;
+                    ctx.fillStyle = oppCol;
+                    ctx.fillText('1', 0, 0);
+                    ctx.shadowBlur = 0;
                 } else if (p.type === 'self') {
                     ctx.rotate(-time);
                     ctx.beginPath();
@@ -2775,15 +2781,15 @@
                     const progress = (ms % slotMs) / slotMs; // 0→1 within this slot
                     const curColor  = playerColors[slot % playerColors.length] || '#ff3300';
                     const nextColor = playerColors[(slot + 1) % playerColors.length] || '#ff3300';
-                    const rTip = -cellSize * 0.25;
-                    const rBot =  cellSize * 0.15;
+                    const rTip = -cellSize * 0.30;
+                    const rBot =  cellSize * 0.18;
                     const fillY = rBot - progress * (rBot - rTip); // chase line moves upward
                     const rocketPath = () => {
                         ctx.beginPath();
                         ctx.moveTo(0, rTip);
-                        ctx.lineTo( cellSize * 0.15, rBot);
-                        ctx.lineTo(0, cellSize * 0.05);
-                        ctx.lineTo(-cellSize * 0.15, rBot);
+                        ctx.lineTo( cellSize * 0.18, rBot);
+                        ctx.lineTo(0, cellSize * 0.06);
+                        ctx.lineTo(-cellSize * 0.18, rBot);
                         ctx.closePath();
                     };
                     // Base: full rocket in current colour
@@ -2795,7 +2801,7 @@
                     // Chase strip: next colour clipped to the filled bottom portion
                     ctx.save();
                     ctx.beginPath();
-                    ctx.rect(-cellSize * 0.2, fillY, cellSize * 0.4, rBot - fillY + 1);
+                    ctx.rect(-cellSize * 0.24, fillY, cellSize * 0.48, rBot - fillY + 1);
                     ctx.clip();
                     rocketPath();
                     ctx.fillStyle = nextColor;
@@ -2806,9 +2812,9 @@
                     // Snap instantly between normal and flipped every ~1.2s
                     const flipped = Math.floor(time * 0.5) % 2 === 1;
                     const flipAngle = flipped ? Math.PI : 0;
-                    const spH = cellSize * 0.21;
-                    const spV = cellSize * 0.09; // scraping-close to bottom row
-                    const ar  = cellSize * 0.155;
+                    const spH = cellSize * 0.17;
+                    const spV = cellSize * 0.075;
+                    const ar  = cellSize * 0.13;
                     ctx.fillStyle = '#ffffff';
                     ctx.strokeStyle = '#ff0000';
                     ctx.lineWidth = Math.max(1, cellSize * 0.055);
@@ -2843,7 +2849,7 @@
                     const MYSTERY_COLORS = ['#ffff00', '#00ffff', '#ff6600', '#ff00ff', '#00aaff', '#ffcc00']; // opp/self/rocket/mirror/freeze/beacon
                     const cycleIdx = Math.floor(performance.now() / 200) % MYSTERY_COLORS.length;
                     const mColor   = MYSTERY_COLORS[cycleIdx];
-                    const r        = cellSize * 0.28;
+                    const r        = cellSize * 0.30;
 
                     // Spinning diamond outline
                     ctx.save();
@@ -2866,40 +2872,20 @@
                     ctx.textBaseline = 'middle';
                     ctx.fillText('?', 0, 0);
                 } else if (p.type === 'freeze') {
-                    // Icy snowball — dark navy sphere with 6-point snowflake, cold blue glow
-                    const pulse   = (Math.sin(performance.now() / 350) + 1) / 2;
-                    const sphereR = cellSize * 0.25;
-
-                    // Sphere body (dark navy)
-                    ctx.beginPath();
-                    ctx.arc(0, 0, sphereR, 0, Math.PI * 2);
-                    ctx.fillStyle   = '#001a33';
-                    ctx.shadowBlur  = 18 + pulse * 12;
-                    ctx.shadowColor = '#00aaff';
-                    ctx.fill();
-
-                    // Icy highlight ring
-                    ctx.beginPath();
-                    ctx.arc(0, 0, sphereR, 0, Math.PI * 2);
-                    ctx.strokeStyle = `rgba(136,220,255,${0.5 + pulse * 0.4})`;
-                    ctx.lineWidth   = Math.max(1, cellSize * 0.04);
-                    ctx.shadowBlur  = 6;
-                    ctx.shadowColor = '#ffffff';
-                    ctx.stroke();
-
-                    // 6-point snowflake (slowly rotating)
-                    const spokeLen  = sphereR * 0.75;
-                    const barLen    = spokeLen * 0.35;
-                    ctx.lineWidth   = Math.max(1, cellSize * 0.045);
-                    ctx.lineCap     = 'round';
-                    ctx.shadowBlur  = 6;
-                    ctx.shadowColor = '#ffffff';
+                    // 6-point snowflake, scaled to fill the same space as the self circle
+                    const pulse    = (Math.sin(performance.now() / 350) + 1) / 2;
+                    const spokeLen = cellSize * 0.27;
+                    const barLen   = spokeLen * 0.38;
+                    ctx.lineWidth  = Math.max(1, cellSize * 0.055);
+                    ctx.lineCap    = 'round';
                     for (let i = 0; i < 6; i++) {
-                        const a   = i * Math.PI / 3 + time * 0.25;
-                        const tx  = Math.cos(a) * spokeLen, ty  = Math.sin(a) * spokeLen;
-                        const bx  = Math.cos(a) * spokeLen * 0.55, by = Math.sin(a) * spokeLen * 0.55;
-                        const pa  = a + Math.PI / 2;
+                        const a  = i * Math.PI / 3 + time * 0.25;
+                        const tx = Math.cos(a) * spokeLen, ty = Math.sin(a) * spokeLen;
+                        const bx = Math.cos(a) * spokeLen * 0.55, by = Math.sin(a) * spokeLen * 0.55;
+                        const pa = a + Math.PI / 2;
                         ctx.strokeStyle = i % 2 === 0 ? '#ffffff' : '#88ddff';
+                        ctx.shadowBlur  = 8 + pulse * 10;
+                        ctx.shadowColor = i % 2 === 0 ? '#ffffff' : '#00aaff';
                         ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(tx, ty); ctx.stroke();
                         ctx.beginPath();
                         ctx.moveTo(bx - Math.cos(pa) * barLen, by - Math.sin(pa) * barLen);
