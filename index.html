@@ -586,6 +586,37 @@
 
         #dpad.hidden { display: none; }
 
+        /* Power-up legend (replaces dpad) */
+        #pu-legend {
+            grid-column: 2;
+            grid-row: 1 / span 2;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 5px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: rgba(255, 255, 255, 0.85);
+            font-family: monospace;
+            font-size: clamp(0.58rem, 1.4vmin, 0.8rem);
+            align-self: stretch;
+        }
+
+        .pu-legend-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .pu-legend-icon {
+            width: 22px;
+            height: 22px;
+            flex-shrink: 0;
+            overflow: visible;
+        }
+
         /* Popup joystick */
         #joystick-container {
             position: fixed;
@@ -717,7 +748,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.195</div>
+    <div id="version-number">v1.5.196</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -859,6 +890,47 @@
                 <button class="dpad-btn" data-dir="left">◀</button>
                 <button class="dpad-btn" data-dir="down">▼</button>
                 <button class="dpad-btn" data-dir="right">▶</button>
+            </div>
+            <div id="pu-legend">
+                <div class="pu-legend-row">
+                    <svg class="pu-legend-icon" viewBox="-16 -16 32 32" style="filter:drop-shadow(0 0 5px #ffff00)">
+                        <circle r="12" fill="#ffff00"/>
+                        <text x="0" y="0" dominant-baseline="central" text-anchor="middle" font-size="13" font-weight="bold" font-family="monospace" fill="#000">1</text>
+                    </svg>
+                    <span>Teleport the leader</span>
+                </div>
+                <div class="pu-legend-row">
+                    <svg class="pu-legend-icon" viewBox="-16 -16 32 32" style="filter:drop-shadow(0 0 5px #00ffff)">
+                        <circle r="12" fill="none" stroke="#00ffff" stroke-width="2.5" stroke-dasharray="5 3"/>
+                    </svg>
+                    <span>Teleport yourself</span>
+                </div>
+                <div class="pu-legend-row">
+                    <svg class="pu-legend-icon" viewBox="-16 -16 32 32" style="filter:drop-shadow(0 0 5px #88ddff)">
+                        <g stroke="#88ddff" stroke-width="2.5" stroke-linecap="round">
+                            <line x1="0" y1="-13" x2="0" y2="13"/>
+                            <line x1="-11.3" y1="-6.5" x2="11.3" y2="6.5"/>
+                            <line x1="-11.3" y1="6.5" x2="11.3" y2="-6.5"/>
+                            <line x1="-3.5" y1="-7" x2="3.5" y2="-7"/>
+                            <line x1="-3.5" y1="7" x2="3.5" y2="7"/>
+                        </g>
+                    </svg>
+                    <span>Freeze</span>
+                </div>
+                <div class="pu-legend-row">
+                    <svg class="pu-legend-icon" viewBox="-16 -16 32 32" style="filter:drop-shadow(0 0 5px #ff6600)">
+                        <polygon points="0,-14 10,8 0,3 -10,8" fill="#ff6600"/>
+                    </svg>
+                    <span>Homing missile</span>
+                </div>
+                <div class="pu-legend-row">
+                    <svg class="pu-legend-icon" viewBox="-16 -16 32 32">
+                        <polygon class="goal-star-svg"
+                            points="0,-14 3.5,-4.9 13.3,-4.3 5.7,1.9 8.2,11.3 0,6 -8.2,11.3 -5.7,1.9 -13.3,-4.3 -3.5,-4.9"
+                            fill="#050510" stroke="#00ff88" stroke-width="1.5"/>
+                    </svg>
+                    <span>Victory</span>
+                </div>
             </div>
         </div>
     </div>
