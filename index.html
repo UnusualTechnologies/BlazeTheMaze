@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.182</div>
+    <div id="version-number">v1.5.183</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3437,6 +3437,9 @@
                                 blazer.executeMove(dx, dy);
                                 blazer.updatePixelPos(true); // snap pixel position — no lerp lag
                                 blazer.turnIntent = null; // consumed
+                                // Wind lastMoveTime back so the next move fires on the very next
+                                // RAF frame instead of waiting a full cooldown after the instant snap.
+                                blazer.lastMoveTime -= blazer.moveCooldown;
                             }
                         }
                     }
