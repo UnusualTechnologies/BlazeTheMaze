@@ -687,7 +687,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.184</div>
+    <div id="version-number">v1.5.185</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1798,9 +1798,7 @@
                 }
 
                 // Body — drawn three times with decreasing shadowBlur for maximum bloom
-                const bodyColor = isFrozen ? '#88ddff'
-                    : (this.flashTimer > 0 || isMirrored) ? '#ffffff'
-                    : this.color;
+                const bodyColor = (this.flashTimer > 0 || isMirrored) ? '#ffffff' : this.color;
 
                 // Motion-blur ghost copies — appear after 2+ cells in the same direction
                 if (this.speedBlur > 0.04 && (this.lastDx !== 0 || this.lastDy !== 0)) {
@@ -1848,50 +1846,29 @@
                     ctx.restore();
                 }
 
-                ctx.fillStyle = bodyColor;
                 ctx.globalAlpha = 0.75;
-                for (const blur of [80, 40, 15]) {
-                    ctx.shadowBlur = blur;
-                    ctx.shadowColor = bodyColor;
-                    ctx.beginPath();
-                    ctx.arc(0, 0, size, 0, Math.PI * 2);
-                    ctx.fill();
+                if (isFrozen) {
+                    // Outer glow in ice blue, bright white core
+                    for (const [blur, color] of [[80, '#44bbff'], [40, '#88ddff'], [15, '#ffffff']]) {
+                        ctx.fillStyle = color;
+                        ctx.shadowBlur = blur;
+                        ctx.shadowColor = color;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, size, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                } else {
+                    for (const blur of [80, 40, 15]) {
+                        ctx.fillStyle = bodyColor;
+                        ctx.shadowBlur = blur;
+                        ctx.shadowColor = bodyColor;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, size, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
                 }
                 ctx.shadowBlur = 0;
                 ctx.globalAlpha = 1;
-
-                // Ice crystal spikes while frozen
-                if (isFrozen) {
-                    const spikeCount = 6;
-                    const spikeLen   = size * 1.7;
-                    const now2 = Date.now();
-                    ctx.lineWidth = Math.max(1, size * 0.22);
-                    ctx.lineCap = 'round';
-                    for (let i = 0; i < spikeCount; i++) {
-                        const angle = i * Math.PI / 3 + now2 / 2200;
-                        const tipX  = Math.cos(angle) * spikeLen;
-                        const tipY  = Math.sin(angle) * spikeLen;
-                        // Spike colour alternates white / ice-blue
-                        const spikeColor = i % 2 === 0 ? '#ffffff' : '#44bbff';
-                        ctx.strokeStyle  = spikeColor;
-                        ctx.shadowBlur   = 8;
-                        ctx.shadowColor  = '#00aaff';
-                        ctx.beginPath();
-                        ctx.moveTo(0, 0);
-                        ctx.lineTo(tipX, tipY);
-                        ctx.stroke();
-                        // Small crossbar at 60% of the way out
-                        const bx = tipX * 0.6, by = tipY * 0.6;
-                        const perpA = angle + Math.PI / 2;
-                        const bl = spikeLen * 0.28;
-                        ctx.beginPath();
-                        ctx.moveTo(bx - Math.cos(perpA) * bl, by - Math.sin(perpA) * bl);
-                        ctx.lineTo(bx + Math.cos(perpA) * bl, by + Math.sin(perpA) * bl);
-                        ctx.stroke();
-                    }
-                    ctx.shadowBlur = 0;
-                    ctx.lineCap = 'butt';
-                }
 
                 // Red outline while mirror controls are active
                 if (isMirrored) {
@@ -2883,9 +2860,9 @@
                         const tx = Math.cos(a) * spokeLen, ty = Math.sin(a) * spokeLen;
                         const bx = Math.cos(a) * spokeLen * 0.55, by = Math.sin(a) * spokeLen * 0.55;
                         const pa = a + Math.PI / 2;
-                        ctx.strokeStyle = i % 2 === 0 ? '#ffffff' : '#88ddff';
+                        ctx.strokeStyle = '#88ddff';
                         ctx.shadowBlur  = 8 + pulse * 10;
-                        ctx.shadowColor = i % 2 === 0 ? '#ffffff' : '#00aaff';
+                        ctx.shadowColor = '#00aaff';
                         ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(tx, ty); ctx.stroke();
                         ctx.beginPath();
                         ctx.moveTo(bx - Math.cos(pa) * barLen, by - Math.sin(pa) * barLen);
