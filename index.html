@@ -761,7 +761,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.213</div>
+    <div id="version-number">v1.5.221</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -999,10 +999,19 @@
             isMusicMuted: true,
             isSfxMuted: true,
             bgMusic: new Audio('./assets/audio/music.ogg'),
+            tensionLoop: new Audio('./assets/audio/music_tension.ogg'),
+            _tensionActive: false,
             init() {
                 this.bgMusic.loop = true;
                 this.bgMusic.volume = 0.4;
-                this.bgMusic.onerror = () => { console.log('Music file missing or failed to load. Running silently.'); };
+                this.bgMusic.onerror = () => {
+                    if (typeof Sentry !== 'undefined') Sentry.captureMessage('Audio file missing: music.ogg', 'warning');
+                };
+                this.tensionLoop.loop = true;
+                this.tensionLoop.volume = 0;
+                this.tensionLoop.onerror = () => {
+                    if (typeof Sentry !== 'undefined') Sentry.captureMessage('Audio file missing: music_tension.ogg', 'warning');
+                };
                 this._syncButtons();
             },
             _syncButtons() {
@@ -1013,15 +1022,30 @@
                 if (this.isSfxMuted) return;
                 const audio = new Audio('./assets/audio/' + filename);
                 audio.volume = 0.6;
-                audio.onerror = () => {};
+                audio.onerror = () => {
+                    if (typeof Sentry !== 'undefined') Sentry.captureMessage(`Audio file missing: ${filename}`, 'warning');
+                };
                 audio.play().catch(() => {});
             },
             turn(isPlayer) { if (isPlayer) this.playSound('turn.ogg'); },
             bonk(isPlayer) { if (isPlayer) this.playSound('bonk.ogg'); },
-            thud() { this.playSound('thud.ogg'); },
             zip() { this.playSound('zip.ogg'); },
             glitch() { this.playSound('glitch.ogg'); },
             win() { this.playSound('win.ogg'); },
+            rocketHitStar() { this.playSound('rocket_hit_star.ogg'); },
+            startTension() {
+                this._tensionActive = true;
+                if (this.isMusicMuted) return;
+                this.tensionLoop.currentTime = 0;
+                this.tensionLoop.volume = 0.35;
+                this.tensionLoop.play().catch(() => {});
+            },
+            stopTension() {
+                this._tensionActive = false;
+                this.tensionLoop.pause();
+                this.tensionLoop.currentTime = 0;
+                this.tensionLoop.volume = 0;
+            },
             startMusic() {
                 if (!this.isMusicMuted) {
                     this.bgMusic.play().catch(() => {});
@@ -1029,13 +1053,19 @@
             },
             muffle(isMuffled) {
                 this.bgMusic.volume = isMuffled ? 0.15 : 0.4;
+                if (this._tensionActive) this.tensionLoop.volume = isMuffled ? 0.1 : 0.35;
             },
             toggleMusic() {
                 this.isMusicMuted = !this.isMusicMuted;
                 if (this.isMusicMuted) {
                     this.bgMusic.pause();
+                    this.tensionLoop.pause();
                 } else {
                     this.bgMusic.play().catch(() => {});
+                    if (this._tensionActive) {
+                        this.tensionLoop.volume = 0.35;
+                        this.tensionLoop.play().catch(() => {});
+                    }
                 }
                 this._syncButtons();
             },
@@ -1177,6 +1207,32 @@
         };
 
 
+
+        // ── Analytics ─────────────────────────────────────────────────────────────
+        const ANALYTICS_URL     = 'https://your-vps.com:8080';
+        const ANALYTICS_PROJECT = 'blaze_the_maze';
+        let analyticsSessionId  = (typeof crypto !== 'undefined' && crypto.randomUUID)
+                                    ? crypto.randomUUID()
+                                    : Math.random().toString(36).slice(2);
+        let analyticsSessionStartMs = 0;
+
+        function track(event, properties = {}) {
+            if (!ANALYTICS_URL || ANALYTICS_URL.includes('your-vps')) return;
+            fetch(ANALYTICS_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    timestamp:  new Date().toISOString(),
+                    project:    ANALYTICS_PROJECT,
+                    event,
+                    session_id: analyticsSessionId,
+                    player_id:  (typeof room !== 'undefined' && room?.sessionId) || '',
+                    properties: JSON.stringify(properties),
+                }),
+                keepalive: true,
+            }).catch(() => {});
+        }
+        // ─────────────────────────────────────────────────────────────────────────
 
         // 8 highly distinct player colors spanning the spectrum
         const playerColors = [
@@ -1551,6 +1607,41 @@
             }
         }
         
+        function drawHelixCorkscrew(ctx, phase, HR, HH, N, lw, color, shadowBlur = 10) {
+            const TURNS = 2.5;
+            const hpts = [];
+            for (let s = 0; s <= N; s++) {
+                const t = (s / N) * TURNS * Math.PI * 2;
+                hpts.push({ x: HR * Math.cos(t + phase), y: -HH / 2 + (s / N) * HH, z: Math.sin(t + phase) });
+            }
+            ctx.lineWidth = lw;
+            ctx.lineCap   = 'round';
+            ctx.lineJoin  = 'round';
+            ctx.globalAlpha = 0.28;
+            ctx.strokeStyle = color;
+            ctx.shadowBlur  = 0;
+            ctx.beginPath();
+            let inSeg = false;
+            for (const hp of hpts) {
+                if (hp.z < 0) { if (!inSeg) { ctx.moveTo(hp.x, hp.y); inSeg = true; } else ctx.lineTo(hp.x, hp.y); }
+                else { inSeg = false; }
+            }
+            ctx.stroke();
+            ctx.globalAlpha = 1.0;
+            ctx.strokeStyle = color;
+            ctx.shadowBlur  = shadowBlur;
+            ctx.shadowColor = color;
+            ctx.beginPath();
+            inSeg = false;
+            for (const hp of hpts) {
+                if (hp.z >= 0) { if (!inSeg) { ctx.moveTo(hp.x, hp.y); inSeg = true; } else ctx.lineTo(hp.x, hp.y); }
+                else { inSeg = false; }
+            }
+            ctx.stroke();
+            ctx.shadowBlur  = 0;
+            ctx.globalAlpha = 1;
+        }
+
         class Rocket {
             constructor(x, y, color, id, ownerSessionId = null) {
                 this.gridX = x;
@@ -1585,6 +1676,7 @@
             step() {
                 if (this.gridX === goal.x && this.gridY === goal.y) {
                     this.life = false;
+                    Synth.rocketHitStar();
                     for(let i=0; i<20; i++) { if (particles.length < 200) particles.push(new Particle(this.pixelX, this.pixelY, this.color)); }
                     return;
                 }
@@ -1628,12 +1720,12 @@
 
                 if (this.gridX === goal.x && this.gridY === goal.y) {
                     this.life = false;
+                    Synth.rocketHitStar();
                     for(let i=0; i<20; i++) { if (particles.length < 200) particles.push(new Particle(this.pixelX, this.pixelY, this.color)); }
                 }
             }
 
             draw() {
-                const TURNS = 2.5;
                 const HR    = cellSize * 0.12;
                 const HH    = cellSize * 0.38;
                 const N     = 48;
@@ -1642,37 +1734,7 @@
                 ctx.save();
                 ctx.translate(this.pixelX, this.pixelY);
                 ctx.rotate(this.angle + Math.PI / 2);
-                const hpts = [];
-                for (let s = 0; s <= N; s++) {
-                    const t = (s / N) * TURNS * Math.PI * 2;
-                    hpts.push({ x: HR * Math.cos(t + phase), y: -HH / 2 + (s / N) * HH, z: Math.sin(t + phase) });
-                }
-                ctx.lineWidth = lw;
-                ctx.lineCap   = 'round';
-                ctx.lineJoin  = 'round';
-                ctx.globalAlpha = 0.28;
-                ctx.strokeStyle = this.color;
-                ctx.shadowBlur  = 0;
-                ctx.beginPath();
-                let inSeg = false;
-                for (const hp of hpts) {
-                    if (hp.z < 0) { if (!inSeg) { ctx.moveTo(hp.x, hp.y); inSeg = true; } else ctx.lineTo(hp.x, hp.y); }
-                    else { inSeg = false; }
-                }
-                ctx.stroke();
-                ctx.globalAlpha = 1.0;
-                ctx.strokeStyle = this.color;
-                ctx.shadowBlur  = 10;
-                ctx.shadowColor = this.color;
-                ctx.beginPath();
-                inSeg = false;
-                for (const hp of hpts) {
-                    if (hp.z >= 0) { if (!inSeg) { ctx.moveTo(hp.x, hp.y); inSeg = true; } else ctx.lineTo(hp.x, hp.y); }
-                    else { inSeg = false; }
-                }
-                ctx.stroke();
-                ctx.shadowBlur  = 0;
-                ctx.globalAlpha = 1;
+                drawHelixCorkscrew(ctx, phase, HR, HH, N, lw, this.color);
                 ctx.restore();
             }
         }
@@ -1707,7 +1769,7 @@
                 this.trail = [];
                 this.maxTrail = 25;
                 this.moveTimer = 0;
-                this.moveCooldown = 70;
+                this.moveCooldown = 100;
 
                 this.lastMoveTime = 0;
                 this.lastDx = 0;
@@ -1760,10 +1822,48 @@
                 if (this.gridX + dx < 0 || this.gridX + dx >= cols || this.gridY + dy < 0 || this.gridY + dy >= rows) return false;
                 const cell = grid[this.gridX][this.gridY];
                 if (!cell || !cell.walls) return false;
-                if (dy === -1 && !cell.walls[0]) return true; 
-                if (dx === 1 && !cell.walls[1]) return true;  
-                if (dy === 1 && !cell.walls[2]) return true;  
-                if (dx === -1 && !cell.walls[3]) return true; 
+                if (dy === -1 && !cell.walls[0]) return true;
+                if (dx === 1 && !cell.walls[1]) return true;
+                if (dy === 1 && !cell.walls[2]) return true;
+                if (dx === -1 && !cell.walls[3]) return true;
+                return false;
+            }
+
+            canMoveAtCell(cx, cy, dx, dy) {
+                if (cx + dx < 0 || cx + dx >= cols || cy + dy < 0 || cy + dy >= rows) return false;
+                const cell = grid[cx]?.[cy];
+                if (!cell || !cell.walls) return false;
+                if (dy === -1 && !cell.walls[0]) return true;
+                if (dx ===  1 && !cell.walls[1]) return true;
+                if (dy ===  1 && !cell.walls[2]) return true;
+                if (dx === -1 && !cell.walls[3]) return true;
+                return false;
+            }
+
+            _executeTurnIntent(dx, dy, intentDir) {
+                this.executeMove(dx, dy);
+                const idx = this.heldDirections.indexOf(intentDir);
+                if (idx > -1) {
+                    this.heldDirections.splice(idx, 1);
+                    if (!tapOnlyToggle.checked) {
+                        this.heldDirections.unshift(intentDir);
+                    }
+                }
+                this.turnIntent = null;
+            }
+
+            _tryLookBack(dx, dy) {
+                if (this.lastDx === 0 && this.lastDy === 0) return false;
+                const bx = this.gridX - this.lastDx;
+                const by = this.gridY - this.lastDy;
+                if (bx < 0 || bx >= cols || by < 0 || by >= rows) return false;
+                if (this.canMoveAtCell(bx, by, dx, dy)) {
+                    this.gridX = bx;
+                    this.gridY = by;
+                    this.executeMove(dx, dy);
+                    this.updatePixelPos(true);
+                    return true;
+                }
                 return false;
             }
 
@@ -1833,25 +1933,54 @@
                             return { dx: 0, dy: 0 };
                         };
 
-                        // 1. Check Input Intent Buffer (if player pressed turn slightly before intersection)
+                        // 1. Check Input Intent Buffer (lookahead latch — Pac-Man style)
                         if (this.turnIntent && now - this.turnIntent.time < 300) {
                             const { dx, dy } = dirToDxDy(this.turnIntent.dir);
+                            const intentDir = this.turnIntent.dir;
 
                             if (this.canMove(dx, dy)) {
-                                const intentDir = this.turnIntent.dir; // save before nulling
-                                this.executeMove(dx, dy);
+                                // a. Current cell supports the turn — execute immediately
+                                this._executeTurnIntent(dx, dy, intentDir);
                                 moved = true;
 
-                                // Sync buffer with held directions to preserve alternating behavior
-                                const idx = this.heldDirections.indexOf(intentDir);
-                                if (idx > -1) {
-                                    this.heldDirections.splice(idx, 1);
-                                    if (!tapOnlyToggle.checked) {
-                                        this.heldDirections.unshift(intentDir);
-                                    }
+                            } else if (this.turnIntent.latchX !== undefined) {
+                                // b. Waiting for a specific ahead-cell — check arrival
+                                if (this.gridX === this.turnIntent.latchX && this.gridY === this.turnIntent.latchY) {
+                                    this._executeTurnIntent(dx, dy, intentDir);
+                                    moved = true;
+                                } else {
+                                    // Invalidate if player has already passed the latch cell
+                                    const tdx = this.lastDx, tdy = this.lastDy;
+                                    const passed = tdx !== 0
+                                        ? (tdx > 0 ? this.gridX > this.turnIntent.latchX : this.gridX < this.turnIntent.latchX)
+                                        : (tdy > 0 ? this.gridY > this.turnIntent.latchY : this.gridY < this.turnIntent.latchY);
+                                    if (passed) this.turnIntent = null;
                                 }
 
-                                this.turnIntent = null; // consume intent
+                            } else {
+                                // c. Not yet latched — scan ahead for the first cell that supports this turn
+                                const LOOKAHEAD = 3;
+                                const tdx = this.lastDx, tdy = this.lastDy;
+                                if (tdx !== 0 || tdy !== 0) {
+                                    for (let step = 1; step <= LOOKAHEAD; step++) {
+                                        const cx = this.gridX + tdx * step;
+                                        const cy = this.gridY + tdy * step;
+                                        if (cx < 0 || cx >= cols || cy < 0 || cy >= rows) break;
+                                        // Verify path to this cell is unobstructed
+                                        let reachable = true;
+                                        for (let s = 0; s < step; s++) {
+                                            if (!this.canMoveAtCell(this.gridX + tdx * s, this.gridY + tdy * s, tdx, tdy)) {
+                                                reachable = false;
+                                                break;
+                                            }
+                                        }
+                                        if (!reachable) break;
+                                        if (this.canMoveAtCell(cx, cy, dx, dy)) {
+                                            this.turnIntent = { ...this.turnIntent, latchX: cx, latchY: cy };
+                                            break;
+                                        }
+                                    }
+                                }
                             }
                         }
 
@@ -1892,7 +2021,10 @@
                             let bonkDx = 0, bonkDy = 0;
                             if (this.turnIntent && now - this.turnIntent.time < 300) {
                                 const { dx, dy } = dirToDxDy(this.turnIntent.dir);
-                                bonkDx = dx; bonkDy = dy;
+                                // Don't bonk if latched — turn is pending, not blocked
+                                if (this.turnIntent.latchX === undefined) {
+                                    bonkDx = dx; bonkDy = dy;
+                                }
                             } else if (this.heldDirections.length > 0) {
                                 const { dx, dy } = dirToDxDy(this.heldDirections[this.heldDirections.length - 1]);
                                 bonkDx = dx; bonkDy = dy;
@@ -2561,6 +2693,7 @@
             hudBar.classList.add('hidden');
             lobbyLayer.classList.add('hidden');
             initialMenu.classList.remove('hidden');
+            Synth.stopTension();
             Synth.muffle(true);
             
             generateMaze();
@@ -2576,6 +2709,7 @@
         // --- DRAW LOOP ---
 
         function buildMazeCache() {
+            if (!width || !height) return;
             const dpr = window.devicePixelRatio || 1;
             if (!mazeCache) mazeCache = document.createElement('canvas');
             // Setting width/height resets the context (clears transforms etc.)
@@ -2629,7 +2763,9 @@
 
             // Static background: floor grid + walls (rebuilt only when maze changes or canvas resizes)
             if (!mazeCacheValid) buildMazeCache();
-            ctx.drawImage(mazeCache, 0, 0, width, height);
+            if (mazeCache && mazeCache.width > 0 && mazeCache.height > 0) {
+                ctx.drawImage(mazeCache, 0, 0, width, height);
+            }
 
             // Find the leader (closest blazer to goal by BFS distance) — always, from round start
             let closestBlazer = null;
@@ -2991,54 +3127,14 @@
                 } else if (p.type === 'rocket') {
                     const pulse = 1 + Math.sin(time * 3) * 0.1;
                     ctx.scale(pulse, pulse);
-                    // Corkscrew helix — spins and colour-cycles
-                    const TURNS = 2.5;
-                    const HR    = cellSize * 0.19; // horizontal radius of the coil
-                    const HH    = cellSize * 0.52; // total height
-                    const N     = 64;              // path segments
+                    const HR    = cellSize * 0.19;
+                    const HH    = cellSize * 0.52;
+                    const N     = 64;
                     const lw    = Math.max(1.5, cellSize * 0.07);
-                    const phase = time * 2.5;      // rotation speed
                     const slotMs   = 700;
                     const rSlot    = Math.floor((time * 600) / slotMs);
                     const corColor = playerColors[rSlot % playerColors.length] || '#ff3300';
-                    // Build helix points
-                    const hpts = [];
-                    for (let s = 0; s <= N; s++) {
-                        const t = (s / N) * TURNS * Math.PI * 2;
-                        hpts.push({
-                            x: HR * Math.cos(t + phase),
-                            y: -HH / 2 + (s / N) * HH,
-                            z: Math.sin(t + phase),
-                        });
-                    }
-                    ctx.lineWidth = lw;
-                    ctx.lineCap   = 'round';
-                    ctx.lineJoin  = 'round';
-                    // Pass 1 — back arcs (z < 0), dimmed, no glow
-                    ctx.globalAlpha = 0.28;
-                    ctx.strokeStyle = corColor;
-                    ctx.shadowBlur  = 0;
-                    ctx.beginPath();
-                    let inSeg = false;
-                    for (const hp of hpts) {
-                        if (hp.z < 0) { if (!inSeg) { ctx.moveTo(hp.x, hp.y); inSeg = true; } else ctx.lineTo(hp.x, hp.y); }
-                        else { inSeg = false; }
-                    }
-                    ctx.stroke();
-                    // Pass 2 — front arcs (z >= 0), full brightness + glow
-                    ctx.globalAlpha = 1.0;
-                    ctx.strokeStyle = corColor;
-                    ctx.shadowBlur  = 10;
-                    ctx.shadowColor = corColor;
-                    ctx.beginPath();
-                    inSeg = false;
-                    for (const hp of hpts) {
-                        if (hp.z >= 0) { if (!inSeg) { ctx.moveTo(hp.x, hp.y); inSeg = true; } else ctx.lineTo(hp.x, hp.y); }
-                        else { inSeg = false; }
-                    }
-                    ctx.stroke();
-                    ctx.shadowBlur  = 0;
-                    ctx.globalAlpha = 1;
+                    drawHelixCorkscrew(ctx, time * 2.5, HR, HH, N, lw, corColor);
                 } else if (p.type === 'mirror') {
                     // Snap instantly between normal and flipped every ~1.2s
                     const flipped = Math.floor(time * 0.5) % 2 === 1;
@@ -3648,11 +3744,16 @@
                     if (!blazer.heldDirections.includes(dir)) {
                         blazer.heldDirections.push(dir);
                         blazer.dirKeyDownTimes[dir] = performance.now();
-                        // Buffer the intent so early presses turn seamlessly, ONLY on initial keydown to avoid OS repeat bugs
                         blazer.turnIntent = { dir: dir, time: performance.now() };
-                        // Expire the cooldown now so the very next RAF frame fires the move
-                        // (≤16ms lag, imperceptible) and all subsequent moves keep the same rhythm.
                         blazer.lastMoveTime = e.timeStamp - blazer.moveCooldown;
+                        // Look-back: if we just overshot by 1 cell, correct it immediately
+                        const _mirrored = blazer.mirrorUntil > 0 && Date.now() < blazer.mirrorUntil;
+                        const _effDir = _mirrored ? mirrorDir(dir) : dir;
+                        const _lbMap = { up:{dx:0,dy:-1}, right:{dx:1,dy:0}, down:{dx:0,dy:1}, left:{dx:-1,dy:0} };
+                        const { dx: _lbDx, dy: _lbDy } = _lbMap[_effDir];
+                        if (!blazer.canMove(_lbDx, _lbDy) && blazer._tryLookBack(_lbDx, _lbDy)) {
+                            blazer.turnIntent = null;
+                        }
                     }
                 }
             });
@@ -3810,6 +3911,12 @@
             if (!blazer.heldDirections.includes(dir)) {
                 blazer.heldDirections.push(dir);
                 blazer.turnIntent = { dir, time: performance.now() };
+                // Look-back: if we just overshot by 1 cell, correct it immediately
+                const _lbMap = { up:{dx:0,dy:-1}, right:{dx:1,dy:0}, down:{dx:0,dy:1}, left:{dx:-1,dy:0} };
+                const { dx: _lbDx, dy: _lbDy } = _lbMap[dir];
+                if (!blazer.canMove(_lbDx, _lbDy) && blazer._tryLookBack(_lbDx, _lbDy)) {
+                    blazer.turnIntent = null;
+                }
             }
         }
 
@@ -3870,6 +3977,7 @@
             const text = el?.tagName === 'INPUT' ? el.value : el?.innerText;
             if (!el || !text) return;
             navigator.clipboard?.writeText(text).catch(() => {});
+            track('friend_code_copied', {});
             el.classList.add('copied-flash');
             setTimeout(() => el.classList.remove('copied-flash'), 800);
         });
@@ -3904,6 +4012,7 @@
         // used by the manual code input.
         window.electronAPI?.onSteamJoinRequest((roomCode) => {
             joiningViaCode = true;
+            track('friend_code_used', { method: 'steam_invite' });
             client.joinById(roomCode, { joinedViaCode: true })
                 .then(newRoom => setupRoom(newRoom))
                 .catch(e => {
@@ -3937,9 +4046,9 @@
             }
             room = newRoom;
             reconnectionToken = newRoom.reconnectionToken ?? null;
-            console.log("Joined room:", room.roomId, "SessionID:", room.sessionId);
-
             const isCodeJoin = joiningViaCode;
+            analyticsSessionStartMs = Date.now();
+            track('session_start', { joined_via_code: isCodeJoin });
             joiningViaCode = false;
 
             if (!isCodeJoin) {
@@ -4173,6 +4282,7 @@
                     updateScoreboard();
                     if (state.matchOver) {
                         gameState = 'MATCH_OVER';
+                        Synth.stopTension();
                         Synth.muffle(true);
                         postMatchLayer.style.setProperty('--winner-color', wColor);
                         postMatchLayer.classList.add('winner-pulse');
@@ -4209,6 +4319,16 @@
                 matchTime += currentRoundTime;
                 roundTimes.push({ winnerId, winnerColor, time: currentRoundTime });
 
+                const _winnerBlazerForTrack = blazers.find(b => b.id === winnerId);
+                track('round_won', {
+                    winner_type:  _winnerBlazerForTrack?.isAI ? 'ai' : winnerId === room.sessionId ? 'self' : 'other_player',
+                    round_time_ms: currentRoundTime,
+                    winner_score:  winnerScore,
+                    is_match_won:  isMatchWon,
+                    round_number:  roundTimes.length,
+                    player_count:  [...(room.state?.players?.values?.() ?? [])].length,
+                });
+
                 // Explosion particles at winner's position
                 screenShake = 40;
                 if (winnerBlazer) {
@@ -4223,7 +4343,8 @@
                     scores[winnerId] = winnerScore;
                     updateScoreboard();
 
-                    Synth.win();
+                    if (winnerBlazer?.isLocal) Synth.win();
+                    Synth.stopTension();
                     Synth.muffle(true);
                     gameState = 'MATCH_OVER';
 
@@ -4263,6 +4384,7 @@
                     // Round win (not match): animate the score label flying to the new column.
                     // Score stays at oldScore visually until the animation lands (at 2 s).
                     // onStateChange is guarded to skip syncing this player during the window.
+                    if (winnerScore === WINS_TO_MATCH - 1) Synth.startTension();
                     gameState = 'ROUND_OVER_COUNTDOWN';
                     currentWinner = winnerBlazer || { id: winnerId, color: winnerColor };
                     roundCountdown = 3000;
@@ -4307,6 +4429,7 @@
                 gridNeedsSync = true; // new maze incoming with next state patch
                 clearInterval(matchEndTimerInterval);
                 matchEndTimerInterval = null;
+                Synth.stopTension();
 
                 // Reset client-side match state
                 scores = {};
@@ -4335,6 +4458,11 @@
             });
 
             room.onLeave(async (code) => {
+                track('session_end', {
+                    duration_ms:   Date.now() - analyticsSessionStartMs,
+                    rounds_played: roundTimes.length,
+                    leave_code:    code,
+                });
                 if (code === 4001) {
                     showNetworkNotification('Removed from Room', 'You were removed to make space for a friend-code player.', () => location.reload());
                 } else if (code === 4003) {
@@ -4644,7 +4772,7 @@
          * (e.g. desiredRoomId, collisions, isPrivate).
          */
         function buildLobbySettings(overrides = {}) {
-            return {
+            const opts = {
                 cols: parseInt(gridSizeInput.value, 10) || 20,
                 rows: parseInt(gridSizeInput.value, 10) || 20,
                 puOpp:   (v => isNaN(v) ? 6 : v)(parseInt(puOppInput.value,  10)),
@@ -4666,6 +4794,22 @@
                 })),
                 ...overrides
             };
+            const usedDefaults = !!opts._isDefaults;
+            delete opts._isDefaults;
+            track('settings_applied', {
+                grid_cols:       opts.cols,
+                grid_rows:       opts.rows,
+                pu_opponent:     opts.puOpp,
+                pu_self:         opts.puSelf,
+                pu_rocket:       opts.puRocket,
+                pu_mirror:       opts.puMirror,
+                pu_mystery:      opts.puMystery,
+                pu_freeze:       opts.puFreeze,
+                pu_beacon:       opts.puBeacon,
+                orb_leader_only: opts.orbLeaderOnly,
+                used_defaults:   usedDefaults,
+            });
+            return opts;
         }
 
         // buildDefaultSettings: like buildLobbySettings but ignores all custom PU/grid values.
@@ -4687,6 +4831,7 @@
                 puFreeze:      3,
                 puBeacon:      0,
                 orbLeaderOnly: true,
+                _isDefaults:   true,
                 ...overrides
             });
         }
@@ -4922,6 +5067,7 @@
                 if (!client) throw new Error('Colyseus client not initialised — check your connection.');
                 initControlSchemeState({ isCreator: false }); // joining someone else's room — no secondary locals
                 joiningViaCode = true;
+                track('friend_code_used', { method: 'manual_input' });
                 gameState = 'CONNECTING';
                 _slowTimerFC = setTimeout(showSlowConnectionToast, 5000);
                 const newRoom = await withTimeout(client.joinById(joinCodeInput.value, { joinedViaCode: true }), 10000);
@@ -5479,35 +5625,15 @@
                 return c;
             }).filter(Boolean);
             if (!ctxs.length) return;
-            const TURNS = 2.5, HR = CSS * 0.19, HH = CSS * 0.52, N = 48;
+            const HR = CSS * 0.19, HH = CSS * 0.52, N = 48;
             const lw = Math.max(1, CSS * 0.07), slotMs = 700;
             function drawCork(c, ts) {
                 c.clearRect(0, 0, CSS, CSS);
                 const corColor = playerColors[Math.floor((ts * 0.6) / slotMs) % playerColors.length] || '#ff3300';
-                const phase = ts / 150;
                 c.save();
                 c.translate(CSS / 2, CSS / 2);
-                const hpts = [];
-                for (let s = 0; s <= N; s++) {
-                    const t = (s / N) * TURNS * Math.PI * 2;
-                    hpts.push({ x: HR * Math.cos(t + phase), y: -HH / 2 + (s / N) * HH, z: Math.sin(t + phase) });
-                }
-                c.lineWidth = lw; c.lineCap = 'round'; c.lineJoin = 'round';
-                c.globalAlpha = 0.28; c.strokeStyle = corColor; c.shadowBlur = 0;
-                c.beginPath();
-                let inSeg = false;
-                for (const hp of hpts) {
-                    if (hp.z < 0) { if (!inSeg) { c.moveTo(hp.x, hp.y); inSeg = true; } else c.lineTo(hp.x, hp.y); } else inSeg = false;
-                }
-                c.stroke();
-                c.globalAlpha = 1; c.strokeStyle = corColor; c.shadowBlur = 6; c.shadowColor = corColor;
-                c.beginPath();
-                inSeg = false;
-                for (const hp of hpts) {
-                    if (hp.z >= 0) { if (!inSeg) { c.moveTo(hp.x, hp.y); inSeg = true; } else c.lineTo(hp.x, hp.y); } else inSeg = false;
-                }
-                c.stroke();
-                c.shadowBlur = 0; c.restore();
+                drawHelixCorkscrew(c, ts / 150, HR, HH, N, lw, corColor, 6);
+                c.restore();
             }
             function frame(ts) { ctxs.forEach(c => drawCork(c, ts)); requestAnimationFrame(frame); }
             requestAnimationFrame(frame);
