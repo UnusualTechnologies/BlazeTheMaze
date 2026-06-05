@@ -761,7 +761,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.221</div>
+    <div id="version-number">v1.5.222</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1772,6 +1772,7 @@
                 this.moveCooldown = 100;
 
                 this.lastMoveTime = 0;
+                this.lastExecuteTime = 0;
                 this.lastDx = 0;
                 this.lastDy = 0;
                 this.dirStreak = 0;  // consecutive cells in the same direction
@@ -1897,6 +1898,7 @@
 
                 this.gridX += dx;
                 this.gridY += dy;
+                this.lastExecuteTime = performance.now();
                 this.lastMoveTime = Math.min(this.lastMoveTime + this.moveCooldown, performance.now());
                 
                 // Authoritative local check for sending moves to server
@@ -3746,12 +3748,14 @@
                         blazer.dirKeyDownTimes[dir] = performance.now();
                         blazer.turnIntent = { dir: dir, time: performance.now() };
                         blazer.lastMoveTime = e.timeStamp - blazer.moveCooldown;
-                        // Look-back: if we just overshot by 1 cell, correct it immediately
+                        // Look-back: if we just overshot by 1 cell, correct it immediately.
+                        // Only fires if the player actually moved recently (not stationary in a dead end).
                         const _mirrored = blazer.mirrorUntil > 0 && Date.now() < blazer.mirrorUntil;
                         const _effDir = _mirrored ? mirrorDir(dir) : dir;
                         const _lbMap = { up:{dx:0,dy:-1}, right:{dx:1,dy:0}, down:{dx:0,dy:1}, left:{dx:-1,dy:0} };
                         const { dx: _lbDx, dy: _lbDy } = _lbMap[_effDir];
-                        if (!blazer.canMove(_lbDx, _lbDy) && blazer._tryLookBack(_lbDx, _lbDy)) {
+                        const _recentMove = performance.now() - blazer.lastExecuteTime < blazer.moveCooldown * 2;
+                        if (_recentMove && !blazer.canMove(_lbDx, _lbDy) && blazer._tryLookBack(_lbDx, _lbDy)) {
                             blazer.turnIntent = null;
                         }
                     }
@@ -3911,10 +3915,12 @@
             if (!blazer.heldDirections.includes(dir)) {
                 blazer.heldDirections.push(dir);
                 blazer.turnIntent = { dir, time: performance.now() };
-                // Look-back: if we just overshot by 1 cell, correct it immediately
+                // Look-back: if we just overshot by 1 cell, correct it immediately.
+                // Only fires if the player actually moved recently (not stationary in a dead end).
                 const _lbMap = { up:{dx:0,dy:-1}, right:{dx:1,dy:0}, down:{dx:0,dy:1}, left:{dx:-1,dy:0} };
                 const { dx: _lbDx, dy: _lbDy } = _lbMap[dir];
-                if (!blazer.canMove(_lbDx, _lbDy) && blazer._tryLookBack(_lbDx, _lbDy)) {
+                const _recentMove = performance.now() - blazer.lastExecuteTime < blazer.moveCooldown * 2;
+                if (_recentMove && !blazer.canMove(_lbDx, _lbDy) && blazer._tryLookBack(_lbDx, _lbDy)) {
                     blazer.turnIntent = null;
                 }
             }
