@@ -761,7 +761,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.222</div>
+    <div id="version-number">v1.5.224</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1208,31 +1208,7 @@
 
 
 
-        // ── Analytics ─────────────────────────────────────────────────────────────
-        const ANALYTICS_URL     = 'https://your-vps.com:8080';
-        const ANALYTICS_PROJECT = 'blaze_the_maze';
-        let analyticsSessionId  = (typeof crypto !== 'undefined' && crypto.randomUUID)
-                                    ? crypto.randomUUID()
-                                    : Math.random().toString(36).slice(2);
-        let analyticsSessionStartMs = 0;
-
-        function track(event, properties = {}) {
-            if (!ANALYTICS_URL || ANALYTICS_URL.includes('your-vps')) return;
-            fetch(ANALYTICS_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    timestamp:  new Date().toISOString(),
-                    project:    ANALYTICS_PROJECT,
-                    event,
-                    session_id: analyticsSessionId,
-                    player_id:  (typeof room !== 'undefined' && room?.sessionId) || '',
-                    properties: JSON.stringify(properties),
-                }),
-                keepalive: true,
-            }).catch(() => {});
-        }
-        // ─────────────────────────────────────────────────────────────────────────
+        // Analytics are tracked server-side in GameRoom.ts — no client-side calls needed.
 
         // 8 highly distinct player colors spanning the spectrum
         const playerColors = [
@@ -3983,7 +3959,6 @@
             const text = el?.tagName === 'INPUT' ? el.value : el?.innerText;
             if (!el || !text) return;
             navigator.clipboard?.writeText(text).catch(() => {});
-            track('friend_code_copied', {});
             el.classList.add('copied-flash');
             setTimeout(() => el.classList.remove('copied-flash'), 800);
         });
@@ -4018,7 +3993,6 @@
         // used by the manual code input.
         window.electronAPI?.onSteamJoinRequest((roomCode) => {
             joiningViaCode = true;
-            track('friend_code_used', { method: 'steam_invite' });
             client.joinById(roomCode, { joinedViaCode: true })
                 .then(newRoom => setupRoom(newRoom))
                 .catch(e => {
@@ -4053,8 +4027,6 @@
             room = newRoom;
             reconnectionToken = newRoom.reconnectionToken ?? null;
             const isCodeJoin = joiningViaCode;
-            analyticsSessionStartMs = Date.now();
-            track('session_start', { joined_via_code: isCodeJoin });
             joiningViaCode = false;
 
             if (!isCodeJoin) {
@@ -4325,16 +4297,6 @@
                 matchTime += currentRoundTime;
                 roundTimes.push({ winnerId, winnerColor, time: currentRoundTime });
 
-                const _winnerBlazerForTrack = blazers.find(b => b.id === winnerId);
-                track('round_won', {
-                    winner_type:  _winnerBlazerForTrack?.isAI ? 'ai' : winnerId === room.sessionId ? 'self' : 'other_player',
-                    round_time_ms: currentRoundTime,
-                    winner_score:  winnerScore,
-                    is_match_won:  isMatchWon,
-                    round_number:  roundTimes.length,
-                    player_count:  [...(room.state?.players?.values?.() ?? [])].length,
-                });
-
                 // Explosion particles at winner's position
                 screenShake = 40;
                 if (winnerBlazer) {
@@ -4464,11 +4426,6 @@
             });
 
             room.onLeave(async (code) => {
-                track('session_end', {
-                    duration_ms:   Date.now() - analyticsSessionStartMs,
-                    rounds_played: roundTimes.length,
-                    leave_code:    code,
-                });
                 if (code === 4001) {
                     showNetworkNotification('Removed from Room', 'You were removed to make space for a friend-code player.', () => location.reload());
                 } else if (code === 4003) {
@@ -4800,21 +4757,7 @@
                 })),
                 ...overrides
             };
-            const usedDefaults = !!opts._isDefaults;
             delete opts._isDefaults;
-            track('settings_applied', {
-                grid_cols:       opts.cols,
-                grid_rows:       opts.rows,
-                pu_opponent:     opts.puOpp,
-                pu_self:         opts.puSelf,
-                pu_rocket:       opts.puRocket,
-                pu_mirror:       opts.puMirror,
-                pu_mystery:      opts.puMystery,
-                pu_freeze:       opts.puFreeze,
-                pu_beacon:       opts.puBeacon,
-                orb_leader_only: opts.orbLeaderOnly,
-                used_defaults:   usedDefaults,
-            });
             return opts;
         }
 
@@ -5073,7 +5016,6 @@
                 if (!client) throw new Error('Colyseus client not initialised — check your connection.');
                 initControlSchemeState({ isCreator: false }); // joining someone else's room — no secondary locals
                 joiningViaCode = true;
-                track('friend_code_used', { method: 'manual_input' });
                 gameState = 'CONNECTING';
                 _slowTimerFC = setTimeout(showSlowConnectionToast, 5000);
                 const newRoom = await withTimeout(client.joinById(joinCodeInput.value, { joinedViaCode: true }), 10000);

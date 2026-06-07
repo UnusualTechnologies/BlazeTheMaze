@@ -11,5 +11,8 @@ dist/
 # Colyseus Cloud credentials
 server/.colyseus-cloud.json
 
+# Local environment secrets (never commit)
+server/.env
+
 # Claude Code internals
 .claude/

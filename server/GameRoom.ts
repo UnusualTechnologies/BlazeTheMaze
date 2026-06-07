@@ -1,6 +1,22 @@
 import { Room } from "colyseus";
 import { type Client } from "@colyseus/core";
 import { GameState, Player, Cell, PowerUp, Slot } from "./GameState.js";
+import { randomUUID } from "crypto";
+
+// ── Analytics ──────────────────────────────────────────────────────────────
+const ANALYTICS_URL     = 'https://analytics-api.unusualtechnologies.com';
+const ANALYTICS_API_KEY = process.env.ANALYTICS_API_KEY ?? '';
+const ANALYTICS_PROJECT = 'blaze_the_maze';
+
+function track(event_name: string, player_id: string, session_id: string, properties: Record<string, unknown> = {}): void {
+    if (!ANALYTICS_URL || !ANALYTICS_API_KEY) return;
+    fetch(ANALYTICS_URL, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': ANALYTICS_API_KEY },
+        body:    JSON.stringify({ project: ANALYTICS_PROJECT, event_name, player_id, session_id, properties }),
+    }).catch(() => {});
+}
+// ───────────────────────────────────────────────────────────────────────────
 
 /** Typed lobby options sent by the client when creating a room. */
 interface SlotConfig {
@@ -45,6 +61,10 @@ export class GameRoom extends Room<{ state: GameState }> {
     distanceMap: number[] = [];
     // Tracks which connected sessionIds joined via friend code (cannot be kicked)
     friendCodeJoiners = new Set<string>();
+    // Per-client analytics state: analytics session UUID, join timestamp, round number at join
+    private clientAnalytics = new Map<string, { analyticsSessionId: string; startMs: number; joinRound: number }>();
+    // Incremented on every round win — used to calculate rounds_played per session
+    private roundCount = 0;
     // Per-AI session state (not broadcast)
     aiCooldowns = new Map<string, number>();
     explorerLastPos = new Map<string, { x: number; y: number }>();
@@ -307,6 +327,27 @@ export class GameRoom extends Room<{ state: GameState }> {
         });
 
         console.log(`Room created: ${this.roomId}`);
+
+        // ── Telemetry: settings used to create this room ───────────────────────
+        const _activeSlots = (options.slots ?? []).filter(s => s.mode !== 'inactive' && s.mode !== 'friend_only');
+        track('settings_applied', 'server', randomUUID(), {
+            grid_cols:       this.cols,
+            grid_rows:       this.rows,
+            collisions:      this.collisions,
+            orb_leader_only: this.orbLeaderOnly,
+            pu_opponent:     options.puOpp     ?? 0,
+            pu_self:         options.puSelf    ?? 0,
+            pu_rocket:       options.puRocket  ?? 0,
+            pu_mirror:       options.puMirror  ?? 0,
+            pu_mystery:      options.puMystery ?? 0,
+            pu_freeze:       options.puFreeze  ?? 0,
+            pu_beacon:       options.puBeacon  ?? 0,
+            active_players:  _activeSlots.length,
+            human_players:   _activeSlots.filter(s => s.mode === 'local' || s.mode === 'secondary').length,
+            ai_players:      _activeSlots.filter(s => s.mode === 'ai' || s.mode === 'ai_online' || s.mode === 'ai_friend').length,
+            used_defaults:   !options.slots || options.slots.length === 0,
+        });
+        // ───────────────────────────────────────────────────────────────────────
     }
 
     onJoin(client: Client, options: JoinOptions) {
@@ -404,6 +445,13 @@ export class GameRoom extends Room<{ state: GameState }> {
             client.send("round_won", this.lastRoundWon);
         }
         console.log(`Client ${client.sessionId} assigned to slot ${assignedSlotIndex}`);
+
+        // ── Telemetry: session start ───────────────────────────────────────────
+        const _aid = randomUUID();
+        this.clientAnalytics.set(client.sessionId, { analyticsSessionId: _aid, startMs: Date.now(), joinRound: this.roundCount });
+        track('session_start', client.sessionId, _aid, { joined_via_code: joinedViaCode, is_host: isHost });
+        if (joinedViaCode) track('friend_code_used', client.sessionId, _aid, {});
+        // ───────────────────────────────────────────────────────────────────────
     }
 
     async onLeave(client: Client, code?: number) {
@@ -437,6 +485,18 @@ export class GameRoom extends Room<{ state: GameState }> {
         this.explorerLastPos.delete(client.sessionId);
         this.guesserData.delete(client.sessionId);
         this.aiCooldowns.delete(client.sessionId);
+
+        // ── Telemetry: session end ─────────────────────────────────────────────
+        const _anal = this.clientAnalytics.get(client.sessionId);
+        if (_anal) {
+            track('session_end', client.sessionId, _anal.analyticsSessionId, {
+                duration_ms:   Date.now() - _anal.startMs,
+                rounds_played: this.roundCount - _anal.joinRound,
+                leave_code:    code ?? 0,
+            });
+            this.clientAnalytics.delete(client.sessionId);
+        }
+        // ───────────────────────────────────────────────────────────────────────
 
         const player = this.state.players.get(client.sessionId);
         if (player) {
@@ -810,6 +870,20 @@ export class GameRoom extends Room<{ state: GameState }> {
             this.roundOver = true; // Freeze the game immediately
             player.score++;
             const isMatchWon = player.score >= GameRoom.WINS_TO_MATCH;
+
+            // ── Telemetry: round result ────────────────────────────────────────
+            this.roundCount++;
+            const _winnerAnal = this.clientAnalytics.get(sessionId);
+            track('round_won', sessionId, _winnerAnal?.analyticsSessionId ?? 'ai', {
+                winner_is_ai:  player.isAI,
+                round_time_ms: Date.now() - this.roundStartMs,
+                winner_score:  player.score,
+                is_match_won:  isMatchWon,
+                round_number:  this.roundCount,
+                player_count:  this.state.players.size,
+                human_count:   [...this.state.players.values()].filter((p: Player) => !p.isAI).length,
+            });
+            // ──────────────────────────────────────────────────────────────────
             // Persist winner info in synced state so late joiners catch up via onStateChange
             this.state.roundOver = true;
             this.state.matchOver = isMatchWon;
