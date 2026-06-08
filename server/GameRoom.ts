@@ -85,8 +85,11 @@ export class GameRoom extends Room<{ state: GameState }> {
     // Timestamp (Date.now()) when the current round started — AI and move messages are blocked
     roundStartMs: number = 0;
     orbLeaderOnly: boolean = false;
-    // Tracks rocket-hit events already processed to prevent duplicate teleports
-    usedRocketHits = new Set<string>();
+    // Server-authoritative rockets. A rocket is spawned when a player collects a rocket
+    // power-up; it walks the BFS path to the goal and teleports any non-owner it overlaps.
+    // Resolving hits here (instead of trusting a client "rocket_hit" message) prevents a
+    // modified client from teleporting arbitrary opponents at will.
+    activeRockets: { x: number; y: number; ownerSessionId: string; accumMs: number; hit: Set<string> }[] = [];
 
     // --- Constants ---
 
@@ -94,6 +97,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     static readonly IDLE_TIMEOUT_MS = 3 * 60 * 1000;  // 3 minutes
     static readonly MOVE_LOCK_MS    = 3000;            // movement blocked at round start — matches client pulse-3 unlock (4500ms * 2/3)
     static readonly RATE_LIMIT_MS   = 50;              // minimum ms between accepted moves (max 20/sec)
+    static readonly ROCKET_STEP_MS  = 50;              // ms per rocket cell — mirrors the client rocket's moveInterval
 
     /** Navigation directions with wall indices and their opposites. */
     private static readonly DIRS = [
@@ -142,8 +146,8 @@ export class GameRoom extends Room<{ state: GameState }> {
 
             if (config) {
                 slot.mode = config.mode || "inactive";
-                slot.id = config.id || `Player ${i + 1}`;
-                slot.color = config.color || defaultColors[i];
+                slot.id = GameRoom.sanitizeId(config.id, `Player ${i + 1}`);
+                slot.color = GameRoom.sanitizeColor(config.color, defaultColors[i]);
                 slot.aiBehavior = config.aiBehavior || "random";
                 slot.controlScheme = config.controlScheme || "WASD";
 
@@ -234,6 +238,8 @@ export class GameRoom extends Room<{ state: GameState }> {
                     }
                 }
             });
+
+            this.updateRockets(dt);
         }, 100);
 
         this.onMessage("move", (client, message) => {
@@ -247,14 +253,11 @@ export class GameRoom extends Room<{ state: GameState }> {
                 if (now - (this.lastMoveTime.get(client.sessionId) ?? 0) < GameRoom.RATE_LIMIT_MS) return;
                 if (now < (this.frozenPlayers.get(client.sessionId) ?? 0)) return; // frozen
                 this.lastMoveTime.set(client.sessionId, now);
-                // Validate coordinates
-                if (
-                    typeof message?.x !== 'number' || typeof message?.y !== 'number' ||
-                    !Number.isFinite(message.x) || !Number.isFinite(message.y) ||
-                    message.x < 0 || message.x >= this.cols ||
-                    message.y < 0 || message.y >= this.rows
-                ) {
-                    console.warn(`Invalid move from ${client.sessionId}:`, message);
+                // Validate the move is a single legal step: in-bounds, exactly one
+                // orthogonal cell away, with no wall in between. Blocks teleport-to-goal
+                // and wall-hacking from modified clients.
+                if (!this.isLegalStep(player, message?.x, message?.y)) {
+                    console.warn(`Illegal move from ${client.sessionId}:`, message);
                     return;
                 }
                 this.lastInputTime.set(client.sessionId, now);
@@ -273,20 +276,16 @@ export class GameRoom extends Room<{ state: GameState }> {
                 if (Date.now() - this.roundStartMs < GameRoom.MOVE_LOCK_MS) return;
                 if (client.sessionId !== this.ownerSessionId) return;
                 const { slotIndex, x, y } = message;
-                if (
-                    typeof x !== 'number' || typeof y !== 'number' ||
-                    !Number.isFinite(x) || !Number.isFinite(y) ||
-                    x < 0 || x >= this.cols ||
-                    y < 0 || y >= this.rows
-                ) {
-                    console.warn(`Invalid move_secondary from ${client.sessionId}:`, message);
-                    return;
-                }
                 const slot = this.state.slots[slotIndex];
                 if (!slot || slot.mode !== 'local' || slot.sessionId !== '') return;
                 const aiId = `ai_${slotIndex}`;
                 const player = this.state.players.get(aiId);
                 if (!player || !player.isAI) return;
+                // Same single-legal-step validation as the primary move handler.
+                if (!this.isLegalStep(player, x, y)) {
+                    console.warn(`Illegal move_secondary from ${client.sessionId}:`, message);
+                    return;
+                }
                 this.lastInputTime.set(client.sessionId, Date.now()); // host is active
                 player.x = x;
                 player.y = y;
@@ -309,22 +308,10 @@ export class GameRoom extends Room<{ state: GameState }> {
             }
         });
 
-        // Rocket hit: client reports that a rocket collided with a player.
-        // rocketId+targetSessionId pair is deduped so multiple clients can't double-teleport the same victim.
-        this.onMessage("rocket_hit", (client, message) => {
-            try {
-                const { rocketId, targetSessionId } = message;
-                if (typeof rocketId !== 'string' || typeof targetSessionId !== 'string') return;
-                if (this.roundOver) return;
-                const key = `${rocketId}:${targetSessionId}`;
-                if (this.usedRocketHits.has(key)) return;
-                this.usedRocketHits.add(key);
-                const target = this.state.players.get(targetSessionId);
-                if (target) this.teleportPlayer(target);
-            } catch (err) {
-                console.error(`rocket_hit handler error:`, err);
-            }
-        });
+        // Rocket hits are now resolved server-side (see updateRockets) so they can't be
+        // spoofed. Kept as a no-op so older clients that still emit this message don't
+        // trigger Colyseus "no handler registered" warnings.
+        this.onMessage("rocket_hit", () => {});
 
         console.log(`Room created: ${this.roomId}`);
 
@@ -538,6 +525,81 @@ export class GameRoom extends Room<{ state: GameState }> {
         return x * this.rows + y;
     }
 
+    /** True if (x, y) is an integer cell inside the grid. */
+    private isInBounds(x: unknown, y: unknown): boolean {
+        return Number.isInteger(x) && Number.isInteger(y) &&
+            (x as number) >= 0 && (x as number) < this.cols &&
+            (y as number) >= 0 && (y as number) < this.rows;
+    }
+
+    /** Validate that moving to (x, y) is a single legal step from the player's current
+     *  cell: in-bounds, exactly one orthogonal cell away, with no wall between. A repeat
+     *  of the current cell (dist 0) is treated as a harmless no-op. */
+    private isLegalStep(player: Player, x: unknown, y: unknown): boolean {
+        if (!this.isInBounds(x, y)) return false;
+        const nx = x as number, ny = y as number;
+        const dx = nx - player.x, dy = ny - player.y;
+        const dist = Math.abs(dx) + Math.abs(dy);
+        if (dist === 0) return true;
+        if (dist !== 1) return false;
+        const cell = this.state.grid[this.idx(player.x, player.y)];
+        if (!cell) return false;
+        const wall = dy === -1 ? 0 : dx === 1 ? 1 : dy === 1 ? 2 : 3;
+        return !cell.walls[wall];
+    }
+
+    /** Only accept 6-digit hex colors; clients render player colors into innerHTML,
+     *  so anything else is rejected to prevent HTML/CSS injection. */
+    private static sanitizeColor(value: unknown, fallback: string): string {
+        return (typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value)) ? value : fallback;
+    }
+
+    /** Restrict player ids to a short alphanumeric charset (no HTML metacharacters). */
+    private static sanitizeId(value: unknown, fallback: string): string {
+        if (typeof value !== 'string') return fallback;
+        const cleaned = value.replace(/[^A-Za-z0-9 _\-]/g, '').trim().slice(0, 24);
+        return cleaned.length > 0 ? cleaned : fallback;
+    }
+
+    /** Advance every active rocket along the BFS gradient toward the goal, teleporting any
+     *  non-owner it lands on. Mirrors the client's rocket pathing so visuals stay in sync. */
+    private updateRockets(dt: number): void {
+        if (this.activeRockets.length === 0) return;
+        for (const rocket of this.activeRockets) {
+            rocket.accumMs += dt;
+            while (rocket.accumMs >= GameRoom.ROCKET_STEP_MS && rocket.x >= 0) {
+                rocket.accumMs -= GameRoom.ROCKET_STEP_MS;
+                if (rocket.x === this.state.goalX && rocket.y === this.state.goalY) {
+                    rocket.x = -1; // reached goal — mark dead
+                    break;
+                }
+                const cell = this.state.grid[this.idx(rocket.x, rocket.y)];
+                if (!cell) { rocket.x = -1; break; }
+                const currDist = this.getDistance(rocket.x, rocket.y);
+                let best: { x: number; y: number } | null = null;
+                let bestDist = currDist;
+                for (const d of GameRoom.DIRS) {
+                    if (cell.walls[d.wall]) continue;
+                    const nx = rocket.x + d.dx, ny = rocket.y + d.dy;
+                    if (nx < 0 || nx >= this.cols || ny < 0 || ny >= this.rows) continue;
+                    const nd = this.getDistance(nx, ny);
+                    if (nd < bestDist) { bestDist = nd; best = { x: nx, y: ny }; }
+                }
+                if (!best) { rocket.x = -1; break; } // dead-end / no improving move
+                rocket.x = best.x;
+                rocket.y = best.y;
+                this.state.players.forEach((p, sid) => {
+                    if (sid === rocket.ownerSessionId || rocket.hit.has(sid)) return;
+                    if (p.x === rocket.x && p.y === rocket.y) {
+                        rocket.hit.add(sid);
+                        this.teleportPlayer(p);
+                    }
+                });
+            }
+        }
+        this.activeRockets = this.activeRockets.filter(r => r.x >= 0);
+    }
+
     /** Convert a human player's slot back to AI control. */
     private convertPlayerToAI(clientSessionId: string, player: Player, slotIndex: number): void {
         const aiId = `ai_${slotIndex}`;
@@ -715,7 +777,7 @@ export class GameRoom extends Room<{ state: GameState }> {
 
     spawnPowerUps(options: Partial<LobbyOptions> = {}) {
         this.state.powerUps.clear();
-        this.usedRocketHits.clear();
+        this.activeRockets = [];
         const playerCount = this.state.players.size;
         const dynamicDefault = Math.max(2, 10 - playerCount);
         const puOpp     = options.puOpp     !== undefined ? Number(options.puOpp)     : dynamicDefault;
@@ -822,8 +884,10 @@ export class GameRoom extends Room<{ state: GameState }> {
         } else if (type === "self") {
             this.teleportPlayer(player);
         } else if (type === "rocket") {
-            // Rocket pickup: nothing to do server-side on collection.
-            // All clients detect the power-up disappearing from state and spawn a local Rocket.
+            // Spawn a server-authoritative rocket at the collector's cell. It walks the BFS
+            // path to the goal each tick and teleports any non-owner it overlaps. Clients
+            // still render their own copy for visuals, but the hit is decided server-side.
+            this.activeRockets.push({ x: player.x, y: player.y, ownerSessionId: sessionId, accumMs: 0, hit: new Set() });
         } else if (type === "mirror") {
             const targetClient = this.clients.find(c => c.sessionId === sessionId);
             if (targetClient) targetClient.send("mirror_controls", { duration: 3000, collectorSessionId: sessionId });

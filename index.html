@@ -5,7 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blaze the Maze</title>
     <script src="https://browser.sentry-cdn.com/7.60.0/bundle.min.js" crossorigin="anonymous"></script>
-    <script src="https://unpkg.com/@colyseus/sdk@0.17.0/dist/colyseus.js"></script>
+    <!-- Colyseus SDK is vendored locally so the game has no third-party CDN dependency at
+         runtime (removes both an availability single-point-of-failure and the supply-chain
+         risk of executing CDN-served JS). If it fails to load, __colyseusLoadFailed is set
+         and the UI shows a clear "cannot connect" message instead of failing silently. -->
+    <script src="vendor/colyseus-0.17.0.js" onerror="window.__colyseusLoadFailed=true;"></script>
     <style>
         * {
             box-sizing: border-box;
@@ -761,7 +765,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.224</div>
+    <div id="version-number">v1.5.225</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1687,8 +1691,9 @@
                             this.hitTargets.add(b.sessionId);
                             screenShake = 10;
                             for(let i=0; i<15; i++) { if (particles.length < 200) particles.push(new Particle(this.pixelX, this.pixelY, this.color)); }
-                            // Report to server — server teleports authoritatively; onStateChange drives the visual
-                            if (room) room.send("rocket_hit", { rocketId: this.id, targetSessionId: b.sessionId });
+                            // The hit/teleport is resolved server-side (the server simulates the
+                            // rocket); onStateChange drives the victim's teleport visual. We only
+                            // play local FX here, so a client can no longer spoof rocket hits.
                             if (this.ownerSessionId === room?.sessionId) achRoundRocketHit = true;
                         }
                     });
@@ -2394,6 +2399,18 @@
             window.electronAPI?.unlockAchievement?.(apiName);
         }
 
+        // Defense-in-depth against HTML/CSS injection: player ids and colors originate
+        // from server state (sanitized server-side too) but are also escaped/validated
+        // here before being interpolated into innerHTML.
+        function escapeHtml(s) {
+            return String(s ?? '').replace(/[&<>"']/g, c => (
+                { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+            ));
+        }
+        function safeColor(c) {
+            return (typeof c === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(c)) ? c : '#ffffff';
+        }
+
         function formatTime(ms) {
             let totalSeconds = Math.floor(ms / 1000);
             let minutes = Math.floor(totalSeconds / 60);
@@ -2414,7 +2431,7 @@
                 if (scoreHiddenIds.has(b.id)) return; // flying — hide from all columns
                 const w = Math.min(scores[b.id] ?? 0, WINS_TO_MATCH - 1);
                 const num = b.id.replace(/\D/g, '');
-                groups[w].push(`<span style="color:${b.color}">P${num}</span>`);
+                groups[w].push(`<span style="color:${safeColor(b.color)}">P${num}</span>`);
             });
             // Negative delay syncs new stars to the global animation cycle,
             // preventing a visible restart every time updateScoreboard() rebuilds the DOM.
@@ -2444,7 +2461,8 @@
 
             const el = document.createElement('div');
             const num = winnerId.replace(/\D/g, '');
-            el.innerHTML = `<span style="color:${winnerColor};font-weight:bold;font-size:14px;font-family:inherit;text-shadow:0 0 8px ${winnerColor},0 0 18px ${winnerColor}">P${num}</span>`;
+            const wc = safeColor(winnerColor);
+            el.innerHTML = `<span style="color:${wc};font-weight:bold;font-size:14px;font-family:inherit;text-shadow:0 0 8px ${wc},0 0 18px ${wc}">P${num}</span>`;
             el.style.cssText = [
                 'position:fixed',
                 `left:${oldRect.left + oldRect.width / 2}px`,
@@ -3985,13 +4003,28 @@
 
         // Start actions
         let client;
-        try { client = new Colyseus.Client("wss://gb-lhr-5b4d543b.colyseus.cloud"); } catch(e) { console.warn('Colyseus unavailable (offline?):', e); }
+        try {
+            if (typeof Colyseus === 'undefined' || window.__colyseusLoadFailed) throw new Error('SDK_NOT_LOADED');
+            client = new Colyseus.Client("wss://gb-lhr-5b4d543b.colyseus.cloud");
+        } catch(e) { console.warn('Colyseus unavailable (offline / SDK failed to load?):', e); }
         let room;
+
+        // Guard for every connect entry point: if the SDK never loaded we can't build a
+        // client, so show a clear "cannot connect" message instead of a raw TypeError.
+        function ensureClient() {
+            if (client) return true;
+            const reason = (typeof Colyseus === 'undefined' || window.__colyseusLoadFailed)
+                ? 'The multiplayer engine could not be loaded. Please restart the game; if this keeps happening, reinstall or check your connection.'
+                : 'Could not reach the game server. Check your internet connection and try again.';
+            showNetworkNotification('Cannot Connect', reason, () => {}, 'OK');
+            return false;
+        }
 
         // When a friend clicks "Join Game" or accepts a Steam invite, Steam fires this
         // with the room code stored in the lobby metadata, feeding the same joinById path
         // used by the manual code input.
         window.electronAPI?.onSteamJoinRequest((roomCode) => {
+            if (!ensureClient()) return;
             joiningViaCode = true;
             client.joinById(roomCode, { joinedViaCode: true })
                 .then(newRoom => setupRoom(newRoom))
@@ -4267,7 +4300,7 @@
                         postMatchLayer.classList.remove('hidden');
                         pmTitle.innerText = '';
                         pmTitle.style.textShadow = '';
-                        pmSubtitle.innerHTML = `${wId} won the Best-of-3!`;
+                        pmSubtitle.innerHTML = `${escapeHtml(wId)} won the Best-of-3!`;
                         document.getElementById('pm-round-times').innerHTML = '';
                         startMatchEndTimer();
                         startVictoryStars(wColor);
@@ -4339,14 +4372,14 @@
                         if (achRoundRocketHit) unlockAchievement('ACH_ROCKET_WIN');
                         if (prevBest === null || matchTime < prevBest) unlockAchievement('ACH_PERSONAL_BEST');
                     } else {
-                        pmSubtitle.innerHTML = `${winnerId} won the Best-of-3!<br>Match Time: ${formatTime(matchTime)}<br>Fastest Round: ${formatTime(fastestRoundTime)}`;
+                        pmSubtitle.innerHTML = `${escapeHtml(winnerId)} won the Best-of-3!<br>Match Time: ${formatTime(matchTime)}<br>Fastest Round: ${formatTime(fastestRoundTime)}`;
                     }
 
                     startMatchEndTimer();
 
                     const roundTimesList = document.getElementById('pm-round-times');
                     roundTimesList.innerHTML = roundTimes.map((rt, index) =>
-                        `<div>Round ${index + 1}: <span style="color:${rt.winnerColor};font-weight:bold;">${rt.winnerId}</span> - ${formatTime(rt.time)}</div>`
+                        `<div>Round ${index + 1}: <span style="color:${safeColor(rt.winnerColor)};font-weight:bold;">${escapeHtml(rt.winnerId)}</span> - ${formatTime(rt.time)}</div>`
                     ).join('');
                 } else {
                     // Round win (not match): animate the score label flying to the new column.
@@ -4508,7 +4541,7 @@
         }
 
         async function startGameWithCode(desiredCode) {
-            if (!client) return;
+            if (!ensureClient()) return;
             blazers = [];
             clampGridSizeInput();
             setButtonLoading(joinFriendBtn, true);

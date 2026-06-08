@@ -24,6 +24,7 @@
     "files": [
       "electron/**/*",
       "index.html",
+      "vendor/**/*",
       "steam_appid.txt"
     ],
     "extraResources": [

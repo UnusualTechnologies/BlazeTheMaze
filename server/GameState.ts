@@ -15,7 +15,7 @@ export class Player extends Schema {
 }
 
 export class Slot extends Schema {
-    @type("string") mode: string = "inactive"; // "inactive", "local", "ai_online", "ai_only"
+    @type("string") mode: string = "inactive"; // "inactive", "local", "ai_online", "ai_only", "ai_friend", "friend_only"
     @type("string") sessionId: string = "";
     @type("string") id: string = "";
     @type("string") color: string = "#ffffff";
@@ -27,7 +27,7 @@ export class Slot extends Schema {
 export class PowerUp extends Schema {
     @type("number") x: number = 0;
     @type("number") y: number = 0;
-    @type("string") type: string = ""; // "opponents", "self", "rocket"
+    @type("string") type: string = ""; // "opponents", "self", "rocket", "mirror", "mystery", "freeze", "beacon"
 }
 
 export class GameState extends Schema {
@@ -37,8 +37,6 @@ export class GameState extends Schema {
     @type([ Cell ]) grid = new ArraySchema<Cell>();
     @type("number") cols: number = 20;
     @type("number") rows: number = 20;
-    @type("number") puOpp: number = 10;
-    @type("number") puSelf: number = 10;
     @type("number") goalX: number = 10;
     @type("number") goalY: number = 10;
     @type([ PowerUp ]) powerUps = new ArraySchema<PowerUp>();

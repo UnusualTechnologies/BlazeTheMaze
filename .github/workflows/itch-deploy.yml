@@ -12,7 +12,7 @@ jobs:
         run: git clone https://github.com/UnusualTechnologies/BlazeTheMaze.git .
 
       - name: Package game
-        run: zip blaze-the-maze.zip index.html assets -r
+        run: zip blaze-the-maze.zip index.html assets vendor -r
 
       - name: Download Butler
         run: |
