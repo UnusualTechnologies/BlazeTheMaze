@@ -78,8 +78,10 @@ export class GameRoom extends Room<{ state: GameState }> {
     lastRoundWon: { winnerId: string; winnerColor: string; winnerScore: number; isMatchWon: boolean } | null = null;
     // Last input timestamp per human sessionId — used for idle kick
     lastInputTime = new Map<string, number>();
-    // Last accepted move timestamp per sessionId — for rate limiting
-    lastMoveTime = new Map<string, number>();
+    // Token-bucket move limiter per sessionId. Absorbs network jitter (so a legitimately
+    // paced move is never dropped — dropping one would desync the client now that moves are
+    // validated as single steps) while still capping the sustained move rate.
+    moveBuckets = new Map<string, { tokens: number; last: number }>();
     // Session ID of the room creator — only they may drive secondary local slots
     ownerSessionId: string = '';
     // Timestamp (Date.now()) when the current round started — AI and move messages are blocked
@@ -96,7 +98,8 @@ export class GameRoom extends Room<{ state: GameState }> {
     static readonly WINS_TO_MATCH   = 3;               // rounds needed to win a match
     static readonly IDLE_TIMEOUT_MS = 3 * 60 * 1000;  // 3 minutes
     static readonly MOVE_LOCK_MS    = 3000;            // movement blocked at round start — matches client pulse-3 unlock (4500ms * 2/3)
-    static readonly RATE_LIMIT_MS   = 50;              // minimum ms between accepted moves (max 20/sec)
+    static readonly MOVE_REFILL_MS  = 50;              // one move token regenerates every 50ms → 20 moves/sec sustained
+    static readonly MOVE_BURST      = 8;               // max moves accepted back-to-back — absorbs network jitter without dropping
     static readonly ROCKET_STEP_MS  = 50;              // ms per rocket cell — mirrors the client rocket's moveInterval
 
     /** Navigation directions with wall indices and their opposites. */
@@ -250,9 +253,8 @@ export class GameRoom extends Room<{ state: GameState }> {
                 // Rate limit: max 20 moves/sec per client
                 const now = Date.now();
                 if (now - this.roundStartMs < GameRoom.MOVE_LOCK_MS) return;
-                if (now - (this.lastMoveTime.get(client.sessionId) ?? 0) < GameRoom.RATE_LIMIT_MS) return;
                 if (now < (this.frozenPlayers.get(client.sessionId) ?? 0)) return; // frozen
-                this.lastMoveTime.set(client.sessionId, now);
+                if (!this.allowMove(client.sessionId, now)) return; // burst-tolerant rate limit
                 // Validate the move is a single legal step: in-bounds, exactly one
                 // orthogonal cell away, with no wall in between. Blocks teleport-to-goal
                 // and wall-hacking from modified clients.
@@ -467,7 +469,7 @@ export class GameRoom extends Room<{ state: GameState }> {
 
         // Player is truly leaving — clean up all tracking state
         this.lastInputTime.delete(client.sessionId);
-        this.lastMoveTime.delete(client.sessionId);
+        this.moveBuckets.delete(client.sessionId);
         this.friendCodeJoiners.delete(client.sessionId);
         this.explorerLastPos.delete(client.sessionId);
         this.guesserData.delete(client.sessionId);
@@ -546,6 +548,22 @@ export class GameRoom extends Room<{ state: GameState }> {
         if (!cell) return false;
         const wall = dy === -1 ? 0 : dx === 1 ? 1 : dy === 1 ? 2 : 3;
         return !cell.walls[wall];
+    }
+
+    /** Token-bucket rate limit. Refills MOVE_BURST tokens at one per MOVE_REFILL_MS and
+     *  consumes one per accepted move. Short bursts (network jitter delivering several
+     *  client-paced moves at once) are absorbed instead of dropped — dropping a legit move
+     *  would leave the next move >1 cell from the server position and cascade into a visible
+     *  snap-back. Sustained spam beyond the refill rate still drains the bucket and is capped. */
+    private allowMove(sessionId: string, now: number): boolean {
+        const cap = GameRoom.MOVE_BURST;
+        let b = this.moveBuckets.get(sessionId);
+        if (!b) { b = { tokens: cap, last: now }; this.moveBuckets.set(sessionId, b); }
+        b.tokens = Math.min(cap, b.tokens + (now - b.last) / GameRoom.MOVE_REFILL_MS);
+        b.last = now;
+        if (b.tokens < 1) return false;
+        b.tokens -= 1;
+        return true;
     }
 
     /** Only accept 6-digit hex colors; clients render player colors into innerHTML,
