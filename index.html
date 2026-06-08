@@ -765,7 +765,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.226</div>
+    <div id="version-number">v1.5.227</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -871,7 +871,7 @@
                             </g>
                         </svg>
                         <label for="pu-freeze-input" style="font-size:1.2rem;">Freeze:</label>
-                        <input type="number" id="pu-freeze-input" value="3" min="0" max="20" inputmode="numeric" style="font-size:1.1rem; padding:5px; width:80px; text-align:center;">
+                        <input type="number" id="pu-freeze-input" value="0" min="0" max="20" inputmode="numeric" style="font-size:1.1rem; padding:5px; width:80px; text-align:center;">
                     </div>
                     <div style="display:flex; align-items:center; gap:10px;">
                         <canvas id="rocket-custom-canvas" class="pu-legend-icon" width="44" height="44"></canvas>
@@ -4810,7 +4810,7 @@
                 puRocket:      Math.max(0, 4 - Math.floor((n - 1) / 2)),
                 puMirror:      0,
                 puMystery:     0,
-                puFreeze:      3,
+                puFreeze:      0,
                 puBeacon:      0,
                 orbLeaderOnly: true,
                 _isDefaults:   true,
