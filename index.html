@@ -765,7 +765,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.227</div>
+    <div id="version-number">v1.5.228</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2526,12 +2526,19 @@
             blazers = [];
             updateScoreboard();
 
-            // Skip the movement lock when joining a game that's already in progress
-            const roundAlreadyRunning = !!room && room.state && room.state.timer > 0;
-            initRound(roundAlreadyRunning);
+            // Apply exactly the remaining portion of the server's move lock.
+            // If timer > 3s the lock already expired — pass 0 to skip it entirely.
+            // If timer is small (e.g. 0.1s after room creation), we still lock for 2.9s
+            // instead of skipping the lock and letting the server reject every early move.
+            const MOVE_LOCK_MS = ROUND_START_MS * (2 / 3); // 3000 — matches server MOVE_LOCK_MS
+            const serverElapsedMs = (room && room.state) ? room.state.timer * 1000 : 0;
+            const remainingLockMs = Math.max(0, MOVE_LOCK_MS - serverElapsedMs);
+            initRound(remainingLockMs);
         }
 
-        function initRound(skipMoveLock = false) {
+        // lockMs: how long to lock movement from now. -1 (default) = full 3-second lock.
+        // 0 = no lock (round already in progress). Positive = partial remaining lock.
+        function initRound(lockMs = -1) {
             gameState = 'INITIALIZING'; // Temporarily change state to block draw() recursion
             bgTintR = bgTintG = bgTintB = 0; // reset so leader tint fades in fresh each round
             document.body.style.backgroundColor = '#000000';
@@ -2573,8 +2580,9 @@
             lastTime = performance.now();
             roundStartTime = performance.now();
             roundRingTime = performance.now();
-            roundMoveLockEnd = skipMoveLock ? 0 : performance.now() + ROUND_START_MS * (2 / 3);
-            roundUnlockFlashFired = skipMoveLock; // no unlock flash if movement was never locked
+            const _lockDuration = lockMs < 0 ? ROUND_START_MS * (2 / 3) : lockMs;
+            roundMoveLockEnd = performance.now() + _lockDuration;
+            roundUnlockFlashFired = (_lockDuration === 0); // no unlock flash if movement was never locked
             roundSonarsFired = 0;
             Synth.muffle(false);
         }
