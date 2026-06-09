@@ -1,6 +1,8 @@
 {
   "name": "blaze-the-maze",
   "version": "1.0.0",
+  "description": "Fast-paced multiplayer maze racing game. First to the centre wins.",
+  "author": "Unusual Technologies",
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
@@ -16,10 +18,11 @@
   "build": {
     "appId": "com.yourstudio.blazethemaze",
     "productName": "Blaze The Maze",
-    "asar": false,
+    "asar": true,
     "win": {
       "target": "portable",
-      "sign": null
+      "sign": null,
+      "icon": "build/favicon.ico"
     },
     "files": [
       "electron/**/*",

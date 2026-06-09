@@ -27,6 +27,8 @@ We use a strict `x.y.z` versioning system tracked in `version.json` and displaye
 ## File Editing Rules
 - **Always edit `D:\Projects\Maze\MazePrototype\index.html` directly** — never edit the worktree copy at `.claude\worktrees\*\index.html`.
 - When the user asks to "update the .md" or refers to updating a project context file, always update `AGENTS.md` (this file).
+- **Whenever a `track()` call is added, removed, or its properties change in `server/GameRoom.ts`, update the Analytics section of `README.md` to match.** The README is the source of truth for what is tracked.
+- **Whenever a gameplay rule or mechanic is added or changed that is not immediately obvious from the UI, add or update it in `GAME_RULES.md`.** This includes numeric thresholds, timers, exclusion zones, win conditions, power-up behaviour, AI behaviour, and any other rules a developer would need to look up in code to understand.
 
 ## Development Workflow
 - When fixing bugs or adding small features, run the build script with `-Type patch`.

@@ -765,7 +765,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.228</div>
+    <div id="version-number">v1.5.233</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1166,6 +1166,7 @@
         let joiningViaCode = false; // true when joining via friend code — triggers maze compat check
         let animationId;
         let lastTime = 0;
+        let avgFps = 60;        // exponential moving average, seeded at 60
         let screenShake = 0;
         let mazeCache = null;        // offscreen canvas caching static walls + floor grid
         let mazeCacheValid = false;  // invalidated on resize or new maze
@@ -1199,6 +1200,13 @@
         let roundFlashStart = null; // performance.now() timestamp when white flash begins
         let bestTime = parseFloat(localStorage.getItem('blazeTheMazeBestTime')) || null;
         let worstTime = parseFloat(localStorage.getItem('blazeTheMazeWorstTime')) || null;
+
+        // Persistent player GUID — survives page reloads and app restarts (localStorage persists in Electron)
+        let playerGuid = localStorage.getItem('blazeTheMazePlayerId');
+        if (!playerGuid) {
+            playerGuid = crypto.randomUUID();
+            localStorage.setItem('blazeTheMazePlayerId', playerGuid);
+        }
         let achRoundRocketHit = false; // local player's rocket hit someone this round
 
         let goal = { x: Math.floor(cols / 2), y: Math.floor(rows / 2) };
@@ -1213,6 +1221,7 @@
 
 
         // Analytics are tracked server-side in GameRoom.ts — no client-side calls needed.
+        const controlSchemesReported = new Set(); // schemes already reported as "actually used" this session
 
         // 8 highly distinct player colors spanning the spectrum
         const playerColors = [
@@ -1889,6 +1898,11 @@
                         room.send("move", { x: this.gridX, y: this.gridY });
                     } else if (this.isSecondaryLocal) {
                         room.send("move_secondary", { slotIndex: this.slotIndex, x: this.gridX, y: this.gridY });
+                    }
+                    const scheme = this.controlScheme || 'WASD';
+                    if (!controlSchemesReported.has(scheme)) {
+                        controlSchemesReported.add(scheme);
+                        room.send("controls_used", { scheme, slotIndex: this.slotIndex });
                     }
                 }
             }
@@ -3300,6 +3314,7 @@
             const now = performance.now();
             const dt = now - lastTime;
             lastTime = now;
+            if (dt > 0 && dt < 500) avgFps = avgFps * 0.95 + (1000 / dt) * 0.05;
 
             ctx.save();
             if (screenShake > 0) {
@@ -4546,6 +4561,22 @@
                 blazers.forEach(resetBlazerInputState);
                 initRound();
             });
+
+            // ── Client telemetry: latency + FPS ───────────────────────────────
+            let _pendingPingT = 0;
+            room.onMessage("pong", (data) => {
+                if (data && data.t) {
+                    const latencyMs = Date.now() - data.t;
+                    if (room) room.send("client_telemetry", { fps: Math.round(avgFps), latency_ms: latencyMs });
+                }
+            });
+            const _telemetryInterval = setInterval(() => {
+                if (!room) { clearInterval(_telemetryInterval); return; }
+                _pendingPingT = Date.now();
+                room.send("ping", { t: _pendingPingT });
+            }, 30000);
+            room.onLeave(() => clearInterval(_telemetryInterval));
+            // ─────────────────────────────────────────────────────────────────
         }
 
         async function startGameWithCode(desiredCode) {
@@ -4777,6 +4808,11 @@
          */
         function buildLobbySettings(overrides = {}) {
             const opts = {
+                playerGuid,
+                isMobile: /Android|iPhone|iPad|iPod/i.test(navigator.userAgent),
+                screenW: screen.width,
+                screenH: screen.height,
+                humanSlotCount: lobbySlots.filter(s => s.typeSelect.value === 'local').length,
                 cols: parseInt(gridSizeInput.value, 10) || 20,
                 rows: parseInt(gridSizeInput.value, 10) || 20,
                 puOpp:   (v => isNaN(v) ? 6 : v)(parseInt(puOppInput.value,  10)),

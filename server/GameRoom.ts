@@ -48,6 +48,11 @@ interface LobbyOptions {
 
 interface JoinOptions {
     joinedViaCode?: boolean;
+    playerGuid?:   string;
+    isMobile?:     boolean;
+    screenW?:      number;
+    screenH?:      number;
+    humanSlotCount?: number;
 }
 
 export class GameRoom extends Room<{ state: GameState }> {
@@ -315,6 +320,37 @@ export class GameRoom extends Room<{ state: GameState }> {
         // trigger Colyseus "no handler registered" warnings.
         this.onMessage("rocket_hit", () => {});
 
+        // Echo the client's timestamp back so it can measure round-trip latency.
+        this.onMessage("ping", (client, message) => {
+            try { client.send("pong", { t: message?.t ?? 0 }); } catch (_) {}
+        });
+
+        // Periodic client-side metrics: fps and measured latency.
+        this.onMessage("client_telemetry", (client, message) => {
+            try {
+                const _anal = this.clientAnalytics.get(client.sessionId);
+                if (!_anal) return;
+                const fps = typeof message?.fps === 'number' ? Math.round(message.fps) : null;
+                const latency_ms = typeof message?.latency_ms === 'number' ? Math.round(message.latency_ms) : null;
+                if (fps !== null) track('fps_sample', client.sessionId, _anal.analyticsSessionId, { fps });
+                if (latency_ms !== null) track('latency_sample', client.sessionId, _anal.analyticsSessionId, { latency_ms });
+            } catch (_) {}
+        });
+
+        // First time a player actually uses a control scheme (vs just selecting it).
+        this.onMessage("controls_used", (client, message) => {
+            try {
+                const _anal = this.clientAnalytics.get(client.sessionId);
+                if (!_anal) return;
+                const scheme = typeof message?.scheme === 'string' ? message.scheme.slice(0, 32) : null;
+                if (!scheme) return;
+                track('controls_used', client.sessionId, _anal.analyticsSessionId, {
+                    scheme,
+                    slot_index: typeof message?.slotIndex === 'number' ? message.slotIndex : null,
+                });
+            } catch (_) {}
+        });
+
         console.log(`Room created: ${this.roomId}`);
 
         // ── Telemetry: settings used to create this room ───────────────────────
@@ -438,7 +474,15 @@ export class GameRoom extends Room<{ state: GameState }> {
         // ── Telemetry: session start ───────────────────────────────────────────
         const _aid = randomUUID();
         this.clientAnalytics.set(client.sessionId, { analyticsSessionId: _aid, startMs: Date.now(), joinRound: this.roundCount });
-        track('session_start', client.sessionId, _aid, { joined_via_code: joinedViaCode, is_host: isHost });
+        track('session_start', client.sessionId, _aid, {
+            joined_via_code:  joinedViaCode,
+            is_host:          isHost,
+            player_guid:      options.playerGuid ?? null,
+            is_mobile:        options.isMobile   ?? false,
+            screen_w:         options.screenW    ?? null,
+            screen_h:         options.screenH    ?? null,
+            human_slot_count: options.humanSlotCount ?? 1,
+        });
         if (joinedViaCode) track('friend_code_used', client.sessionId, _aid, {});
         // ───────────────────────────────────────────────────────────────────────
     }
