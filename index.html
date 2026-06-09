@@ -765,7 +765,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.233</div>
+    <div id="version-number">v1.5.235</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3104,22 +3104,19 @@
                 ctx.save();
                 ctx.translate(px, py);
                 if (p.type === 'opponents') {
-                    // Dashed circle (same as self) + "1" in cycling player colours
-                    ctx.rotate(-time);
+                    // Static dashed circle + cycling "1" — matches menu icon
                     ctx.beginPath();
                     ctx.arc(0, 0, cellSize * 0.3, 0, Math.PI * 2);
                     ctx.fillStyle = colors.bg;
                     ctx.fill();
                     ctx.lineWidth = 2;
-                    ctx.strokeStyle = colors.powerupSelf;
+                    ctx.strokeStyle = '#ffffff';
                     ctx.setLineDash([5, 5]);
                     ctx.shadowBlur = 10;
-                    ctx.shadowColor = colors.powerupSelf;
+                    ctx.shadowColor = '#ffffff';
                     ctx.stroke();
                     ctx.setLineDash([]);
                     ctx.shadowBlur = 0;
-                    // Undo circle rotation for the "1" label so it stays upright
-                    ctx.rotate(time);
                     const oppCol = playerColors[Math.floor(performance.now() / 300) % playerColors.length] || '#ffff00';
                     ctx.font = `bold ${Math.round(cellSize * 0.32)}px monospace`;
                     ctx.textAlign = 'center';
@@ -3130,16 +3127,16 @@
                     ctx.fillText('1', 0, 0);
                     ctx.shadowBlur = 0;
                 } else if (p.type === 'self') {
-                    ctx.rotate(-time);
+                    // Static dashed circle — matches menu icon
                     ctx.beginPath();
                     ctx.arc(0, 0, cellSize * 0.3, 0, Math.PI * 2);
                     ctx.fillStyle = colors.bg;
                     ctx.fill();
                     ctx.lineWidth = 2;
-                    ctx.strokeStyle = colors.powerupSelf;
+                    ctx.strokeStyle = '#ffffff';
                     ctx.setLineDash([5, 5]);
                     ctx.shadowBlur = 10;
-                    ctx.shadowColor = colors.powerupSelf;
+                    ctx.shadowColor = '#ffffff';
                     ctx.stroke();
                     ctx.setLineDash([]);
                 } else if (p.type === 'rocket') {
@@ -3154,66 +3151,50 @@
                     const corColor = playerColors[rSlot % playerColors.length] || '#ff3300';
                     drawHelixCorkscrew(ctx, time * 2.5, HR, HH, N, lw, corColor);
                 } else if (p.type === 'mirror') {
-                    // Snap instantly between normal and flipped every ~1.2s
-                    const flipped = Math.floor(time * 0.5) % 2 === 1;
-                    const flipAngle = flipped ? Math.PI : 0;
-                    const spD = cellSize * 0.12;
-                    const ar  = cellSize * 0.18; // spD + ar = 0.30 — all tips touch self circle
+                    // 4 solid white outward arrows — matches menu icon polygons
+                    const s = cellSize * 0.3 / 12;
                     ctx.fillStyle = '#ffffff';
-                    ctx.strokeStyle = '#ff0000';
-                    ctx.lineWidth = Math.max(1, cellSize * 0.045);
-                    ctx.lineJoin = 'round';
                     ctx.shadowColor = '#ffffff';
-                    ctx.shadowBlur = 10;
-                    const arrows = [
-                        { ax:    0, ay: -spD, base: -Math.PI / 2 }, // up
-                        { ax: -spD, ay:    0, base:  Math.PI     }, // left
-                        { ax:    0, ay:  spD, base:  Math.PI / 2 }, // down
-                        { ax:  spD, ay:    0, base:  0           }, // right
-                    ];
-                    arrows.forEach(({ ax, ay, base }) => {
-                        ctx.save();
-                        ctx.translate(ax, ay);
-                        ctx.rotate(base + flipAngle);
-                        ctx.beginPath();
-                        ctx.moveTo( ar,        0);
-                        ctx.lineTo(-ar * 0.5, -ar * 0.72);
-                        ctx.lineTo(-ar * 0.5,  ar * 0.72);
-                        ctx.closePath();
-                        ctx.fill();
-                        if (flipped) {
-                            ctx.shadowBlur = 0; // no glow bleed on the outline
-                            ctx.stroke();
-                        }
-                        ctx.restore();
-                    });
-                } else if (p.type === 'mystery') {
-                    // Cycles through each power-up type's colour at 200 ms/type
-                    const MYSTERY_COLORS = ['#ffff00', '#00ffff', '#ff6600', '#ff00ff', '#00aaff', '#ffcc00']; // opp/self/rocket/mirror/freeze/beacon
-                    const cycleIdx = Math.floor(performance.now() / 200) % MYSTERY_COLORS.length;
-                    const mColor   = MYSTERY_COLORS[cycleIdx];
-                    const r        = cellSize * 0.212; // r×√2 = 0.30 — corners touch self circle
-
-                    // Spinning diamond outline
-                    ctx.save();
-                    ctx.rotate(Math.PI / 4 + time * 1.5);
+                    ctx.shadowBlur = 8;
+                    // Up:    points="0,-13 5.5,-7.5 -5.5,-7.5"
                     ctx.beginPath();
-                    ctx.rect(-r, -r, r * 2, r * 2);
-                    ctx.strokeStyle = mColor;
+                    ctx.moveTo(0, -13 * s); ctx.lineTo(5.5 * s, -7.5 * s); ctx.lineTo(-5.5 * s, -7.5 * s);
+                    ctx.closePath(); ctx.fill();
+                    // Down:  points="0,13 5.5,7.5 -5.5,7.5"
+                    ctx.beginPath();
+                    ctx.moveTo(0, 13 * s); ctx.lineTo(5.5 * s, 7.5 * s); ctx.lineTo(-5.5 * s, 7.5 * s);
+                    ctx.closePath(); ctx.fill();
+                    // Left:  points="-13,0 -7.5,5.5 -7.5,-5.5"
+                    ctx.beginPath();
+                    ctx.moveTo(-13 * s, 0); ctx.lineTo(-7.5 * s, 5.5 * s); ctx.lineTo(-7.5 * s, -5.5 * s);
+                    ctx.closePath(); ctx.fill();
+                    // Right: points="13,0 7.5,5.5 7.5,-5.5"
+                    ctx.beginPath();
+                    ctx.moveTo(13 * s, 0); ctx.lineTo(7.5 * s, 5.5 * s); ctx.lineTo(7.5 * s, -5.5 * s);
+                    ctx.closePath(); ctx.fill();
+                    ctx.shadowBlur = 0;
+                } else if (p.type === 'mystery') {
+                    // Yellow diamond outline + "?" — matches menu icon
+                    const s = cellSize * 0.3 / 12;
+                    const d = 12 * s;
+                    ctx.strokeStyle = '#ffee00';
                     ctx.lineWidth   = 2;
-                    ctx.shadowBlur  = 18;
-                    ctx.shadowColor = mColor;
+                    ctx.shadowBlur  = 12;
+                    ctx.shadowColor = '#ffee00';
+                    // Diamond: polygon points="0,-12 12,0 0,12 -12,0"
+                    ctx.beginPath();
+                    ctx.moveTo(0, -d); ctx.lineTo(d, 0); ctx.lineTo(0, d); ctx.lineTo(-d, 0);
+                    ctx.closePath();
                     ctx.stroke();
-                    ctx.restore();
-
-                    // "?" label in the current colour
+                    // "?" label
                     ctx.shadowBlur   = 10;
-                    ctx.shadowColor  = mColor;
-                    ctx.fillStyle    = mColor;
+                    ctx.shadowColor  = '#ffee00';
+                    ctx.fillStyle    = '#ffee00';
                     ctx.font         = `bold ${Math.round(cellSize * 0.30)}px monospace`;
                     ctx.textAlign    = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.fillText('?', 0, 0);
+                    ctx.shadowBlur   = 0;
                 } else if (p.type === 'freeze') {
                     // 6-point snowflake, scaled to fill the same space as the self circle
                     const pulse    = (Math.sin(performance.now() / 350) + 1) / 2;
@@ -3238,20 +3219,24 @@
                     ctx.lineCap    = 'butt';
                     ctx.shadowBlur = 0;
                 } else if (p.type === 'beacon') {
-                    // Cycling path cell — looks like an activated beacon cell, loops through all 8 blazer colours
-                    const cycleColor = playerColors[Math.floor(performance.now() / 350) % playerColors.length];
-                    const pulse = 0.28 + 0.07 * Math.sin(time * 2.5);
-                    // Clip to cell so glow doesn't bleed past the walls
+                    // Cyan rounded-rect outline — matches menu icon
+                    const s  = cellSize * 0.3 / 12;
+                    const hw = 11 * s;  // half-width (rect is ±11 in SVG)
+                    const rr = 2 * s;   // border-radius
+                    ctx.shadowBlur  = 8;
+                    ctx.shadowColor = '#00ffff';
+                    ctx.globalAlpha = 0.2;
+                    ctx.fillStyle   = '#00ffff';
                     ctx.beginPath();
-                    ctx.rect(-cellSize / 2, -cellSize / 2, cellSize, cellSize);
-                    ctx.clip();
-                    ctx.globalAlpha = Math.min(0.55, pulse);
-                    ctx.fillStyle = cycleColor;
-                    ctx.shadowBlur = 10;
-                    ctx.shadowColor = cycleColor;
-                    ctx.fillRect(-cellSize / 2 + 1, -cellSize / 2 + 1, cellSize - 2, cellSize - 2);
-                    ctx.shadowBlur = 0;
+                    ctx.roundRect(-hw, -hw, hw * 2, hw * 2, rr);
+                    ctx.fill();
                     ctx.globalAlpha = 1;
+                    ctx.strokeStyle = '#00ffff';
+                    ctx.lineWidth   = 2;
+                    ctx.beginPath();
+                    ctx.roundRect(-hw, -hw, hw * 2, hw * 2, rr);
+                    ctx.stroke();
+                    ctx.shadowBlur  = 0;
                 }
                 ctx.restore();
             });
