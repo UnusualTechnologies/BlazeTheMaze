@@ -1243,7 +1243,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     teleportPlayer(player: Player) {
         const startX = player.x, startY = player.y;
         let x = startX, y = startY;
-        const minDist = Math.max(5, Math.floor(Math.min(this.cols, this.rows) / 3));
+        const minDist = 15; // minimum Manhattan distance from start position
         const maxAttempts = this.cols * this.rows * 4;
         let attempts = 0;
         do {
