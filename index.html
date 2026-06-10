@@ -775,7 +775,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.241</div>
+    <div id="version-number">v1.5.242</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2611,13 +2611,15 @@
             // If timer is small (e.g. 0.1s after room creation), we still lock for 2.9s
             // instead of skipping the lock and letting the server reject every early move.
             const MOVE_LOCK_MS = ROUND_START_MS * (2 / 3); // 3000 — matches server MOVE_LOCK_MS
-            const serverElapsedMs = (room && room.state) ? room.state.timer * 1000 : 0;
+            const _rawTimer = (room && room.state && typeof room.state.timer === 'number') ? room.state.timer : 0;
+            const serverElapsedMs = _rawTimer * 1000;
             const remainingLockMs = Math.max(0, MOVE_LOCK_MS - serverElapsedMs);
             initRound(remainingLockMs);
         }
 
         // lockMs: how long to lock movement from now. -1 (default) = full 3-second lock.
         // 0 = no lock (round already in progress). Positive = partial remaining lock.
+        // NaN/Infinity treated as -1 (full lock) so a bad caller can't permanently lock movement.
         function initRound(lockMs = -1) {
             gameState = 'INITIALIZING'; // Temporarily change state to block draw() recursion
             bgTintR = bgTintG = bgTintB = 0; // reset so leader tint fades in fresh each round
@@ -2660,7 +2662,7 @@
             lastTime = performance.now();
             roundStartTime = performance.now();
             roundRingTime = performance.now();
-            const _lockDuration = lockMs < 0 ? ROUND_START_MS * (2 / 3) : lockMs;
+            const _lockDuration = (lockMs >= 0 && isFinite(lockMs)) ? lockMs : ROUND_START_MS * (2 / 3);
             roundMoveLockEnd = performance.now() + _lockDuration;
             roundUnlockFlashFired = (_lockDuration === 0); // no unlock flash if movement was never locked
             roundSonarsFired = 0;
