@@ -822,12 +822,13 @@ export class GameRoom extends Room<{ state: GameState }> {
             move = this.seekPowerUpIfThreatened(sessionId, player, open);
             if (!move) {
                 const myDist = this.distanceMap[this.idx(player.x, player.y)];
+                const nearGoal = Math.max(15, Math.floor(this.cols * this.rows / 20));
                 const gd = this.guesserData.get(sessionId);
                 const atTarget = !gd || (player.x === gd.target.x && player.y === gd.target.y);
 
                 if (atTarget && gd && !gd.reachedFirst) gd.reachedFirst = true;
 
-                const useGoal = myDist <= 50 || (gd?.reachedFirst ?? true);
+                const useGoal = myDist <= nearGoal || (gd?.reachedFirst ?? true);
                 if (useGoal) {
                     // Navigate toward star
                     for (const n of open) {
@@ -846,8 +847,9 @@ export class GameRoom extends Room<{ state: GameState }> {
 
         } else if (behavior === "chaotic") {
             const myDist = this.distanceMap[this.idx(player.x, player.y)];
+            const nearGoal = Math.max(15, Math.floor(this.cols * this.rows / 20));
             const hasPowerUps = this.state.powerUps.length > 0;
-            const useGoal = myDist <= 50 || !hasPowerUps;
+            const useGoal = myDist <= nearGoal || !hasPowerUps;
 
             if (useGoal) {
                 for (const n of open) {
