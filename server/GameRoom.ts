@@ -713,7 +713,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         const configured = this.state.slots[player.slotIndex]?.aiBehavior ?? "random";
 
         // "random" is a meta-setting: pick a real strategy for this round
-        const realStrategies = ["genius", "guesser", "chaotic", "focused"];
+        const realStrategies = ["genius", "guesser", "chaotic"];
         const behavior = configured === "random"
             ? realStrategies[Math.floor(Math.random() * realStrategies.length)]
             : configured;
