@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.277</div>
+    <div id="version-number">v1.5.278</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3606,7 +3606,8 @@
 
             for (let i = rockets.length - 1; i >= 0; i--) {
                 const r = rockets[i];
-                if (r.update(dt)) r.draw(); else rockets.splice(i, 1);
+                const roundDone = gameState === 'ROUND_OVER_COUNTDOWN' || gameState === 'MATCH_OVER';
+                if (roundDone) { r.draw(); } else if (r.update(dt)) r.draw(); else rockets.splice(i, 1);
             }
 
             for (let i = particles.length - 1; i >= 0; i--) {
