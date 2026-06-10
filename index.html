@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.248</div>
+    <div id="version-number">v1.5.253</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1334,8 +1334,8 @@
                             <option value="custom">Speed: Custom</option>
                         </select>
                         <div class="custom-speed-wrapper" style="display: none; align-items: center; gap: 5px;">
-                            <input type="range" class="custom-speed-slider" min="100" max="1000" value="250" step="10" style="flex: 1; cursor: pointer;">
-                            <span class="custom-speed-display" style="font-size: 0.9rem; min-width: 35px; text-align: right;">250</span>
+                            <input type="range" class="custom-speed-slider" min="1" max="100" value="50" step="1" style="flex: 1; cursor: pointer;">
+                            <span class="custom-speed-display" style="font-size: 0.9rem; min-width: 35px; text-align: right;">50</span>
                         </div>
                         <select class="ai-behavior-select">
                             <option value="random" selected>Strategy: Random</option>
@@ -1576,7 +1576,7 @@
                         isPlayer: isLocal,
                         controlScheme: isLocal ? slot.controlSelect.value : null,
                         aiSpeed: slot.aiSpeedSelect.value,
-                        aiCustomSpeed: parseInt(slot.customSpeedSlider.value, 10),
+                        aiCustomSpeed: speedScaleToMs(parseInt(slot.customSpeedSlider.value, 10)),
                         aiBehavior: slot.aiBehaviorSelect.value,
                         startIndex: slot.index
                     });
@@ -2490,6 +2490,9 @@
         // Defense-in-depth against HTML/CSS injection: player ids and colors originate
         // from server state (sanitized server-side too) but are also escaped/validated
         // here before being interpolated into innerHTML.
+        // Convert 1-100 speed scale to ms: 1 = 1000ms (slowest), 100 = 100ms (fastest)
+        function speedScaleToMs(s) { return Math.round(100 + (100 - s) * (900 / 99)); }
+
         function escapeHtml(s) {
             return String(s ?? '').replace(/[&<>"']/g, c => (
                 { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
