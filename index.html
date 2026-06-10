@@ -765,7 +765,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.237</div>
+    <div id="version-number">v1.5.238</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -853,6 +853,13 @@
 
                 <!-- Match Settings Panel -->
                 <div class="lobby-settings-panel">
+                    <!-- Grid size -->
+                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <label for="grid-size-input" style="font-size:1.2rem;">Grid Size:</label>
+                        <input type="number" id="grid-size-input" value="20" min="5" max="100" inputmode="numeric" style="font-size:1.1rem; padding:5px; width:80px; text-align:center;">
+                        <span id="grid-size-hint" style="font-size:0.85rem; color:#ff6666; display:none;"></span>
+                    </div>
+                    <div style="width:100%; height:1px; background:rgba(255,255,255,0.15); margin:2px 0;"></div>
                     <!-- Power-ups -->
                     <div style="display:flex; align-items:center; gap:10px;">
                         <svg class="pu-legend-icon" viewBox="-16 -16 32 32" style="filter:drop-shadow(0 0 4px #ffffff)">
@@ -911,13 +918,6 @@
                         </svg>
                         <label for="pu-mystery-input" style="font-size:1.2rem;">Mystery:</label>
                         <input type="number" id="pu-mystery-input" value="0" min="0" max="20" inputmode="numeric" style="font-size:1.1rem; padding:5px; width:80px; text-align:center;">
-                    </div>
-                    <!-- Other settings -->
-                    <div style="width:100%; height:1px; background:rgba(255,255,255,0.15); margin:2px 0;"></div>
-                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                        <label for="grid-size-input" style="font-size:1.2rem;">Grid Size:</label>
-                        <input type="number" id="grid-size-input" value="20" min="5" max="100" inputmode="numeric" style="font-size:1.1rem; padding:5px; width:80px; text-align:center;">
-                        <span id="grid-size-hint" style="font-size:0.85rem; color:#ff6666; display:none;"></span>
                     </div>
                     <div style="display:flex; align-items:center; gap:10px;">
                         <input type="checkbox" id="collisions-toggle" checked style="width:20px; height:20px; cursor:pointer;">
