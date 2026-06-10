@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.261</div>
+    <div id="version-number">v1.5.262</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1841,8 +1841,9 @@
                 this.targetGridX = 0;
                 this.targetGridY = 0;
                 this.flashTimer = 0;
-                this.mirrorUntil = 0; // Date.now() timestamp until mirror controls expire for this blazer
-                this.frozenUntil = 0; // Date.now() timestamp until freeze expires for this blazer
+                this.mirrorUntil = 0;   // Date.now() timestamp until mirror controls expire for this blazer
+                this.frozenUntil = 0;   // Date.now() timestamp until freeze expires for this blazer
+                this.freezeGraceEnd = 0; // performance.now() until which post-freeze snap-back animations are suppressed
                 this.beaconUntil = 0; // Date.now() timestamp until path-guide beacon expires
                 this._beaconPathCache = [];        // cached path for beacon rendering
                 this._beaconPathCacheX = -1;       // gridX when path was last computed
@@ -4361,10 +4362,14 @@
                         // A real mid-grace teleport will be caught once the grace window closes.
                         const _moveLocked = performance.now() < roundMoveLockEnd;
                         const _moveGrace  = performance.now() < roundMoveLockEnd + 1000;
+                        // Freeze grace: suppress false snap-back animations for the local player
+                        // for 500 ms after freeze ends (same idea as _moveGrace but for freeze).
+                        const _freezeGrace = (isLocal || blazer.isSecondaryLocal) &&
+                            blazer.freezeGraceEnd > 0 && performance.now() < blazer.freezeGraceEnd;
 
                         // If player position changed drastically, trigger teleport animation
                         if (Math.abs(blazer.gridX - playerState.x) > 1 || Math.abs(blazer.gridY - playerState.y) > 1) {
-                            if (_moveGrace && (isLocal || blazer.isSecondaryLocal)) {
+                            if ((_moveGrace || _freezeGrace) && (isLocal || blazer.isSecondaryLocal)) {
                                 if (_moveLocked) {
                                     // During the lock itself: silently snap — no moves sent yet so
                                     // the server position is always correct (e.g. pre-snap landed
@@ -4373,8 +4378,8 @@
                                     blazer.gridY = playerState.y;
                                     blazer.updatePixelPos(true);
                                 }
-                                // Post-lock grace window: skip entirely — this is a stale patch
-                                // from the lock era, not a real server-side teleport.
+                                // Post-lock / post-freeze grace window: skip entirely — this is a
+                                // stale patch, not a real server-side teleport.
                                 // Client prediction is preserved; no silent position reset.
                             } else if (blazer.state === 'normal') {
                                 // Smoke puff at departure point, drifting toward destination
@@ -4662,7 +4667,16 @@
             room.onMessage("freeze", ({ collectorSessionId, duration }) => {
                 const freezeUntil = Date.now() + duration;
                 blazers.forEach(b => {
-                    if (b.sessionId !== collectorSessionId) b.frozenUntil = freezeUntil;
+                    if (b.sessionId !== collectorSessionId) {
+                        b.frozenUntil = freezeUntil;
+                        // Grace window: suppress false large-displacement teleport animations for
+                        // the local player for 500 ms after the freeze expires. Without this, if
+                        // the server is still frozen by a few ms when the client unfreezes (clock
+                        // skew), the server rejects the first moves, the client drifts 2+ cells
+                        // ahead, and the next state patch triggers a snap-back teleport animation
+                        // that blocks movement for ~600 ms.
+                        b.freezeGraceEnd = performance.now() + duration + 500;
+                    }
                 });
             });
 
