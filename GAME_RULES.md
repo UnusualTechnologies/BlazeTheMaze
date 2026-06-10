@@ -118,9 +118,9 @@ Resolves to one of the 6 types above based on `floor(Date.now() / 200) % 6` — 
 | Behaviour | Logic |
 |---|---|
 | Random | Pick any open neighbour randomly |
-| Focused | Always step to the neighbour with the lowest BFS distance to goal |
-| Explorer | If currently closest to goal → Focused; otherwise avoids backtracking to previous cell |
-| Guesser | Navigate to a random non-goal target; on arrival, switch to Focused |
+| Genius | Always tracks the star. If any opponent is ≤ 20 cells from victory AND closer to it than the AI: seek the nearest missile (rocket) or teleport-other within 20 cells (closest of the two wins); if neither found, seek teleport-self within 20 cells; if none found, resume tracking the star. PU threat check runs every move. |
+| Guesser | Picks a random non-goal cell and navigates there. Once the first target is reached, or when within 50 cells of victory, switches to tracking the star. Uses the same PU-threat logic as Genius every move. |
+| Chaotic | Always seeks the closest power-up of any type. Only tracks the star when within 50 cells of victory or when no power-ups remain on the map. |
 
 AI respects the 3 000 ms movement lock at round start, identical to human players.
 

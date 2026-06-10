@@ -72,8 +72,8 @@ export class GameRoom extends Room<{ state: GameState }> {
     private roundCount = 0;
     // Per-AI session state (not broadcast)
     aiCooldowns = new Map<string, number>();
-    explorerLastPos = new Map<string, { x: number; y: number }>();
-    guesserData = new Map<string, { target: { x: number; y: number }; distMap: number[] }>();
+    guesserData = new Map<string, { target: { x: number; y: number }; distMap: number[]; reachedFirst: boolean }>();
+    aiPUTarget = new Map<string, { x: number; y: number; distMap: number[] } | null>();
     frozenPlayers = new Map<string, number>(); // sessionId → unfreeze timestamp (ms)
     // Freeze simulation while waiting for round reset
     roundOver: boolean = false;
@@ -448,8 +448,8 @@ export class GameRoom extends Room<{ state: GameState }> {
 
         if (existingPlayer !== undefined && existingId !== undefined) {
             this.state.players.delete(existingId);
-            this.explorerLastPos.delete(existingId);
             this.guesserData.delete(existingId);
+            this.aiPUTarget.delete(existingId);
             existingPlayer.isAI = false;
             this.state.players.set(client.sessionId, existingPlayer);
         } else {
@@ -515,8 +515,8 @@ export class GameRoom extends Room<{ state: GameState }> {
         this.lastInputTime.delete(client.sessionId);
         this.moveBuckets.delete(client.sessionId);
         this.friendCodeJoiners.delete(client.sessionId);
-        this.explorerLastPos.delete(client.sessionId);
         this.guesserData.delete(client.sessionId);
+        this.aiPUTarget.delete(client.sessionId);
         this.aiCooldowns.delete(client.sessionId);
 
         // ── Telemetry: session end ─────────────────────────────────────────────
@@ -701,10 +701,7 @@ export class GameRoom extends Room<{ state: GameState }> {
 
     initAIState(sessionId: string, player: Player) {
         const behavior = this.state.slots[player.slotIndex]?.aiBehavior ?? "random";
-        if (behavior === "explorer") {
-            this.explorerLastPos.set(sessionId, { x: -1, y: -1 });
-        } else if (behavior === "guesser") {
-            // Pick a random target that isn't the goal
+        if (behavior === "guesser") {
             let rx: number, ry: number;
             do {
                 rx = Math.floor(Math.random() * this.cols);
@@ -713,8 +710,76 @@ export class GameRoom extends Room<{ state: GameState }> {
             this.guesserData.set(sessionId, {
                 target: { x: rx, y: ry },
                 distMap: this.computeDistanceMap(rx, ry),
+                reachedFirst: false,
             });
         }
+        this.aiPUTarget.delete(sessionId);
+    }
+
+    // BFS from (px,py) up to maxDist steps; returns nearest PU of given types and its full distMap, or null.
+    private findNearestPowerUp(px: number, py: number, types: string[], maxDist: number): { x: number; y: number; distMap: number[] } | null {
+        const visited = new Set<number>();
+        const queue: { x: number; y: number; dist: number }[] = [{ x: px, y: py, dist: 0 }];
+        visited.add(this.idx(px, py));
+        while (queue.length > 0) {
+            const curr = queue.shift()!;
+            if (curr.dist > 0) {
+                const pu = this.state.powerUps.find((p: any) => p.x === curr.x && p.y === curr.y && types.includes(p.type));
+                if (pu) return { x: curr.x, y: curr.y, distMap: this.computeDistanceMap(curr.x, curr.y) };
+            }
+            if (curr.dist >= maxDist) continue;
+            const cell = this.state.grid[this.idx(curr.x, curr.y)];
+            for (const d of GameRoom.DIRS) {
+                const nx = curr.x + d.dx, ny = curr.y + d.dy;
+                if (nx < 0 || nx >= this.cols || ny < 0 || ny >= this.rows || cell.walls[d.wall]) continue;
+                const ni = this.idx(nx, ny);
+                if (!visited.has(ni)) { visited.add(ni); queue.push({ x: nx, y: ny, dist: curr.dist + 1 }); }
+            }
+        }
+        return null;
+    }
+
+    // Check if cached PU target still exists on the map; clear if not.
+    private validatePUTarget(sessionId: string): { x: number; y: number; distMap: number[] } | null {
+        const cached = this.aiPUTarget.get(sessionId) ?? null;
+        if (!cached) return null;
+        const still = this.state.powerUps.some((p: any) => p.x === cached.x && p.y === cached.y);
+        if (!still) { this.aiPUTarget.set(sessionId, null); return null; }
+        return cached;
+    }
+
+    // Returns a move toward a PU-seek target if an opponent is ≤20 cells from victory and ahead.
+    // Priority: missile/teleport-other (closest), then teleport-self if neither found.
+    private seekPowerUpIfThreatened(sessionId: string, player: Player, open: { x: number; y: number }[]): { x: number; y: number } | null {
+        const myDist = this.distanceMap[this.idx(player.x, player.y)];
+        let threatened = false;
+        this.state.players.forEach((other, sid) => {
+            if (sid === sessionId) return;
+            const d = this.distanceMap[this.idx(other.x, other.y)];
+            if (d <= 20 && d < myDist) threatened = true;
+        });
+        if (!threatened) { this.aiPUTarget.set(sessionId, null); return null; }
+
+        // Check cached target first
+        let target = this.validatePUTarget(sessionId);
+        if (!target) {
+            // Search for missile or teleport-other within 20 cells
+            target = this.findNearestPowerUp(player.x, player.y, ["rocket", "opponents"], 20);
+            if (!target) {
+                // Fallback: teleport-self within 20 cells
+                target = this.findNearestPowerUp(player.x, player.y, ["self"], 20);
+            }
+            this.aiPUTarget.set(sessionId, target);
+        }
+        if (!target) return null;
+
+        const tDist = target.distMap[this.idx(player.x, player.y)];
+        let move: { x: number; y: number } | null = null;
+        for (const n of open) {
+            const d = target.distMap[this.idx(n.x, n.y)];
+            if (d < tDist && (!move || d < target.distMap[this.idx(move.x, move.y)])) move = n;
+        }
+        return move;
     }
 
     moveAI(sessionId: string, player: Player) {
@@ -736,51 +801,74 @@ export class GameRoom extends Room<{ state: GameState }> {
 
         let move: { x: number; y: number } | null = null;
 
-        if (behavior === "explorer") {
-            const last = this.explorerLastPos.get(sessionId) ?? { x: -1, y: -1 };
-
-            // If no one else is closer to the goal, act focused
-            const myDist = this.distanceMap[this.idx(player.x, player.y)];
-            let minOtherDist = Infinity;
-            this.state.players.forEach((other, sid) => {
-                if (sid !== sessionId) {
-                    const d = this.distanceMap[this.idx(other.x, other.y)];
-                    if (d < minOtherDist) minOtherDist = d;
+        if (behavior === "genius") {
+            // Check power-up seeking first (overrides goal-tracking if threatened)
+            move = this.seekPowerUpIfThreatened(sessionId, player, open);
+            if (!move) {
+                // Track the star
+                const currDist = this.distanceMap[this.idx(player.x, player.y)];
+                for (const n of open) {
+                    const d = this.distanceMap[this.idx(n.x, n.y)];
+                    if (d < currDist && (!move || d < this.distanceMap[this.idx(move.x, move.y)])) move = n;
                 }
-            });
+            }
 
-            if (myDist <= minOtherDist) {
-                // Act focused
+        } else if (behavior === "guesser") {
+            // Check power-up seeking first
+            move = this.seekPowerUpIfThreatened(sessionId, player, open);
+            if (!move) {
+                const myDist = this.distanceMap[this.idx(player.x, player.y)];
+                const gd = this.guesserData.get(sessionId);
+                const atTarget = !gd || (player.x === gd.target.x && player.y === gd.target.y);
+
+                if (atTarget && gd && !gd.reachedFirst) gd.reachedFirst = true;
+
+                const useGoal = myDist <= 50 || (gd?.reachedFirst ?? true);
+                if (useGoal) {
+                    // Navigate toward star
+                    for (const n of open) {
+                        const d = this.distanceMap[this.idx(n.x, n.y)];
+                        if (d < myDist && (!move || d < this.distanceMap[this.idx(move.x, move.y)])) move = n;
+                    }
+                } else if (gd && !atTarget) {
+                    // Navigate toward random target
+                    const currDist = gd.distMap[this.idx(player.x, player.y)];
+                    for (const n of open) {
+                        const d = gd.distMap[this.idx(n.x, n.y)];
+                        if (d < currDist && (!move || d < gd.distMap[this.idx(move.x, move.y)])) move = n;
+                    }
+                }
+            }
+
+        } else if (behavior === "chaotic") {
+            const myDist = this.distanceMap[this.idx(player.x, player.y)];
+            const hasPowerUps = this.state.powerUps.length > 0;
+            const useGoal = myDist <= 50 || !hasPowerUps;
+
+            if (useGoal) {
                 for (const n of open) {
                     const d = this.distanceMap[this.idx(n.x, n.y)];
                     if (d < myDist && (!move || d < this.distanceMap[this.idx(move.x, move.y)])) move = n;
                 }
-            }
-
-            if (!move) {
-                // Prefer not backtracking
-                const forward = open.filter(n => !(n.x === last.x && n.y === last.y));
-                move = (forward.length > 0 ? forward : open)[Math.floor(Math.random() * (forward.length > 0 ? forward.length : open.length))];
-            }
-
-            this.explorerLastPos.set(sessionId, { x: player.x, y: player.y });
-
-        } else if (behavior === "guesser") {
-            const gd = this.guesserData.get(sessionId);
-            if (gd && (player.x !== gd.target.x || player.y !== gd.target.y)) {
-                // Navigate to guess target
-                const currDist = gd.distMap[this.idx(player.x, player.y)];
-                for (const n of open) {
-                    const d = gd.distMap[this.idx(n.x, n.y)];
-                    if (d < currDist && (!move || d < gd.distMap[this.idx(move.x, move.y)])) move = n;
+            } else {
+                // Seek the closest power-up (any type); cache target until picked up
+                let target = this.validatePUTarget(sessionId);
+                if (!target) {
+                    target = this.findNearestPowerUp(player.x, player.y,
+                        ["rocket", "opponents", "self", "mirror", "freeze", "beacon", "mystery"], this.cols * this.rows);
+                    this.aiPUTarget.set(sessionId, target);
+                }
+                if (target) {
+                    const tDist = target.distMap[this.idx(player.x, player.y)];
+                    for (const n of open) {
+                        const d = target.distMap[this.idx(n.x, n.y)];
+                        if (d < tDist && (!move || d < target.distMap[this.idx(move.x, move.y)])) move = n;
+                    }
                 }
             }
-            // If at target or no route, fall through to focused
-            if (!move) behavior = "focused";
-        }
 
-        if (behavior === "focused" || (!move && behavior !== "explorer")) {
-            // Greedy: step to open neighbour with smallest BFS distance to goal
+        } else if (behavior === "focused") {
+            // Legacy: always track the star
             const currDist = this.distanceMap[this.idx(player.x, player.y)];
             for (const n of open) {
                 const d = this.distanceMap[this.idx(n.x, n.y)];
