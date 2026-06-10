@@ -477,6 +477,20 @@ export class GameRoom extends Room<{ state: GameState }> {
             this.state.players.set(client.sessionId, player);
         }
         this.lastInputTime.set(client.sessionId, Date.now()); // start idle clock from join time
+        // Send the authoritative maze directly to the joiner via reliable message so
+        // the client never has to decode the grid from schema state (see broadcastGridSync).
+        if (this.state.grid.length === this.cols * this.rows) {
+            const total = this.cols * this.rows;
+            const walls: number[] = new Array(total);
+            for (let i = 0; i < total; i++) {
+                const c = this.state.grid[i];
+                walls[i] = c ? ((c.walls[0] ? 1 : 0) | (c.walls[1] ? 2 : 0) | (c.walls[2] ? 4 : 0) | (c.walls[3] ? 8 : 0)) : 0;
+            }
+            client.send("grid_sync", {
+                gen: this.state.gridGeneration, cols: this.cols, rows: this.rows,
+                goalX: this.state.goalX, goalY: this.state.goalY, walls,
+            });
+        }
         // Catch up a late joiner who missed the round_won broadcast during the countdown
         if (this.roundOver && this.lastRoundWon) {
             client.send("round_won", this.lastRoundWon);
@@ -981,6 +995,36 @@ export class GameRoom extends Room<{ state: GameState }> {
                 stack.pop();
             }
         }
+
+        // Broadcast the freshly-generated maze as a RELIABLE MESSAGE, not just via
+        // schema state. The grid is a 441-element ArraySchema of sub-schemas; Colyseus
+        // delta-encodes round-2+ changes (clear()+repopulate OR in-place wall edits)
+        // and the client can decode that delta into a corrupted/partial grid — the
+        // root cause of the round-2 "illegal move / snap to spawn" desync. Round 1
+        // worked only because joins get a full snapshot, not a delta. A plain message
+        // carries the authoritative walls verbatim, bypassing schema diffing entirely.
+        this.broadcastGridSync();
+    }
+
+    /** Packs each cell's 4 walls into a 4-bit mask and broadcasts the whole maze
+     *  as a reliable message. Client rebuilds its grid directly from this. */
+    private broadcastGridSync() {
+        const total = this.cols * this.rows;
+        const walls: number[] = new Array(total);
+        for (let i = 0; i < total; i++) {
+            const c = this.state.grid[i];
+            if (!c) { walls[i] = 0; continue; }
+            walls[i] = (c.walls[0] ? 1 : 0) | (c.walls[1] ? 2 : 0)
+                     | (c.walls[2] ? 4 : 0) | (c.walls[3] ? 8 : 0);
+        }
+        this.broadcast("grid_sync", {
+            gen:   this.state.gridGeneration,
+            cols:  this.cols,
+            rows:  this.rows,
+            goalX: this.state.goalX,
+            goalY: this.state.goalY,
+            walls,
+        });
     }
 
     spawnPowerUps(options: Partial<LobbyOptions> = {}) {

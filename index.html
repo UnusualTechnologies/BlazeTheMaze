@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.283</div>
+    <div id="version-number">v1.5.284</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -4237,12 +4237,27 @@
                 goal.x = state.goalX;
                 goal.y = state.goalY;
 
-                // Sync Maze Grid — rebuild whenever the server's gridGeneration counter
-                // changes (incremented each time generateMaze() runs). Falls back to the
-                // old flag for servers that don't yet send gridGeneration (legacy compat).
+                // Sync Maze Grid — FALLBACK ONLY. The authoritative grid now arrives via
+                // the reliable "grid_sync" message (on join + every regen), which sets
+                // lastGridGeneration to the current gen and thus normally short-circuits
+                // this block. This schema-based rebuild only fires if a grid_sync was
+                // somehow missed for a new generation. It validates the grid is COMPLETE
+                // before reading — a partial/delta-corrupted ArraySchema is skipped (it
+                // will retry next patch, and grid_sync overrides regardless), avoiding the
+                // round-2+ desync where partial cell data was read as the live maze.
                 const _serverGen = state.gridGeneration ?? 0;
                 const _gridChanged = _serverGen !== lastGridGeneration;
-                if (_gridChanged && state.grid && state.grid.length > 0) {
+                const _gridComplete = state.grid && state.grid.length === state.cols * state.rows
+                    && state.grid.length > 0;
+                // Verify every cell is fully present before committing to a rebuild.
+                let _allCellsValid = _gridComplete;
+                if (_gridChanged && _gridComplete) {
+                    for (let i = 0; i < state.grid.length; i++) {
+                        const sc = state.grid[i];
+                        if (!sc || !sc.walls || sc.walls.length !== 4) { _allCellsValid = false; break; }
+                    }
+                }
+                if (_gridChanged && _allCellsValid) {
                     lastGridGeneration = _serverGen;
                     if (isCodeJoin && !gridCompatChecked) {
                         gridCompatChecked = true;
@@ -4715,11 +4730,42 @@
                 });
             });
 
+            // Authoritative maze sync via reliable message. The server sends this every
+            // time the maze is regenerated (and once on join). It carries each cell's 4
+            // walls packed into a 4-bit mask, bypassing the fragile ArraySchema delta that
+            // caused round-2+ grid desync (illegal moves / snap to spawn). This is the
+            // SOLE source of truth for the local grid in networked play.
+            room.onMessage("grid_sync", (data) => {
+                if (!data || !Array.isArray(data.walls)) return;
+                const newCols = data.cols, newRows = data.rows;
+                if (data.walls.length !== newCols * newRows) return; // ignore malformed payloads
+                cols = newCols;
+                rows = newRows;
+                const newGrid = [];
+                for (let x = 0; x < cols; x++) {
+                    newGrid[x] = [];
+                    for (let y = 0; y < rows; y++) {
+                        const m = data.walls[x * rows + y];
+                        const cell = new Cell(x, y);
+                        cell.walls = [!!(m & 1), !!(m & 2), !!(m & 4), !!(m & 8)];
+                        newGrid[x][y] = cell;
+                    }
+                }
+                grid = newGrid;
+                if (typeof data.goalX === 'number') { goal.x = data.goalX; goal.y = data.goalY; }
+                // Mark this generation as handled so the onStateChange schema-rebuild
+                // does NOT later overwrite this authoritative grid with delta-decoded data.
+                if (typeof data.gen === 'number') lastGridGeneration = data.gen;
+                generateDistanceMap();
+                cellSize = width / cols;
+                mazeCacheValid = false;
+            });
+
             room.onMessage("round_reset", () => {
                 if (roundFlashStart === null) roundFlashStart = performance.now(); // failsafe if msg arrives before countdown
-                // Force the next onStateChange to rebuild the grid from server data, even if
-                // gridGeneration somehow didn't increment (defensive — normally it always does).
-                lastGridGeneration = -1;
+                // The new maze arrives authoritatively via the "grid_sync" message that the
+                // server broadcasts immediately after this (from generateMaze()). No need to
+                // poke lastGridGeneration — grid_sync rebuilds the grid and sets it directly.
 
                 // Snap every blazer to its spawn position immediately, before the server state
                 // patch (which carries the new spawn positions) arrives 1–2 ticks later.
