@@ -659,7 +659,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                     if (sid === rocket.ownerSessionId || rocket.hit.has(sid)) return;
                     if (p.x === rocket.x && p.y === rocket.y) {
                         rocket.hit.add(sid);
-                        this.teleportPlayer(p);
+                        this.teleportPlayer(p, "rocket");
                     }
                 });
             }
@@ -1048,14 +1048,14 @@ export class GameRoom extends Room<{ state: GameState }> {
                     if (d < minDist) { minDist = d; leaderSid = sid; }
                 });
                 const leaderPlayer = leaderSid ? this.state.players.get(leaderSid) : null;
-                if (leaderPlayer) this.teleportPlayer(leaderPlayer);
+                if (leaderPlayer) this.teleportPlayer(leaderPlayer, "pu-opponents-leader");
             } else {
                 this.state.players.forEach((p, sid) => {
-                    if (sid !== sessionId) this.teleportPlayer(p);
+                    if (sid !== sessionId) this.teleportPlayer(p, "pu-opponents");
                 });
             }
         } else if (type === "self") {
-            this.teleportPlayer(player);
+            this.teleportPlayer(player, "pu-self");
         } else if (type === "rocket") {
             // Spawn a server-authoritative rocket at the collector's cell. It walks the BFS
             // path to the goal each tick and teleports any non-owner it overlaps. Clients
@@ -1103,8 +1103,8 @@ export class GameRoom extends Room<{ state: GameState }> {
         if (this.collisions) {
             this.state.players.forEach((other, sid) => {
                 if (sid !== sessionId && other.x === movedToX && other.y === movedToY) {
-                    this.teleportPlayer(player);
-                    this.teleportPlayer(other);
+                    this.teleportPlayer(player, `collision-with-slot${other.slotIndex}`);
+                    this.teleportPlayer(other, `collision-with-slot${player.slotIndex}`);
                 }
             });
         }
@@ -1274,7 +1274,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         return false;
     }
 
-    teleportPlayer(player: Player) {
+    teleportPlayer(player: Player, reason: string = "unknown") {
         const startX = player.x, startY = player.y;
         let x = startX, y = startY;
         const minDist = 15; // minimum BFS (maze-path) distance from start position
@@ -1301,6 +1301,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         // Authoritative teleport signal — the client plays the teleport animation when this
         // changes, rather than guessing from position displacement.
         player.teleportSeq = (player.teleportSeq + 1) & 0x7fffffff;
+        console.log(`  TELEPORT ${player.isAI ? 'AI' : 'HUMAN'} slot ${player.slotIndex} (${player.color})  (${startX},${startY}) → (${x},${y})  reason=${reason}  seq=${player.teleportSeq}`);
     }
 
     getDistance(x: number, y: number) {
