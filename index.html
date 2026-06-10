@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.271</div>
+    <div id="version-number">v1.5.272</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1914,6 +1914,19 @@
                 const by = this.gridY - this.lastDy;
                 if (bx < 0 || bx >= cols || by < 0 || by >= rows) return false;
                 if (this.canMoveAtCell(bx, by, dx, dy)) {
+                    // If moves are in-flight the server may already be at the overshoot cell
+                    // (gridX/gridY before backing up). Send an explicit back-step so the server
+                    // sees C → B → B+dx (all valid single steps) instead of a diagonal jump.
+                    if (this.sentMoves.length > 0 && room) {
+                        const isActuallyLocal = (room && room.sessionId) ? (this.sessionId === room.sessionId) : this.isLocal;
+                        if (isActuallyLocal) {
+                            room.send("move", { x: bx, y: by });
+                        } else if (this.isSecondaryLocal) {
+                            room.send("move_secondary", { slotIndex: this.slotIndex, x: bx, y: by });
+                        }
+                        this.sentMoves.push({ x: bx, y: by });
+                        if (this.sentMoves.length > 32) this.sentMoves.shift();
+                    }
                     this.gridX = bx;
                     this.gridY = by;
                     this.executeMove(dx, dy);
@@ -4436,6 +4449,13 @@
                                 // Stationary (no pending predictions) and server disagrees — a move
                                 // was rejected (freeze/lock/rate-limit). Re-sync to authoritative
                                 // position. Let the game-loop lerp move the pixel smoothly.
+                                blazer.gridX = playerState.x;
+                                blazer.gridY = playerState.y;
+                            } else if (blazer.sentMoves.length > 8) {
+                                // sentMoves has grown beyond the server's burst cap (8) — this means
+                                // moves are being rejected and the client has drifted. Force a resync
+                                // to recover cleanly rather than drifting indefinitely.
+                                blazer.sentMoves = [];
                                 blazer.gridX = playerState.x;
                                 blazer.gridY = playerState.y;
                             }
