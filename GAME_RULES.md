@@ -25,7 +25,7 @@ Non-obvious rules and numeric constants. Update this file whenever a mechanic is
 | 7 | Mid right edge `(cols-1, midY)` |
 
 ## Movement
-- **Move cooldown (client):** 100 ms minimum between moves sent
+- **Move cooldown (client):** Configurable in lobby — 100 / 125 / **150 (default)** / 175 / 200 ms. Controls minimum time between moves sent.
 - **Rate limit (server):** Token bucket — max **20 moves/sec** sustained; burst tolerance of **8 moves** back-to-back (`MOVE_BURST = 8`, refill every `MOVE_REFILL_MS = 50 ms`)
 - **Move validation:** Server rejects anything other than exactly 1 orthogonal cell step — no diagonals, no teleport-to-goal, no wall clipping
 - **Turn intent leniency:** Client holds a queued turn direction for up to **300 ms** (Pac-Man style cornering)

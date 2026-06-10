@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.272</div>
+    <div id="version-number">v1.5.273</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -962,6 +962,16 @@
                     <div style="display:flex; align-items:center; gap:10px;">
                         <input type="checkbox" id="tap-only-toggle" style="width:20px; height:20px; cursor:pointer;">
                         <label for="tap-only-toggle" style="font-size:1.2rem; cursor:pointer; user-select:none;">Tap Only Controls</label>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <label for="move-speed-select" style="font-size:1.2rem;">Player Speed:</label>
+                        <select id="move-speed-select" style="font-size:1.1rem; padding:5px; background:#111; color:#fff; border:1px solid #555; border-radius:4px; cursor:pointer;">
+                            <option value="100">Fast (100 ms)</option>
+                            <option value="125">125 ms</option>
+                            <option value="150" selected>Normal (150 ms)</option>
+                            <option value="175">175 ms</option>
+                            <option value="200">Slow (200 ms)</option>
+                        </select>
                     </div>
                 </div>
                 </div><!-- /.rules-panel-wrap -->
@@ -1160,6 +1170,7 @@
         const puBeaconInput   = document.getElementById('pu-beacon-input');
         const orbLeaderToggle = document.getElementById('orb-leader-toggle');
         const tapOnlyToggle   = document.getElementById('tap-only-toggle');
+        const moveSpeedSelect = document.getElementById('move-speed-select');
         const pmNextGameBtn   = document.getElementById('pm-next-game-btn');
 
         const WINS_TO_MATCH = 3; // must stay in sync with GameRoom.WINS_TO_MATCH on the server
@@ -1510,6 +1521,7 @@
                 collisions:    document.getElementById('collisions-toggle').checked,
                 orbLeader:     orbLeaderToggle.checked,
                 tapOnly:       tapOnlyToggle.checked,
+                moveSpeed:     moveSpeedSelect.value,
                 slots:         lobbySlots.map(s => ({
                     mode:        s.typeSelect.value,
                     control:     s.controlSelect.value,
@@ -1558,6 +1570,7 @@
             document.getElementById('collisions-toggle').checked = s.collisions;
             orbLeaderToggle.checked = s.orbLeader;
             tapOnlyToggle.checked   = s.tapOnly ?? false;
+            if (s.moveSpeed) moveSpeedSelect.value = s.moveSpeed;
             // 4. Restore the actual manual-flag state (not the all-locked state from step 1)
             puManualFlags      = new Set(s.puManualFlags);
             gridSizeManualFlag = s.gridSizeManual;
@@ -1822,7 +1835,7 @@
                 this.trail = [];
                 this.maxTrail = 25;
                 this.moveTimer = 0;
-                this.moveCooldown = 100;
+                this.moveCooldown = 150;
 
                 this.lastMoveTime = 0;
                 this.lastExecuteTime = 0;
@@ -1908,34 +1921,6 @@
                 this.turnIntent = null;
             }
 
-            _tryLookBack(dx, dy) {
-                if (this.lastDx === 0 && this.lastDy === 0) return false;
-                const bx = this.gridX - this.lastDx;
-                const by = this.gridY - this.lastDy;
-                if (bx < 0 || bx >= cols || by < 0 || by >= rows) return false;
-                if (this.canMoveAtCell(bx, by, dx, dy)) {
-                    // If moves are in-flight the server may already be at the overshoot cell
-                    // (gridX/gridY before backing up). Send an explicit back-step so the server
-                    // sees C → B → B+dx (all valid single steps) instead of a diagonal jump.
-                    if (this.sentMoves.length > 0 && room) {
-                        const isActuallyLocal = (room && room.sessionId) ? (this.sessionId === room.sessionId) : this.isLocal;
-                        if (isActuallyLocal) {
-                            room.send("move", { x: bx, y: by });
-                        } else if (this.isSecondaryLocal) {
-                            room.send("move_secondary", { slotIndex: this.slotIndex, x: bx, y: by });
-                        }
-                        this.sentMoves.push({ x: bx, y: by });
-                        if (this.sentMoves.length > 32) this.sentMoves.shift();
-                    }
-                    this.gridX = bx;
-                    this.gridY = by;
-                    this.executeMove(dx, dy);
-                    this.updatePixelPos(true);
-                    return true;
-                }
-                return false;
-            }
-
             triggerBonk(dx, dy) {
                 if (this.bonkTimer <= 0) Synth.bonk(this.isPlayer);
                 this.bonkDx = dx;
@@ -1996,6 +1981,8 @@
                 const now = performance.now();
 
                 if (this.isPlayer && this.state === 'normal' && this.isActuallyLocal() && now >= roundMoveLockEnd && Date.now() >= this.frozenUntil) {
+                    // Pick up any live speed change from the lobby dropdown
+                    this.moveCooldown = parseInt(moveSpeedSelect.value, 10) || 150;
                     // If the schedule fell more than 2 periods behind (frozen, locked, tab hidden, etc.),
                     // reset it so at most one move fires immediately — no catch-up burst.
                     if (now - this.lastMoveTime > this.moveCooldown * 2) {
@@ -3863,16 +3850,6 @@
                         blazer.dirKeyDownTimes[dir] = performance.now();
                         blazer.turnIntent = { dir: dir, time: performance.now() };
                         blazer.lastMoveTime = e.timeStamp - blazer.moveCooldown;
-                        // Look-back: if we just overshot by 1 cell, correct it immediately.
-                        // Only fires if the player actually moved recently (not stationary in a dead end).
-                        const _mirrored = blazer.mirrorUntil > 0 && Date.now() < blazer.mirrorUntil;
-                        const _effDir = _mirrored ? mirrorDir(dir) : dir;
-                        const _lbMap = { up:{dx:0,dy:-1}, right:{dx:1,dy:0}, down:{dx:0,dy:1}, left:{dx:-1,dy:0} };
-                        const { dx: _lbDx, dy: _lbDy } = _lbMap[_effDir];
-                        const _recentMove = performance.now() - blazer.lastExecuteTime < blazer.moveCooldown * 2;
-                        if (_recentMove && !blazer.canMove(_lbDx, _lbDy) && blazer._tryLookBack(_lbDx, _lbDy)) {
-                            blazer.turnIntent = null;
-                        }
                     }
                 }
             });
@@ -4030,14 +4007,6 @@
             if (!blazer.heldDirections.includes(dir)) {
                 blazer.heldDirections.push(dir);
                 blazer.turnIntent = { dir, time: performance.now() };
-                // Look-back: if we just overshot by 1 cell, correct it immediately.
-                // Only fires if the player actually moved recently (not stationary in a dead end).
-                const _lbMap = { up:{dx:0,dy:-1}, right:{dx:1,dy:0}, down:{dx:0,dy:1}, left:{dx:-1,dy:0} };
-                const { dx: _lbDx, dy: _lbDy } = _lbMap[dir];
-                const _recentMove = performance.now() - blazer.lastExecuteTime < blazer.moveCooldown * 2;
-                if (_recentMove && !blazer.canMove(_lbDx, _lbDy) && blazer._tryLookBack(_lbDx, _lbDy)) {
-                    blazer.turnIntent = null;
-                }
             }
         }
 
