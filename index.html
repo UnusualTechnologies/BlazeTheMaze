@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.280</div>
+    <div id="version-number">v1.5.281</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2656,9 +2656,14 @@
             stopVictoryStars();
             stopWinnerLap();
 
-            // Always build a local grid so drawMaze has a valid 2D array.
-            // For networked play this placeholder is overwritten by the first onStateChange.
-            generateMaze();
+            // Solo play: generate a fresh random maze locally.
+            // Networked play: keep the existing grid. The server's correct maze arrives via
+            // onStateChange within ~50ms (round_reset) or has already arrived before the
+            // match_reset message fires. Calling generateMaze() here would overwrite a
+            // correctly-loaded server grid (match_reset) or create a brief window where the
+            // client navigates a wrong maze (round_reset), both causing server-rejected moves
+            // and snap-back to the server's last accepted position (often spawn).
+            if (!room) generateMaze();
 
             shockwaves = [];
             particles = [];
@@ -4712,6 +4717,9 @@
 
             room.onMessage("round_reset", () => {
                 if (roundFlashStart === null) roundFlashStart = performance.now(); // failsafe if msg arrives before countdown
+                // Force the next onStateChange to rebuild the grid from server data, even if
+                // gridGeneration somehow didn't increment (defensive — normally it always does).
+                lastGridGeneration = -1;
 
                 // Snap every blazer to its spawn position immediately, before the server state
                 // patch (which carries the new spawn positions) arrives 1–2 ticks later.
