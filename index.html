@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.270</div>
+    <div id="version-number">v1.5.271</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2122,11 +2122,19 @@
                     this.stateTimer -= dt * 0.003;
                     if (this.stateTimer <= 0) {
                         this.state = 'normal';
+                        // A second teleport may have arrived while we were mid-animation and
+                        // updated targetGridX/Y. gridX/Y was already set at the out→in transition
+                        // so it points to the first destination. Correct it now so the player
+                        // lands at the latest authoritative position instead of the stale one.
+                        if (this.gridX !== this.targetGridX || this.gridY !== this.targetGridY) {
+                            this.gridX = this.targetGridX;
+                            this.gridY = this.targetGridY;
+                            this.updatePixelPos(true);
+                        }
                         // Float the player's name briefly at the arrival point
                         floatLabels.push({ x: this.pixelX, y: this.pixelY, color: this.color, scheme: this.controlScheme, startTime: performance.now() });
-                        // Explorer AI memory is reset server-side on teleport
                     }
-                    return; 
+                    return;
                 }
 
                 this.updatePixelPos();
@@ -4732,7 +4740,15 @@
                 ];
                 blazers.forEach(blazer => {
                     const sp = _spawnPos[blazer.slotIndex];
-                    if (sp) { blazer.gridX = sp.x; blazer.gridY = sp.y; blazer.updatePixelPos(true); }
+                    if (sp) {
+                        // Abort any in-progress teleport animation so its out→in transition
+                        // cannot overwrite the spawn position we are about to set.
+                        blazer.state = 'normal';
+                        blazer.gridX = sp.x;
+                        blazer.gridY = sp.y;
+                        blazer.updatePixelPos(true);
+                        blazer.sentMoves = []; // discard stale predictions from last round
+                    }
                 });
 
                 blazers.forEach(resetBlazerInputState);
