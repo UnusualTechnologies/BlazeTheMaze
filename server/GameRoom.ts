@@ -1305,8 +1305,16 @@ export class GameRoom extends Room<{ state: GameState }> {
         const startX = player.x, startY = player.y;
         let x = startX, y = startY;
         const minDist = 15; // minimum BFS (maze-path) distance from start position
+        const minPlayerDist = 10; // minimum BFS distance from any other player
         // BFS distance map from the player's current cell — respects walls
         const fromStartDist = this.computeDistanceMap(startX, startY);
+        // Pre-compute BFS maps from every OTHER player so we can cheaply reject
+        // destinations that would land within minPlayerDist cells of anyone.
+        const otherPlayerMaps: number[][] = [];
+        this.state.players.forEach((p, sid) => {
+            if (p.x === startX && p.y === startY) return; // skip the player being teleported
+            otherPlayerMaps.push(this.computeDistanceMap(p.x, p.y));
+        });
         const maxAttempts = this.cols * this.rows * 4;
         let attempts = 0;
         do {
@@ -1316,11 +1324,11 @@ export class GameRoom extends Room<{ state: GameState }> {
         } while (
             attempts < maxAttempts &&
             (
-                fromStartDist[this.idx(x, y)] < minDist ||  // too close via maze path
+                fromStartDist[this.idx(x, y)] < minDist ||  // too close to start via maze path
                 this.isReservedCell(x, y) ||
                 this.getDistance(x, y) <= 10 ||   // keep players away from the goal area
                 this.state.powerUps.some((pu: PowerUp) => pu.x === x && pu.y === y) ||
-                [...this.state.players.values()].some((p: Player) => p.x === x && p.y === y)
+                otherPlayerMaps.some(map => map[this.idx(x, y)] < minPlayerDist) // too close to another player
             )
         );
         player.x = x;

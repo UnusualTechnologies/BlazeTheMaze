@@ -42,6 +42,7 @@ When a player is teleported (collision, power-up, rocket hit), the destination m
 - Not occupied by a power-up
 - BFS distance from goal ≥ **10 cells**
 - BFS (maze-path) distance from the player's current cell ≥ **15**
+- BFS distance from every other player's current position ≥ **10 cells** (checked at moment of teleport)
 - Up to `cols × rows × 4` attempts are made; the goal-distance constraint relaxes after 200 failed attempts
 
 ## Idle Kick & Reconnection
