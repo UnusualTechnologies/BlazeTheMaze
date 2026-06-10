@@ -128,8 +128,8 @@ export class GameRoom extends Room<{ state: GameState }> {
             for (let i = 0; i < 9; i++) customId += chars.charAt(Math.floor(Math.random() * chars.length));
             this.roomId = customId;
         }
-        this.cols = Math.max(5, Math.min(100, Number(options.cols) || 20));
-        this.rows = Math.max(5, Math.min(100, Number(options.rows) || 20));
+        this.cols = Math.max(15, Math.min(100, Number(options.cols) || 20));
+        this.rows = Math.max(15, Math.min(100, Number(options.rows) || 20));
         this.collisions = options.collisions !== false; // default true
         this.orbLeaderOnly = options.orbLeaderOnly === true;
 

@@ -775,7 +775,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.240</div>
+    <div id="version-number">v1.5.241</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -868,9 +868,10 @@
                     <!-- Grid size -->
                     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                         <label for="grid-size-input" style="font-size:1.2rem;">Grid Size:</label>
-                        <input type="number" id="grid-size-input" value="20" min="5" max="100" inputmode="numeric" style="font-size:1.1rem; padding:5px; width:80px; text-align:center;">
+                        <input type="number" id="grid-size-input" value="20" min="15" max="100" inputmode="numeric" style="font-size:1.1rem; padding:5px; width:80px; text-align:center;">
                         <span id="grid-size-hint" style="font-size:0.85rem; color:#ff6666; display:none;"></span>
                     </div>
+                    <div id="pu-cap-warning" style="display:none; color:#ffcc44; font-size:0.85rem; margin-top:4px;"></div>
                     <div style="width:100%; height:1px; background:rgba(255,255,255,0.15); margin:2px 0;"></div>
                     <!-- Power-ups -->
                     <div style="display:flex; align-items:center; gap:10px;">
@@ -1416,22 +1417,23 @@
         //   Teleport Other / Self : 7 − (n−1)          [−1 per extra player, base 6 at 1p]
         //   Homing Missiles       : 4  − ⌊(n−1)/2⌋    [−1 per 2 extra players]
         //   Mirror Controls       : 0  (off by default)
-        //   Grid Size             : 20 → 28 over 2–8p  [20 + round((n−2)×4/3)]
+        //   Grid Size             : 20 (1-2p) → 21 (3-4p) → 22 (5-6p) → 23 (7-8p)
         // Inputs that were manually edited (puManualFlags / gridSizeManualFlag) are left unchanged.
         function updatePowerUpDefaults() {
             const n = lobbySlots.filter(s => {
                 const v = s.typeSelect.value;
                 return v !== 'inactive' && v !== 'friend_only';
             }).length;
+            const bracket = Math.floor((n - 1) / 2); // 0=1-2p, 1=3-4p, 2=5-6p, 3=7-8p
 
             const auto = {
-                opp:     Math.max(0, 7 - (n - 1)),
-                self:    Math.max(0, 10 - (n - 1)),
-                rocket:  Math.max(0, 4  - Math.floor((n - 1) / 2)),
+                opp:     Math.max(0, 10 - bracket),
+                self:    Math.max(0, 10 - bracket),
+                rocket:  Math.max(0, 5  - bracket),
                 mirror:  0,
-                mystery: 0, // off by default
-                freeze:  3, // flat — more players = more satisfying freeze, keep count constant
-                beacon:  0, // off by default
+                mystery: 0,
+                freeze:  0,
+                beacon:  0,
             };
 
             PU_KEYS.forEach(k => {
@@ -1442,8 +1444,7 @@
             });
 
             if (!gridSizeManualFlag) {
-                const autoSize = Math.min(28, Math.max(20, 20 + Math.round((n - 2) * 4 / 3)));
-                gridSizeInput.value = String(autoSize);
+                gridSizeInput.value = String(20 + bracket);
             }
         }
 
@@ -1462,6 +1463,7 @@
             }).length;
             const bracket = Math.floor((n - 1) / 2); // 0=1-2p, 1=3-4p, 2=5-6p, 3=7-8p
             gridSizeInput.value = String(20 + bracket);
+            clampGridSizeInput();
             puOppInput.value    = String(Math.max(0, 10 - bracket));
             puSelfInput.value   = String(Math.max(0, 10 - bracket));
             puRocketInput.value = String(Math.max(0, 5  - bracket));
@@ -2273,9 +2275,9 @@
 
         function getMazeLimits() {
             const size = Math.min(gameContainer.clientWidth, gameContainer.clientHeight);
-            if (size <= 0) return { min: 3, max: 999 }; // container not laid out yet — allow anything
+            if (size <= 0) return { min: 15, max: 999 }; // container not laid out yet — allow anything
             return {
-                min: Math.max(3, Math.ceil(size / MAX_CELL_SIZE)),
+                min: Math.max(15, Math.ceil(size / MAX_CELL_SIZE)),
                 max: Math.floor(size / MIN_CELL_SIZE)
             };
         }
@@ -2303,6 +2305,28 @@
                 gridSizeHint.style.display = 'inline';
             } else {
                 gridSizeHint.style.display = 'none';
+            }
+        }
+
+        function checkPowerUpCaps() {
+            const grid = parseInt(gridSizeInput.value, 10) || 20;
+            const maxPerType = Math.floor((grid * grid - 9) * 0.35);
+            const over = [];
+            [['opp', 'Teleport leader'], ['self', 'Teleport self'], ['rocket', 'Homing missile'],
+             ['mirror', 'Mirror'], ['mystery', 'Mystery'], ['freeze', 'Freeze'], ['beacon', 'Beacon']
+            ].forEach(([k, label]) => {
+                const el = document.getElementById(`pu-${k}-input`);
+                if (el && parseInt(el.value, 10) > maxPerType) {
+                    over.push(`${label} (max ${maxPerType})`);
+                }
+            });
+            const warn = document.getElementById('pu-cap-warning');
+            if (!warn) return;
+            if (over.length) {
+                warn.textContent = `⚠ Grid too small — these will be capped by the server: ${over.join(', ')}.`;
+                warn.style.display = 'block';
+            } else {
+                warn.style.display = 'none';
             }
         }
 
@@ -4904,13 +4928,14 @@
                 const v = s.typeSelect.value;
                 return v !== 'inactive' && v !== 'friend_only';
             }).length;
-            const gridSize = Math.min(28, Math.max(20, 20 + Math.round((n - 2) * 4 / 3)));
+            const bracket = Math.floor((n - 1) / 2); // 0=1-2p, 1=3-4p, 2=5-6p, 3=7-8p
+            const gridSize = 20 + bracket;
             return buildLobbySettings({
                 cols:          gridSize,
                 rows:          gridSize,
-                puOpp:         Math.max(0, 7 - (n - 1)),
-                puSelf:        Math.max(0, 7 - (n - 1)),
-                puRocket:      Math.max(0, 4 - Math.floor((n - 1) / 2)),
+                puOpp:         Math.max(0, 10 - bracket),
+                puSelf:        Math.max(0, 10 - bracket),
+                puRocket:      Math.max(0, 5  - bracket),
                 puMirror:      0,
                 puMystery:     0,
                 puFreeze:      0,
@@ -5738,6 +5763,7 @@
                 el.addEventListener('change', () => {
                     puManualFlags.add(k);
                     savePuToLocalStorage();
+                    checkPowerUpCaps();
                 });
             });
 
@@ -5746,7 +5772,7 @@
             updateGridSizeInputLimits();
 
             gridSizeInput.addEventListener('blur', clampGridSizeInput);
-            gridSizeInput.addEventListener('change', () => { gridSizeManualFlag = true; clampGridSizeInput(); });
+            gridSizeInput.addEventListener('change', () => { gridSizeManualFlag = true; clampGridSizeInput(); checkPowerUpCaps(); });
         };
     </script>
 </body>
