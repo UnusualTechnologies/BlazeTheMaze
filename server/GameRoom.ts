@@ -77,6 +77,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     aiPUTarget = new Map<string, { x: number; y: number; distMap: number[] } | null>();
     frozenPlayers = new Map<string, number>(); // sessionId → unfreeze timestamp (ms)
     aiLoggedState = new Map<string, string>(); // sessionId → last logged sub-state (for change detection)
+    aiLastPos = new Map<string, { x: number; y: number }>(); // sessionId → cell visited before current (for random anti-backtrack)
     // Freeze simulation while waiting for round reset
     roundOver: boolean = false;
     // True once a match is won; blocks new joins until someone with the code restarts
@@ -218,6 +219,9 @@ export class GameRoom extends Room<{ state: GameState }> {
         state.players.forEach((player, sid) => {
             if (player.isAI) this.initAIState(sid, player);
         });
+
+        // Log Round 1 assignments (subsequent rounds log via resetRound)
+        this.logRoundStart();
 
         if (options.isPrivate) this.setPrivate(true);
 
@@ -891,7 +895,14 @@ export class GameRoom extends Room<{ state: GameState }> {
         }
 
         if (behavior === "random" && !move) {
-            move = open[Math.floor(Math.random() * open.length)];
+            // Anti-backtrack: if there are 2+ open neighbours, prefer not to step back
+            // to the cell we just came from (eliminates the annoying oscillation in corridors).
+            // In a dead-end (only one exit) we have no choice but to reverse.
+            const last = this.aiLastPos.get(sessionId);
+            const forward = last
+                ? open.filter(n => !(n.x === last.x && n.y === last.y))
+                : open;
+            move = (forward.length > 0 ? forward : open)[Math.floor(Math.random() * (forward.length > 0 ? forward : open).length)];
         }
 
         // Final fallback: random (handles dead-ends with no improving move)
@@ -905,6 +916,9 @@ export class GameRoom extends Room<{ state: GameState }> {
             const speedMs = slot?.aiSpeed ?? 600;
             console.log(`  AI slot ${player.slotIndex} (${player.color}) [${behavior}@${speedMs}ms] → ${aiSubState}  pos=(${player.x},${player.y})`);
         }
+
+        // Remember where the player was before this move (for random anti-backtrack next tick)
+        this.aiLastPos.set(sessionId, { x: player.x, y: player.y });
 
         player.x = move.x;
         player.y = move.y;
@@ -1202,6 +1216,22 @@ export class GameRoom extends Room<{ state: GameState }> {
         });
     }
 
+    logRoundStart() {
+        console.log(`\n── Round ${this.roundCount + 1} ──`);
+        this.state.players.forEach((player) => {
+            const slot = this.state.slots[player.slotIndex];
+            const behavior = slot?.aiBehavior ?? "random";
+            const speedMs  = slot?.aiSpeed ?? 600;
+            const label    = player.isAI ? `AI  slot ${player.slotIndex}` : `Human slot ${player.slotIndex}`;
+            const color    = player.color ?? '?';
+            if (player.isAI) {
+                console.log(`  ${label} (${color})  behavior=${behavior}  speed=${speedMs}ms`);
+            } else {
+                console.log(`  ${label} (${color})  [human]`);
+            }
+        });
+    }
+
     resetRound() {
         this.roundOver = false;
         this.frozenPlayers.clear();
@@ -1224,24 +1254,13 @@ export class GameRoom extends Room<{ state: GameState }> {
             player.y = spawn.y;
             this.aiCooldowns.set(sessionId, 0);
             this.aiLoggedState.delete(sessionId);
+            this.aiLastPos.delete(sessionId);
             // Re-init guesser/explorer state for AI
             if (player.isAI) this.initAIState(sessionId, player);
         });
 
         // Log round-start AI assignments
-        console.log(`\n── Round ${this.roundCount + 1} ──`);
-        this.state.players.forEach((player, sessionId) => {
-            const slot = this.state.slots[player.slotIndex];
-            const behavior = slot?.aiBehavior ?? "random";
-            const speedMs  = slot?.aiSpeed ?? 600;
-            const label    = player.isAI ? `AI  slot ${player.slotIndex}` : `Human slot ${player.slotIndex}`;
-            const color    = player.color ?? '?';
-            if (player.isAI) {
-                console.log(`  ${label} (${color})  behavior=${behavior}  speed=${speedMs}ms`);
-            } else {
-                console.log(`  ${label} (${color})  [human]`);
-            }
-        });
+        this.logRoundStart();
 
         // Fresh power-ups using original lobby settings
         this.spawnPowerUps(this.spawnOptions);
