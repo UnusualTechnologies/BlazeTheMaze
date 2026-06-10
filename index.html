@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.268</div>
+    <div id="version-number">v1.5.269</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2084,9 +2084,7 @@
                             }
                         }
 
-                        if (moved) {
-                            this.updatePixelPos(true); // snap immediately — no lerp inertia for local player
-                        } else {
+                        if (!moved) {
                             let bonkDx = 0, bonkDy = 0;
                             if (this.turnIntent && now - this.turnIntent.time < 300) {
                                 const { dx, dy } = dirToDxDy(this.turnIntent.dir);
@@ -4426,16 +4424,17 @@
                                 blazer.sentMoves.splice(0, _ackIdx + 1);
                             } else if (blazer.gridX === playerState.x && blazer.gridY === playerState.y) {
                                 // Already aligned (e.g. stationary) — nothing to do.
-                            } else {
-                                // Server is at a cell we never sent and we're not there → a move was
-                                // rejected (lock/freeze/rate-limit) or a desync slipped through.
-                                // Silently snap to the authoritative position to recover. No
-                                // animation: this is a correction, not a teleport.
+                            } else if (blazer.sentMoves.length === 0) {
+                                // Stationary (no pending predictions) and server disagrees — a move
+                                // was rejected (freeze/lock/rate-limit). Re-sync to authoritative
+                                // position. Let the game-loop lerp move the pixel smoothly.
                                 blazer.gridX = playerState.x;
                                 blazer.gridY = playerState.y;
-                                blazer.updatePixelPos(true);
-                                blazer.sentMoves = [];
                             }
+                            // else: sentMoves is non-empty — we have predictions in flight.
+                            // The server position is simply lagging behind our sent moves
+                            // (pre-prediction echo). Trust client prediction; do NOT snap.
+                            // When movement stops, sentMoves drains and the check above fires.
                         }
                     }
                 });
