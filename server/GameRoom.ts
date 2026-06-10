@@ -243,12 +243,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                     if (moveLocked) { this.aiCooldowns.set(sessionId, 0); return; }
                     const cooldown = (this.aiCooldowns.get(sessionId) ?? 0) + dt;
                     this.aiCooldowns.set(sessionId, cooldown);
-                    let slotSpeed = this.state.slots[player.slotIndex]?.aiSpeed ?? 600;
-                    if (this.scalingSpeedSlots.has(player.slotIndex)) {
-                        let maxScore = 0;
-                        this.state.players.forEach(p => { if (p.score > maxScore) maxScore = p.score; });
-                        slotSpeed = maxScore >= 2 ? 300 : maxScore >= 1 ? 600 : 1000;
-                    }
+                    const slotSpeed = this.state.slots[player.slotIndex]?.aiSpeed ?? 600;
                     if (cooldown >= slotSpeed) {
                         this.aiCooldowns.set(sessionId, 0);
                         this.moveAI(sessionId, player);
@@ -1092,6 +1087,13 @@ export class GameRoom extends Room<{ state: GameState }> {
         if (player.x === this.state.goalX && player.y === this.state.goalY) {
             this.roundOver = true; // Freeze the game immediately
             player.score++;
+            // Update scaling-speed slots based on new max score
+            if (this.scalingSpeedSlots.size > 0) {
+                let maxScore = 0;
+                this.state.players.forEach(p => { if (p.score > maxScore) maxScore = p.score; });
+                const scaledMs = maxScore >= 2 ? 300 : maxScore >= 1 ? 600 : 1000;
+                this.scalingSpeedSlots.forEach(idx => { this.state.slots[idx].aiSpeed = scaledMs; });
+            }
             const isMatchWon = player.score >= GameRoom.WINS_TO_MATCH;
 
             // ── Telemetry: round result ────────────────────────────────────────
