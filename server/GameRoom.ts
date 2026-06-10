@@ -72,6 +72,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     private roundCount = 0;
     // Per-AI session state (not broadcast)
     aiCooldowns = new Map<string, number>();
+    scalingSpeedSlots = new Set<number>(); // slot indices configured with "scaling" speed
     guesserData = new Map<string, { target: { x: number; y: number }; distMap: number[]; reachedFirst: boolean }>();
     aiPUTarget = new Map<string, { x: number; y: number; distMap: number[] } | null>();
     frozenPlayers = new Map<string, number>(); // sessionId → unfreeze timestamp (ms)
@@ -164,6 +165,9 @@ export class GameRoom extends Room<{ state: GameState }> {
                     slot.aiSpeed = Math.max(100, Math.min(1000, Number(config.aiCustomSpeed) || 600));
                 } else if (speedKey === "random") {
                     slot.aiSpeed = Math.floor(Math.random() * 900 + 100);
+                } else if (speedKey === "scaling") {
+                    slot.aiSpeed = 1000; // starts at easy; updated each move from scores
+                    this.scalingSpeedSlots.add(i);
                 } else {
                     slot.aiSpeed = aiSpeedMs[speedKey] ?? 600;
                 }
@@ -239,7 +243,12 @@ export class GameRoom extends Room<{ state: GameState }> {
                     if (moveLocked) { this.aiCooldowns.set(sessionId, 0); return; }
                     const cooldown = (this.aiCooldowns.get(sessionId) ?? 0) + dt;
                     this.aiCooldowns.set(sessionId, cooldown);
-                    const slotSpeed = this.state.slots[player.slotIndex]?.aiSpeed ?? 600;
+                    let slotSpeed = this.state.slots[player.slotIndex]?.aiSpeed ?? 600;
+                    if (this.scalingSpeedSlots.has(player.slotIndex)) {
+                        let maxScore = 0;
+                        this.state.players.forEach(p => { if (p.score > maxScore) maxScore = p.score; });
+                        slotSpeed = maxScore >= 2 ? 300 : maxScore >= 1 ? 600 : 1000;
+                    }
                     if (cooldown >= slotSpeed) {
                         this.aiCooldowns.set(sessionId, 0);
                         this.moveAI(sessionId, player);
