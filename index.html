@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.278</div>
+    <div id="version-number">v1.5.279</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -4814,8 +4814,8 @@
             c.scale(window.devicePixelRatio, window.devicePixelRatio);
 
             const SPEED    = 0.12; // laps per second
-            const BLAZER_R = Math.max(5, cellSize * 0.216); // match in-game proportion
-            const STAR_R   = Math.max(3, BLAZER_R * 0.72);  // px — trailing star radius
+            const BLAZER_R = Math.max(5, cellSize * 0.216) * 3; // match in-game proportion
+            const STAR_R   = Math.max(3, BLAZER_R * 0.72);      // px — trailing star radius
             // Lag offsets (fractions of a lap) for the 3 trailing stars
             const STAR_LAGS = [0.055, 0.115, 0.195];
 
