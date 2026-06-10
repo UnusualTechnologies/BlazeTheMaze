@@ -511,6 +511,25 @@
             border: 1px solid rgba(255, 255, 255, 0.15);
         }
 
+        .rules-panel-wrap {
+            display: flex;
+            flex-direction: column;
+            align-self: center;
+            width: 100%;
+            max-width: 480px;
+        }
+
+        #apply-player-defaults-btn {
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 8px;
+        }
+
+        .lobby-settings-panel {
+            width: 100%;
+            box-sizing: border-box;
+        }
+
         #version-number { display: none; }
 
         .ver-text {
@@ -775,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.244</div>
+    <div id="version-number">v1.5.246</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -861,7 +880,8 @@
             <div id="lobby-rules-layer" class="menu-overlay hidden">
                 <h1>Custom Game</h1>
 
-                <button class="action-btn tertiary-btn" id="apply-player-defaults-btn" style="margin-bottom:8px;">Set maze dimensions based on player count.</button>
+                <div class="rules-panel-wrap">
+                <button class="action-btn tertiary-btn" id="apply-player-defaults-btn">Set maze dimensions based on player count.</button>
 
                 <!-- Match Settings Panel -->
                 <div class="lobby-settings-panel">
@@ -944,6 +964,7 @@
                         <label for="tap-only-toggle" style="font-size:1.2rem; cursor:pointer; user-select:none;">Tap Only Controls</label>
                     </div>
                 </div>
+                </div><!-- /.rules-panel-wrap -->
 
                 <div class="btn-group">
                     <button class="action-btn secondary-btn" id="rules-back-btn">Back</button>
