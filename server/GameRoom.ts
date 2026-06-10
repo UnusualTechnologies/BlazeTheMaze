@@ -78,6 +78,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     frozenPlayers = new Map<string, number>(); // sessionId → unfreeze timestamp (ms)
     aiLoggedState = new Map<string, string>(); // sessionId → last logged sub-state (for change detection)
     aiLastPos = new Map<string, { x: number; y: number }>(); // sessionId → cell visited before current (for random anti-backtrack)
+    aiResolvedBehavior = new Map<string, string>(); // sessionId → concrete behavior (resolves "random" meta-setting to a real strategy)
     // Freeze simulation while waiting for round reset
     roundOver: boolean = false;
     // True once a match is won; blocks new joins until someone with the code restarts
@@ -709,7 +710,15 @@ export class GameRoom extends Room<{ state: GameState }> {
     }
 
     initAIState(sessionId: string, player: Player) {
-        const behavior = this.state.slots[player.slotIndex]?.aiBehavior ?? "random";
+        const configured = this.state.slots[player.slotIndex]?.aiBehavior ?? "random";
+
+        // "random" is a meta-setting: pick a real strategy for this round
+        const realStrategies = ["genius", "guesser", "chaotic", "focused"];
+        const behavior = configured === "random"
+            ? realStrategies[Math.floor(Math.random() * realStrategies.length)]
+            : configured;
+        this.aiResolvedBehavior.set(sessionId, behavior);
+
         if (behavior === "guesser") {
             let rx: number, ry: number;
             do {
@@ -795,7 +804,9 @@ export class GameRoom extends Room<{ state: GameState }> {
     moveAI(sessionId: string, player: Player) {
         if (Date.now() < (this.frozenPlayers.get(sessionId) ?? 0)) return; // frozen
         const slot = this.state.slots[player.slotIndex];
-        let behavior = slot?.aiBehavior ?? "random";
+        // Use the resolved behavior (resolves "random" meta-setting to a concrete strategy)
+        const configuredBehavior = slot?.aiBehavior ?? "random";
+        let behavior = this.aiResolvedBehavior.get(sessionId) ?? configuredBehavior;
 
         const cell = this.state.grid[this.idx(player.x, player.y)];
 
@@ -890,19 +901,6 @@ export class GameRoom extends Room<{ state: GameState }> {
                 const d = this.distanceMap[this.idx(n.x, n.y)];
                 if (d < currDist && (!move || d < this.distanceMap[this.idx(move.x, move.y)])) move = n;
             }
-        } else if (behavior === "random") {
-            aiSubState = "random";
-        }
-
-        if (behavior === "random" && !move) {
-            // Anti-backtrack: if there are 2+ open neighbours, prefer not to step back
-            // to the cell we just came from (eliminates the annoying oscillation in corridors).
-            // In a dead-end (only one exit) we have no choice but to reverse.
-            const last = this.aiLastPos.get(sessionId);
-            const forward = last
-                ? open.filter(n => !(n.x === last.x && n.y === last.y))
-                : open;
-            move = (forward.length > 0 ? forward : open)[Math.floor(Math.random() * (forward.length > 0 ? forward : open).length)];
         }
 
         // Final fallback: random (handles dead-ends with no improving move)
@@ -1218,14 +1216,19 @@ export class GameRoom extends Room<{ state: GameState }> {
 
     logRoundStart() {
         console.log(`\n── Round ${this.roundCount + 1} ──`);
-        this.state.players.forEach((player) => {
+        this.state.players.forEach((player, sessionId) => {
             const slot = this.state.slots[player.slotIndex];
-            const behavior = slot?.aiBehavior ?? "random";
-            const speedMs  = slot?.aiSpeed ?? 600;
-            const label    = player.isAI ? `AI  slot ${player.slotIndex}` : `Human slot ${player.slotIndex}`;
-            const color    = player.color ?? '?';
+            const configured = slot?.aiBehavior ?? "random";
+            const resolved   = this.aiResolvedBehavior.get(sessionId) ?? configured;
+            const speedMs    = slot?.aiSpeed ?? 600;
+            const label      = player.isAI ? `AI  slot ${player.slotIndex}` : `Human slot ${player.slotIndex}`;
+            const color      = player.color ?? '?';
             if (player.isAI) {
-                console.log(`  ${label} (${color})  behavior=${behavior}  speed=${speedMs}ms`);
+                // Show resolved strategy; annotate "(rolled)" if it was randomly chosen
+                const behaviorLabel = configured === "random"
+                    ? `${resolved} (rolled random)`
+                    : resolved;
+                console.log(`  ${label} (${color})  behavior=${behaviorLabel}  speed=${speedMs}ms`);
             } else {
                 console.log(`  ${label} (${color})  [human]`);
             }
@@ -1255,6 +1258,7 @@ export class GameRoom extends Room<{ state: GameState }> {
             this.aiCooldowns.set(sessionId, 0);
             this.aiLoggedState.delete(sessionId);
             this.aiLastPos.delete(sessionId);
+            this.aiResolvedBehavior.delete(sessionId);
             // Re-init guesser/explorer state for AI
             if (player.isAI) this.initAIState(sessionId, player);
         });
