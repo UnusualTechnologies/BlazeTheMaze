@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.284</div>
+    <div id="version-number">v1.5.285</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -4739,6 +4739,7 @@
                 if (!data || !Array.isArray(data.walls)) return;
                 const newCols = data.cols, newRows = data.rows;
                 if (data.walls.length !== newCols * newRows) return; // ignore malformed payloads
+                console.log(`[grid_sync] Received gen=${data.gen}, blazer0=(${blazers[0]?.gridX},${blazers[0]?.gridY})`);
                 cols = newCols;
                 rows = newRows;
                 const newGrid = [];
@@ -4762,6 +4763,7 @@
             });
 
             room.onMessage("round_reset", () => {
+                console.log(`[round_reset] Received, blazer0 before snap=(${blazers[0]?.gridX},${blazers[0]?.gridY})`);
                 if (roundFlashStart === null) roundFlashStart = performance.now(); // failsafe if msg arrives before countdown
                 // The new maze arrives authoritatively via the "grid_sync" message that the
                 // server broadcasts immediately after this (from generateMaze()). No need to
@@ -4796,6 +4798,7 @@
                         blazer.sentMoves = []; // discard stale predictions from last round
                     }
                 });
+                console.log(`[round_reset] After snap: blazer0=(${blazers[0]?.gridX},${blazers[0]?.gridY}), gridGen=${lastGridGeneration}, cols=${cols}, rows=${rows}`);
 
                 blazers.forEach(resetBlazerInputState);
                 initRound();

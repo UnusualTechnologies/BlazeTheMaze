@@ -275,7 +275,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                 // orthogonal cell away, with no wall in between. Blocks teleport-to-goal
                 // and wall-hacking from modified clients.
                 if (!this.isLegalStep(player, message?.x, message?.y)) {
-                    console.warn(`Illegal move from ${client.sessionId}:`, message);
+                    console.warn(`Illegal move from ${client.sessionId}: ${JSON.stringify(message)} (server: from (${player.x},${player.y}), round=${this.roundCount}, gridGen=${this.state.gridGeneration})`);
                     return;
                 }
                 this.lastInputTime.set(client.sessionId, now);
@@ -1278,6 +1278,7 @@ export class GameRoom extends Room<{ state: GameState }> {
             this.aiCooldowns.set(sessionId, 0);
             if (player.isAI) this.initAIState(sessionId, player);
         });
+        console.log(`[resetRound] Player positions set: ${Array.from(this.state.players.entries()).map(([sid, p]) => `${sid}@slot${p.slotIndex}=(${p.x},${p.y})`).join(', ')}`);
     }
 
     logRoundStart() {
