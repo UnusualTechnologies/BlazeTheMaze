@@ -932,11 +932,28 @@ export class GameRoom extends Room<{ state: GameState }> {
 
     generateMaze() {
         this.state.gridGeneration++;   // signal to clients that the grid has changed
-        for (let x = 0; x < this.cols; x++) {
-            for (let y = 0; y < this.rows; y++) {
-                const cell = new Cell();
-                cell.walls[0] = cell.walls[1] = cell.walls[2] = cell.walls[3] = true;
-                this.state.grid.push(cell);
+        const totalCells = this.cols * this.rows;
+        if (this.state.grid.length === totalCells) {
+            // Grid already populated (round 2+): reset walls in-place.
+            // Colyseus sends only the changed wall values as a delta — much simpler
+            // and more reliable than clear() + repopulate, which encodes as DELETE-all
+            // then ADD-all and can leave the client schema in a partially-reconstructed
+            // state when onStateChange fires.
+            for (let i = 0; i < totalCells; i++) {
+                this.state.grid[i].walls[0] = true;
+                this.state.grid[i].walls[1] = true;
+                this.state.grid[i].walls[2] = true;
+                this.state.grid[i].walls[3] = true;
+            }
+        } else {
+            // First generation: grid is empty, push all cells fresh.
+            this.state.grid.splice(0);  // ensure clean
+            for (let x = 0; x < this.cols; x++) {
+                for (let y = 0; y < this.rows; y++) {
+                    const cell = new Cell();
+                    cell.walls[0] = cell.walls[1] = cell.walls[2] = cell.walls[3] = true;
+                    this.state.grid.push(cell);
+                }
             }
         }
 
@@ -1204,7 +1221,6 @@ export class GameRoom extends Room<{ state: GameState }> {
         this.state.players.forEach((player) => { player.score = 0; });
 
         this.roundOver = false;
-        this.state.grid.clear();
         this.generateMaze();
         this.distanceMap = this.computeDistanceMap(this.state.goalX, this.state.goalY);
         this.spawnPowerUps(this.spawnOptions);
@@ -1250,8 +1266,8 @@ export class GameRoom extends Room<{ state: GameState }> {
         this.state.lastWinnerId = "";
         this.state.lastWinnerColor = "";
         this.state.lastWinnerScore = 0;
-        // New maze
-        this.state.grid.clear();
+        // New maze — generateMaze() resets walls in-place for round 2+ (avoids
+        // Colyseus clear()+repopulate delta issues that caused client grid desync).
         this.generateMaze();
         this.distanceMap = this.computeDistanceMap(this.state.goalX, this.state.goalY);
 
