@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.260</div>
+    <div id="version-number">v1.5.261</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -4354,21 +4354,28 @@
 
                         // During the movement lock the local player hasn't sent any moves yet,
                         // so the server position is authoritative and we should stay in sync.
-                        // We extend this silent-sync window 1 s past lock expiry to absorb any
-                        // Colyseus state patches that were generated during the lock (showing spawn)
-                        // but arrive late — those stale patches would otherwise trigger a false
-                        // large-displacement snap once the player has moved 2+ cells away.
-                        const _moveGrace = performance.now() < roundMoveLockEnd + 1000;
+                        // After lock expiry there is a grace window (1 s) during which stale
+                        // Colyseus patches from the lock era can still arrive showing the player
+                        // at spawn.  We skip ALL local-player position updates during that window
+                        // (no snap, no animation) so client prediction is never clobbered.
+                        // A real mid-grace teleport will be caught once the grace window closes.
+                        const _moveLocked = performance.now() < roundMoveLockEnd;
+                        const _moveGrace  = performance.now() < roundMoveLockEnd + 1000;
 
                         // If player position changed drastically, trigger teleport animation
                         if (Math.abs(blazer.gridX - playerState.x) > 1 || Math.abs(blazer.gridY - playerState.y) > 1) {
                             if (_moveGrace && (isLocal || blazer.isSecondaryLocal)) {
-                                // During the lock + grace window, silently snap — the server
-                                // position may be a stale lock-era broadcast (player still at spawn)
-                                // rather than a real server-side teleport.  No animation or sound.
-                                blazer.gridX = playerState.x;
-                                blazer.gridY = playerState.y;
-                                blazer.updatePixelPos(true);
+                                if (_moveLocked) {
+                                    // During the lock itself: silently snap — no moves sent yet so
+                                    // the server position is always correct (e.g. pre-snap landed
+                                    // in wrong slot, or state arrived before round_reset handler ran).
+                                    blazer.gridX = playerState.x;
+                                    blazer.gridY = playerState.y;
+                                    blazer.updatePixelPos(true);
+                                }
+                                // Post-lock grace window: skip entirely — this is a stale patch
+                                // from the lock era, not a real server-side teleport.
+                                // Client prediction is preserved; no silent position reset.
                             } else if (blazer.state === 'normal') {
                                 // Smoke puff at departure point, drifting toward destination
                                 smokePuffs.push({
@@ -4393,8 +4400,8 @@
                             // so its canMove() checks are always correct. Applying server state here
                             // causes jitter because stale ticks (broadcast before the server processed
                             // the latest move) temporarily snap the player back one cell.
-                            // Exception: during the lock + grace window, sync the local player too
-                            // so position is correct at lock expiry and stale patches are absorbed.
+                            // Exception: during the movement lock, sync the local player so position
+                            // is guaranteed correct at lock expiry.
                             if (!isLocal && !blazer.isSecondaryLocal) {
                                 const rdx = playerState.x - blazer.gridX;
                                 const rdy = playerState.y - blazer.gridY;
@@ -4404,9 +4411,8 @@
                                 }
                                 blazer.gridX = playerState.x;
                                 blazer.gridY = playerState.y;
-                            } else if (_moveGrace) {
-                                // Lock + grace window: keep local player synced (no jitter risk
-                                // during lock; stale patches during grace are harmless to absorb).
+                            } else if (_moveLocked) {
+                                // Lock period only: keep local player synced.
                                 blazer.gridX = playerState.x;
                                 blazer.gridY = playerState.y;
                             }
