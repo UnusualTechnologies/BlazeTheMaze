@@ -1298,6 +1298,9 @@ export class GameRoom extends Room<{ state: GameState }> {
         );
         player.x = x;
         player.y = y;
+        // Authoritative teleport signal — the client plays the teleport animation when this
+        // changes, rather than guessing from position displacement.
+        player.teleportSeq = (player.teleportSeq + 1) & 0x7fffffff;
     }
 
     getDistance(x: number, y: number) {

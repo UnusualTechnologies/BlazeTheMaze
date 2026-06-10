@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.263</div>
+    <div id="version-number">v1.5.264</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1843,7 +1843,8 @@
                 this.flashTimer = 0;
                 this.mirrorUntil = 0;   // Date.now() timestamp until mirror controls expire for this blazer
                 this.frozenUntil = 0;   // Date.now() timestamp until freeze expires for this blazer
-                this.freezeGraceEnd = 0; // performance.now() until which post-freeze snap-back animations are suppressed
+                this.lastTeleportSeq = undefined; // last server teleportSeq seen (drives teleport animation)
+                this.sentMoves = [];    // recent predicted positions sent to server, for reconciliation
                 this.beaconUntil = 0; // Date.now() timestamp until path-guide beacon expires
                 this._beaconPathCache = [];        // cached path for beacon rendering
                 this._beaconPathCacheX = -1;       // gridX when path was last computed
@@ -1962,6 +1963,13 @@
                         room.send("move", { x: this.gridX, y: this.gridY });
                     } else if (this.isSecondaryLocal) {
                         room.send("move_secondary", { slotIndex: this.slotIndex, x: this.gridX, y: this.gridY });
+                    }
+                    if (isActuallyLocal || this.isSecondaryLocal) {
+                        // Record the predicted position so onStateChange can tell normal
+                        // prediction-lag (server trailing through our sent cells) apart from a
+                        // genuine desync (server at a cell we never sent → snap to recover).
+                        this.sentMoves.push({ x: this.gridX, y: this.gridY });
+                        if (this.sentMoves.length > 32) this.sentMoves.shift();
                     }
                     const scheme = this.controlScheme || 'WASD';
                     if (!controlSchemesReported.has(scheme)) {
@@ -4353,73 +4361,80 @@
                         // so any position change here would be the reset teleport arriving early.
                         if (gameState === 'ROUND_OVER_COUNTDOWN') return;
 
-                        // During the movement lock the local player hasn't sent any moves yet,
-                        // so the server position is authoritative and we should stay in sync.
-                        // After lock expiry there is a grace window (1 s) during which stale
-                        // Colyseus patches from the lock era can still arrive showing the player
-                        // at spawn.  We skip ALL local-player position updates during that window
-                        // (no snap, no animation) so client prediction is never clobbered.
-                        // A real mid-grace teleport will be caught once the grace window closes.
+                        const _isLocalBlazer = isLocal || blazer.isSecondaryLocal;
                         const _moveLocked = performance.now() < roundMoveLockEnd;
-                        const _moveGrace  = performance.now() < roundMoveLockEnd + 1000;
-                        // Freeze grace: suppress false snap-back animations for the local player
-                        // for 500 ms after freeze ends (same idea as _moveGrace but for freeze).
-                        const _freezeGrace = (isLocal || blazer.isSecondaryLocal) &&
-                            blazer.freezeGraceEnd > 0 && performance.now() < blazer.freezeGraceEnd;
 
-                        // If player position changed drastically, trigger teleport animation
-                        if (Math.abs(blazer.gridX - playerState.x) > 1 || Math.abs(blazer.gridY - playerState.y) > 1) {
-                            if ((_moveGrace || _freezeGrace) && (isLocal || blazer.isSecondaryLocal)) {
-                                if (_moveLocked) {
-                                    // During the lock itself: silently snap — no moves sent yet so
-                                    // the server position is always correct (e.g. pre-snap landed
-                                    // in wrong slot, or state arrived before round_reset handler ran).
-                                    blazer.gridX = playerState.x;
-                                    blazer.gridY = playerState.y;
-                                    blazer.updatePixelPos(true);
-                                }
-                                // Post-lock / post-freeze grace window: skip entirely — this is a
-                                // stale patch, not a real server-side teleport.
-                                // Client prediction is preserved; no silent position reset.
-                            } else if (blazer.state === 'normal') {
-                                // Smoke puff at departure point, drifting toward destination
+                        // ── Authoritative teleport detection ──────────────────────────────
+                        // The server bumps playerState.teleportSeq every time it teleports this
+                        // player (collision, power-up, rocket). We play the teleport animation
+                        // ONLY when that counter changes — never by guessing from position
+                        // displacement, which false-fires whenever client prediction or a remote
+                        // blazer's coalesced moves leave the rendered position >1 cell from a
+                        // server patch. (init lastTeleportSeq lazily so we don't animate on join.)
+                        const _seq = playerState.teleportSeq || 0;
+                        if (blazer.lastTeleportSeq === undefined) blazer.lastTeleportSeq = _seq;
+                        const _teleported = _seq !== blazer.lastTeleportSeq;
+                        blazer.lastTeleportSeq = _seq;
+
+                        if (_teleported) {
+                            // Real server-side teleport — animate to the authoritative destination.
+                            // Guard against re-triggering if already mid-teleport: just retarget.
+                            if (blazer.state === 'normal') {
                                 smokePuffs.push({
                                     fromX: blazer.gridX, fromY: blazer.gridY,
                                     toX: playerState.x,  toY: playerState.y,
                                     color: blazer.color,
                                     startTime: performance.now()
                                 });
-                                // Trigger local teleport effect for visual consistency
                                 blazer.state = 'teleport_out';
                                 blazer.stateTimer = 1.0;
-                                blazer.targetGridX = playerState.x;
-                                blazer.targetGridY = playerState.y;
-
                                 if (blazer.isLocal) Synth.zip();
                                 else Synth.glitch();
                             }
+                            blazer.targetGridX = playerState.x;
+                            blazer.targetGridY = playerState.y;
+                            blazer.sentMoves = []; // pre-teleport predictions are moot now
+                        } else if (blazer.state === 'teleport_out' || blazer.state === 'teleport_in') {
+                            // Mid-teleport animation with no new teleport — leave it alone so the
+                            // animation can finish landing on its target.
+                        } else if (!_isLocalBlazer) {
+                            // Remote / AI blazer: server position is authoritative. Sync directly
+                            // (no animation) even across multi-cell coalesced patches — the render
+                            // loop lerps the visual, so this stays smooth.
+                            const rdx = playerState.x - blazer.gridX;
+                            const rdy = playerState.y - blazer.gridY;
+                            if ((Math.abs(rdx) === 1 && rdy === 0) || (rdx === 0 && Math.abs(rdy) === 1)) {
+                                blazer.lastDx = rdx;
+                                blazer.lastDy = rdy;
+                            }
+                            blazer.gridX = playerState.x;
+                            blazer.gridY = playerState.y;
+                        } else if (_moveLocked) {
+                            // Local blazer during the round-start lock: not moving yet, so keep it
+                            // pinned to the server's spawn position. Guarantees a clean hand-off to
+                            // client prediction the instant the lock expires.
+                            blazer.gridX = playerState.x;
+                            blazer.gridY = playerState.y;
+                            blazer.sentMoves = [];
                         } else {
-                            // Remote players: always sync from server.
-                            // Local player: skip during normal play — client prediction is authoritative
-                            // for single-cell moves. The client uses the same wall data as the server,
-                            // so its canMove() checks are always correct. Applying server state here
-                            // causes jitter because stale ticks (broadcast before the server processed
-                            // the latest move) temporarily snap the player back one cell.
-                            // Exception: during the movement lock, sync the local player so position
-                            // is guaranteed correct at lock expiry.
-                            if (!isLocal && !blazer.isSecondaryLocal) {
-                                const rdx = playerState.x - blazer.gridX;
-                                const rdy = playerState.y - blazer.gridY;
-                                if ((Math.abs(rdx) === 1 && rdy === 0) || (rdx === 0 && Math.abs(rdy) === 1)) {
-                                    blazer.lastDx = rdx;
-                                    blazer.lastDy = rdy;
-                                }
+                            // Local blazer during normal play. Client prediction is authoritative;
+                            // the server only moves us via our own validated moves. Reconcile:
+                            const _ackIdx = blazer.sentMoves.findIndex(m => m.x === playerState.x && m.y === playerState.y);
+                            if (_ackIdx !== -1) {
+                                // Server is working through our sent moves (normal lag) — drop the
+                                // acknowledged ones and keep predicting ahead. No snap.
+                                blazer.sentMoves.splice(0, _ackIdx + 1);
+                            } else if (blazer.gridX === playerState.x && blazer.gridY === playerState.y) {
+                                // Already aligned (e.g. stationary) — nothing to do.
+                            } else {
+                                // Server is at a cell we never sent and we're not there → a move was
+                                // rejected (lock/freeze/rate-limit) or a desync slipped through.
+                                // Silently snap to the authoritative position to recover. No
+                                // animation: this is a correction, not a teleport.
                                 blazer.gridX = playerState.x;
                                 blazer.gridY = playerState.y;
-                            } else if (_moveLocked) {
-                                // Lock period only: keep local player synced.
-                                blazer.gridX = playerState.x;
-                                blazer.gridY = playerState.y;
+                                blazer.updatePixelPos(true);
+                                blazer.sentMoves = [];
                             }
                         }
                     }
@@ -4667,16 +4682,7 @@
             room.onMessage("freeze", ({ collectorSessionId, duration }) => {
                 const freezeUntil = Date.now() + duration;
                 blazers.forEach(b => {
-                    if (b.sessionId !== collectorSessionId) {
-                        b.frozenUntil = freezeUntil;
-                        // Grace window: suppress false large-displacement teleport animations for
-                        // the local player for 500 ms after the freeze expires. Without this, if
-                        // the server is still frozen by a few ms when the client unfreezes (clock
-                        // skew), the server rejects the first moves, the client drifts 2+ cells
-                        // ahead, and the next state patch triggers a snap-back teleport animation
-                        // that blocks movement for ~600 ms.
-                        b.freezeGraceEnd = performance.now() + duration + 500;
-                    }
+                    if (b.sessionId !== collectorSessionId) b.frozenUntil = freezeUntil;
                 });
             });
 
