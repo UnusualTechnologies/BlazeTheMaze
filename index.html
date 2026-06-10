@@ -765,7 +765,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.235</div>
+    <div id="version-number">v1.5.236</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -5029,8 +5029,7 @@
             const _slowTimer1 = setTimeout(showSlowConnectionToast, 5000);
             try {
                 if (!client) throw new Error('Colyseus client not initialised — check your connection.');
-                // Race always uses default settings regardless of custom menu state
-                const settings = buildDefaultSettings();
+                const settings = buildLobbySettings();
                 initControlSchemeState();
 
                 gameState = 'CONNECTING';
