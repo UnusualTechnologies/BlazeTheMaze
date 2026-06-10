@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.274</div>
+    <div id="version-number">v1.5.275</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2596,7 +2596,9 @@
         function resetBlazerInputState(blazer) {
             blazer.state = 'normal';
             blazer.stateTimer = 0;
-            blazer.heldDirections = [];
+            // Do NOT clear heldDirections — if the player is holding a key through the
+            // round transition it should stay active so movement fires the instant the
+            // new-round move lock expires. Released keys are already removed by keyup.
             blazer.turnIntent = null;
             blazer.swipeIntent = null;
             blazer.dirKeyDownTimes = {};
@@ -3856,9 +3858,8 @@
         });
 
         window.addEventListener('keyup', (e) => {
-            // No gameState gate — releases must always clean up heldDirections.
-            // Gating here would leave ghost held directions if the key is released
-            // during ROUND_OVER_COUNTDOWN, causing the blazer to auto-move next round.
+            // No gameState gate — releases must always clean up heldDirections,
+            // including during ROUND_OVER_COUNTDOWN and the move-lock period.
             blazers.forEach(blazer => {
                 if (!blazer.isPlayer) return;
 
