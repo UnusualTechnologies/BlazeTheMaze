@@ -26,6 +26,7 @@ Project key: `blaze_the_maze`
 | `pu_opponent`, `pu_self`, `pu_rocket`, `pu_mirror`, `pu_mystery`, `pu_freeze`, `pu_beacon` | Power-up counts configured for the room |
 | `active_players`, `human_players`, `ai_players` | Slot breakdown at room creation |
 | `used_defaults` | Whether the host used Quick Start defaults |
+| `client_version` | Game version string (e.g. `v1.5.279`) from the client at room creation |
 
 #### `session_start` — fired when a player joins
 | Property | Description |

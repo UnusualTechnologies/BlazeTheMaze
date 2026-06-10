@@ -381,6 +381,7 @@ export class GameRoom extends Room<{ state: GameState }> {
             human_players:   _activeSlots.filter(s => s.mode === 'local' || s.mode === 'secondary').length,
             ai_players:      _activeSlots.filter(s => s.mode === 'ai' || s.mode === 'ai_online' || s.mode === 'ai_friend').length,
             used_defaults:   !options.slots || options.slots.length === 0,
+            client_version:  typeof options.clientVersion === 'string' ? options.clientVersion : null,
         });
         // ───────────────────────────────────────────────────────────────────────
     }
