@@ -1243,7 +1243,9 @@ export class GameRoom extends Room<{ state: GameState }> {
     teleportPlayer(player: Player) {
         const startX = player.x, startY = player.y;
         let x = startX, y = startY;
-        const minDist = 15; // minimum Manhattan distance from start position
+        const minDist = 15; // minimum BFS (maze-path) distance from start position
+        // BFS distance map from the player's current cell — respects walls
+        const fromStartDist = this.computeDistanceMap(startX, startY);
         const maxAttempts = this.cols * this.rows * 4;
         let attempts = 0;
         do {
@@ -1253,7 +1255,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         } while (
             attempts < maxAttempts &&
             (
-                Math.abs(x - startX) + Math.abs(y - startY) < minDist ||  // too close to current position
+                fromStartDist[this.idx(x, y)] < minDist ||  // too close via maze path
                 this.isReservedCell(x, y) ||
                 this.getDistance(x, y) <= 10 ||   // keep players away from the goal area
                 this.state.powerUps.some((pu: PowerUp) => pu.x === x && pu.y === y) ||
