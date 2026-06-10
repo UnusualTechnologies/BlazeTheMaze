@@ -775,7 +775,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.242</div>
+    <div id="version-number">v1.5.243</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -871,7 +871,6 @@
                         <input type="number" id="grid-size-input" value="20" min="15" max="100" inputmode="numeric" style="font-size:1.1rem; padding:5px; width:80px; text-align:center;">
                         <span id="grid-size-hint" style="font-size:0.85rem; color:#ff6666; display:none;"></span>
                     </div>
-                    <div id="pu-cap-warning" style="display:none; color:#ffcc44; font-size:0.85rem; margin-top:4px;"></div>
                     <div style="width:100%; height:1px; background:rgba(255,255,255,0.15); margin:2px 0;"></div>
                     <!-- Power-ups -->
                     <div style="display:flex; align-items:center; gap:10px;">
@@ -2311,23 +2310,12 @@
         function checkPowerUpCaps() {
             const grid = parseInt(gridSizeInput.value, 10) || 20;
             const maxPerType = Math.floor((grid * grid - 9) * 0.35);
-            const over = [];
-            [['opp', 'Teleport leader'], ['self', 'Teleport self'], ['rocket', 'Homing missile'],
-             ['mirror', 'Mirror'], ['mystery', 'Mystery'], ['freeze', 'Freeze'], ['beacon', 'Beacon']
-            ].forEach(([k, label]) => {
+            ['opp', 'self', 'rocket', 'mirror', 'mystery', 'freeze', 'beacon'].forEach(k => {
                 const el = document.getElementById(`pu-${k}-input`);
-                if (el && parseInt(el.value, 10) > maxPerType) {
-                    over.push(`${label} (max ${maxPerType})`);
-                }
+                if (!el) return;
+                const v = parseInt(el.value, 10);
+                if (!isNaN(v) && v > maxPerType) el.value = String(maxPerType);
             });
-            const warn = document.getElementById('pu-cap-warning');
-            if (!warn) return;
-            if (over.length) {
-                warn.textContent = `⚠ Grid too small — these will be capped by the server: ${over.join(', ')}.`;
-                warn.style.display = 'block';
-            } else {
-                warn.style.display = 'none';
-            }
         }
 
         function resizeCanvas() {
