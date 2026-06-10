@@ -603,6 +603,16 @@
         }
         .legend-color-cycle { animation: legend-color-cycle 2.4s steps(8, end) infinite; }
 
+        @keyframes dash-spin {
+            from { transform: rotate(0deg); }
+            to   { transform: rotate(360deg); }
+        }
+        .spin-dash {
+            animation: dash-spin 4s linear infinite;
+            transform-box: fill-box;
+            transform-origin: center;
+        }
+
         /* Power-up legend (replaces dpad) */
         #pu-legend {
             grid-column: 2;
@@ -765,7 +775,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.239</div>
+    <div id="version-number">v1.5.240</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -865,17 +875,17 @@
                     <!-- Power-ups -->
                     <div style="display:flex; align-items:center; gap:10px;">
                         <svg class="pu-legend-icon" viewBox="-16 -16 32 32" style="filter:drop-shadow(0 0 4px #ffffff)">
-                            <circle r="12" fill="#000" stroke="#fff" stroke-width="2.5" stroke-dasharray="5 3"/>
+                            <circle class="spin-dash" r="12" fill="#000" stroke="#fff" stroke-width="2.5" stroke-dasharray="5 3"/>
                             <text x="0" y="0" dominant-baseline="central" text-anchor="middle" font-size="13" font-weight="bold" font-family="monospace" class="legend-color-cycle">1</text>
                         </svg>
-                        <label for="pu-opp-input" style="font-size:1.2rem;">Teleport leader:</label>
+                        <label for="pu-opp-input" style="font-size:1.2rem;">Teleport leader</label>
                         <input type="number" id="pu-opp-input" value="6" min="0" max="100" inputmode="numeric" style="font-size:1.1rem; padding:5px; width:80px; text-align:center;">
                     </div>
                     <div style="display:flex; align-items:center; gap:10px;">
                         <svg class="pu-legend-icon" viewBox="-16 -16 32 32" style="filter:drop-shadow(0 0 4px #ffffff)">
-                            <circle r="12" fill="#000" stroke="#fff" stroke-width="2.5" stroke-dasharray="5 3"/>
+                            <circle class="spin-dash" r="12" fill="#000" stroke="#fff" stroke-width="2.5" stroke-dasharray="5 3"/>
                         </svg>
-                        <label for="pu-self-input" style="font-size:1.2rem;">Teleport self:</label>
+                        <label for="pu-self-input" style="font-size:1.2rem;">Teleport self</label>
                         <input type="number" id="pu-self-input" value="5" min="0" max="100" inputmode="numeric" style="font-size:1.1rem; padding:5px; width:80px; text-align:center;">
                     </div>
                     <div style="display:flex; align-items:center; gap:10px;">
@@ -955,28 +965,16 @@
             <div id="pu-legend">
                 <div class="pu-legend-row">
                     <svg class="pu-legend-icon" viewBox="-16 -16 32 32" style="filter:drop-shadow(0 0 5px #ffffff)">
-                        <circle r="12" fill="#000" stroke="#fff" stroke-width="2.5" stroke-dasharray="5 3"/>
+                        <circle class="spin-dash" r="12" fill="#000" stroke="#fff" stroke-width="2.5" stroke-dasharray="5 3"/>
                         <text x="0" y="0" dominant-baseline="central" text-anchor="middle" font-size="13" font-weight="bold" font-family="monospace" class="legend-color-cycle">1</text>
                     </svg>
-                    <span>Teleport the leader</span>
+                    <span>Teleport leader</span>
                 </div>
                 <div class="pu-legend-row">
                     <svg class="pu-legend-icon" viewBox="-16 -16 32 32" style="filter:drop-shadow(0 0 5px #ffffff)">
-                        <circle r="12" fill="#000" stroke="#fff" stroke-width="2.5" stroke-dasharray="5 3"/>
+                        <circle class="spin-dash" r="12" fill="#000" stroke="#fff" stroke-width="2.5" stroke-dasharray="5 3"/>
                     </svg>
-                    <span>Teleport yourself</span>
-                </div>
-                <div class="pu-legend-row">
-                    <svg class="pu-legend-icon" viewBox="-16 -16 32 32" style="filter:drop-shadow(0 0 5px #88ddff)">
-                        <g stroke="#88ddff" stroke-width="2.5" stroke-linecap="round">
-                            <line x1="0" y1="-13" x2="0" y2="13"/>
-                            <line x1="-11.3" y1="-6.5" x2="11.3" y2="6.5"/>
-                            <line x1="-11.3" y1="6.5" x2="11.3" y2="-6.5"/>
-                            <line x1="-3.5" y1="-7" x2="3.5" y2="-7"/>
-                            <line x1="-3.5" y1="7" x2="3.5" y2="7"/>
-                        </g>
-                    </svg>
-                    <span>Freeze</span>
+                    <span>Teleport self</span>
                 </div>
                 <div class="pu-legend-row">
                     <canvas id="rocket-legend-canvas" class="pu-legend-icon" width="44" height="44"></canvas>
@@ -3149,7 +3147,7 @@
                 ctx.save();
                 ctx.translate(px, py);
                 if (p.type === 'opponents') {
-                    // Static dashed circle + cycling "1" — matches menu icon
+                    // Spinning dashed circle + cycling "1" — matches menu icon
                     ctx.beginPath();
                     ctx.arc(0, 0, cellSize * 0.3, 0, Math.PI * 2);
                     ctx.fillStyle = colors.bg;
@@ -3157,10 +3155,12 @@
                     ctx.lineWidth = 2;
                     ctx.strokeStyle = '#ffffff';
                     ctx.setLineDash([5, 5]);
+                    ctx.lineDashOffset = -time * 8;
                     ctx.shadowBlur = 10;
                     ctx.shadowColor = '#ffffff';
                     ctx.stroke();
                     ctx.setLineDash([]);
+                    ctx.lineDashOffset = 0;
                     ctx.shadowBlur = 0;
                     const oppCol = playerColors[Math.floor(performance.now() / 300) % playerColors.length] || '#ffff00';
                     ctx.font = `bold ${Math.round(cellSize * 0.32)}px monospace`;
@@ -3172,7 +3172,7 @@
                     ctx.fillText('1', 0, 0);
                     ctx.shadowBlur = 0;
                 } else if (p.type === 'self') {
-                    // Static dashed circle — matches menu icon
+                    // Spinning dashed circle — matches menu icon
                     ctx.beginPath();
                     ctx.arc(0, 0, cellSize * 0.3, 0, Math.PI * 2);
                     ctx.fillStyle = colors.bg;
@@ -3180,10 +3180,12 @@
                     ctx.lineWidth = 2;
                     ctx.strokeStyle = '#ffffff';
                     ctx.setLineDash([5, 5]);
+                    ctx.lineDashOffset = -time * 8;
                     ctx.shadowBlur = 10;
                     ctx.shadowColor = '#ffffff';
                     ctx.stroke();
                     ctx.setLineDash([]);
+                    ctx.lineDashOffset = 0;
                 } else if (p.type === 'rocket') {
                     const pulse = 1 + Math.sin(time * 3) * 0.1;
                     ctx.scale(pulse, pulse);
