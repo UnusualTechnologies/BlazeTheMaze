@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.246</div>
+    <div id="version-number">v1.5.247</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -826,7 +826,7 @@
                 <div class="pm-buttons-vertical">
                     <button class="action-btn" id="pm-next-game-btn" disabled
                             style="display:none; opacity:0.4; cursor:not-allowed;">
-                        Next game starting in 30
+                        Next game starting in 15
                     </button>
                     <button class="action-btn secondary-btn" id="menu-btn">Main Menu</button>
                 </div>
@@ -1338,10 +1338,10 @@
                             <span class="custom-speed-display" style="font-size: 0.9rem; min-width: 35px; text-align: right;">250</span>
                         </div>
                         <select class="ai-behavior-select">
-                            <option value="random" selected>Style: Random</option>
-                            <option value="genius">Style: Genius</option>
-                            <option value="guesser">Style: Guesser</option>
-                            <option value="chaotic">Style: Chaotic</option>
+                            <option value="random" selected>Strategy: Random</option>
+                            <option value="genius">Strategy: Genius</option>
+                            <option value="guesser">Strategy: Guesser</option>
+                            <option value="chaotic">Strategy: Chaotic</option>
                         </select>
                     </div>
                 `;
@@ -2720,9 +2720,9 @@
                 return;
             }
 
-            // Networked: wait for server match_reset (up to 30 s); button unlocks in last 5 s.
-            const MATCH_END_WAIT = 30000;
-            const JOIN_UNLOCK_MS = 25000;
+            // Networked: wait for server match_reset (up to 15 s); button unlocks in last 5 s.
+            const MATCH_END_WAIT = 15000;
+            const JOIN_UNLOCK_MS = 10000;
             pmJoinIntent = false;
             const btn = pmNextGameBtn;
             if (btn) {
@@ -2730,7 +2730,7 @@
                 btn.disabled = true;
                 btn.style.opacity = '0.4';
                 btn.style.cursor = 'default';
-                btn.textContent = 'Next game starting in 30';
+                btn.textContent = 'Next game starting in 15';
                 btn.onclick = () => {
                     if (btn.disabled) return;
                     pmJoinIntent = true;
@@ -5565,25 +5565,30 @@
                     ctx.save();
                     ctx.translate(px, py);
                     if (pu.type === 'opponents') {
-                        const n = playerColors.length;
-                        const r = CELL * 0.21;
-                        const sliceAngle = (Math.PI * 2) / n;
-                        const gapAngle = sliceAngle * 0.12; // proportional gap — stays visible at all cell sizes
-                        const arcAngle = sliceAngle - gapAngle;
-                        ctx.rotate(time);
-                        playerColors.forEach((col, i) => {
-                            const startA = i * sliceAngle + gapAngle / 2;
-                            for (let pass = 0; pass < 3; pass++) {
-                                ctx.beginPath();
-                                ctx.arc(0, 0, r, startA, startA + arcAngle);
-                                ctx.lineWidth = 2;
-                                ctx.strokeStyle = col;
-                                ctx.shadowBlur = [60, 30, 12][pass];
-                                ctx.shadowColor = col;
-                                ctx.stroke();
-                            }
-                            ctx.shadowBlur = 0;
-                        });
+                        // Spinning dashed circle + cycling "1" — matches main game drawPowerUps()
+                        ctx.beginPath();
+                        ctx.arc(0, 0, CELL * 0.3, 0, Math.PI * 2);
+                        ctx.fillStyle = colors.bg;
+                        ctx.fill();
+                        ctx.lineWidth = 2;
+                        ctx.strokeStyle = '#ffffff';
+                        ctx.setLineDash([5, 5]);
+                        ctx.lineDashOffset = -time * 8;
+                        ctx.shadowBlur = 10;
+                        ctx.shadowColor = '#ffffff';
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+                        ctx.lineDashOffset = 0;
+                        ctx.shadowBlur = 0;
+                        const oppCol = playerColors[Math.floor(elapsed / 300) % playerColors.length] || '#ffff00';
+                        ctx.font = `bold ${Math.round(CELL * 0.32)}px monospace`;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.shadowBlur = 12;
+                        ctx.shadowColor = oppCol;
+                        ctx.fillStyle = oppCol;
+                        ctx.fillText('1', 0, 0);
+                        ctx.shadowBlur = 0;
                     } else {
                         // Dashed white circle — matches main game self power-up
                         ctx.rotate(-time);
