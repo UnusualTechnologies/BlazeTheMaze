@@ -76,6 +76,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     guesserData = new Map<string, { target: { x: number; y: number }; distMap: number[]; reachedFirst: boolean }>();
     aiPUTarget = new Map<string, { x: number; y: number; distMap: number[] } | null>();
     frozenPlayers = new Map<string, number>(); // sessionId → unfreeze timestamp (ms)
+    aiLoggedState = new Map<string, string>(); // sessionId → last logged sub-state (for change detection)
     // Freeze simulation while waiting for round reset
     roundOver: boolean = false;
     // True once a match is won; blocks new joins until someone with the code restarts
@@ -806,9 +807,12 @@ export class GameRoom extends Room<{ state: GameState }> {
 
         let move: { x: number; y: number } | null = null;
 
+        let aiSubState = "idle";
+
         if (behavior === "genius") {
             // Check power-up seeking first (overrides goal-tracking if threatened)
             move = this.seekPowerUpIfThreatened(sessionId, player, open);
+            aiSubState = move ? "seeking-pu (threatened)" : "tracking-star";
             if (!move) {
                 // Track the star
                 const currDist = this.distanceMap[this.idx(player.x, player.y)];
@@ -829,6 +833,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                 if (atTarget && gd && !gd.reachedFirst) gd.reachedFirst = true;
 
                 const useGoal = aiDist <= this.cols * 2 || (gd?.reachedFirst ?? true);
+                aiSubState = move ? "seeking-pu (threatened)" : useGoal ? "tracking-star" : "navigating-random-target";
                 if (useGoal) {
                     // Navigate toward star
                     for (const n of open) {
@@ -863,6 +868,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                         ["rocket", "opponents", "self", "mirror", "freeze", "beacon", "mystery"], this.cols * this.rows);
                     this.aiPUTarget.set(sessionId, target);
                 }
+                aiSubState = target ? `seeking-pu (${target.x},${target.y})` : "tracking-star (no pu)";
                 if (target) {
                     const tDist = target.distMap[this.idx(player.x, player.y)];
                     for (const n of open) {
@@ -873,12 +879,15 @@ export class GameRoom extends Room<{ state: GameState }> {
             }
 
         } else if (behavior === "focused") {
+            aiSubState = "tracking-star";
             // Legacy: always track the star
             const currDist = this.distanceMap[this.idx(player.x, player.y)];
             for (const n of open) {
                 const d = this.distanceMap[this.idx(n.x, n.y)];
                 if (d < currDist && (!move || d < this.distanceMap[this.idx(move.x, move.y)])) move = n;
             }
+        } else if (behavior === "random") {
+            aiSubState = "random";
         }
 
         if (behavior === "random" && !move) {
@@ -887,6 +896,15 @@ export class GameRoom extends Room<{ state: GameState }> {
 
         // Final fallback: random (handles dead-ends with no improving move)
         if (!move) move = open[Math.floor(Math.random() * open.length)];
+
+        // Log sub-state changes only (avoids spam on every tick)
+        const prevState = this.aiLoggedState.get(sessionId);
+        if (prevState !== aiSubState) {
+            this.aiLoggedState.set(sessionId, aiSubState);
+            const slot = this.state.slots[player.slotIndex];
+            const speedMs = slot?.aiSpeed ?? 600;
+            console.log(`  AI slot ${player.slotIndex} (${player.color}) [${behavior}@${speedMs}ms] → ${aiSubState}  pos=(${player.x},${player.y})`);
+        }
 
         player.x = move.x;
         player.y = move.y;
@@ -1205,8 +1223,24 @@ export class GameRoom extends Room<{ state: GameState }> {
             player.x = spawn.x;
             player.y = spawn.y;
             this.aiCooldowns.set(sessionId, 0);
+            this.aiLoggedState.delete(sessionId);
             // Re-init guesser/explorer state for AI
             if (player.isAI) this.initAIState(sessionId, player);
+        });
+
+        // Log round-start AI assignments
+        console.log(`\n── Round ${this.roundCount + 1} ──`);
+        this.state.players.forEach((player, sessionId) => {
+            const slot = this.state.slots[player.slotIndex];
+            const behavior = slot?.aiBehavior ?? "random";
+            const speedMs  = slot?.aiSpeed ?? 600;
+            const label    = player.isAI ? `AI  slot ${player.slotIndex}` : `Human slot ${player.slotIndex}`;
+            const color    = player.color ?? '?';
+            if (player.isAI) {
+                console.log(`  ${label} (${color})  behavior=${behavior}  speed=${speedMs}ms`);
+            } else {
+                console.log(`  ${label} (${color})  [human]`);
+            }
         });
 
         // Fresh power-ups using original lobby settings
