@@ -752,26 +752,27 @@ export class GameRoom extends Room<{ state: GameState }> {
         return cached;
     }
 
-    // Returns a move toward a PU-seek target if an opponent is ≤20 cells from victory and ahead.
+    // Returns a move toward a PU-seek target if an opponent is within cols*2 cells of victory and ahead.
     // Priority: missile/teleport-other (closest), then teleport-self if neither found.
     private seekPowerUpIfThreatened(sessionId: string, player: Player, open: { x: number; y: number }[]): { x: number; y: number } | null {
+        const threatRange = this.cols * 2;
         const myDist = this.distanceMap[this.idx(player.x, player.y)];
         let threatened = false;
         this.state.players.forEach((other, sid) => {
             if (sid === sessionId) return;
             const d = this.distanceMap[this.idx(other.x, other.y)];
-            if (d <= 20 && d < myDist) threatened = true;
+            if (d <= threatRange && d < myDist) threatened = true;
         });
         if (!threatened) { this.aiPUTarget.set(sessionId, null); return null; }
 
         // Check cached target first
         let target = this.validatePUTarget(sessionId);
         if (!target) {
-            // Search for missile or teleport-other within 20 cells
-            target = this.findNearestPowerUp(player.x, player.y, ["rocket", "opponents"], 20);
+            // Search for missile or teleport-other within cols*2 cells
+            target = this.findNearestPowerUp(player.x, player.y, ["rocket", "opponents"], threatRange);
             if (!target) {
-                // Fallback: teleport-self within 20 cells
-                target = this.findNearestPowerUp(player.x, player.y, ["self"], 20);
+                // Fallback: teleport-self within cols*2 cells
+                target = this.findNearestPowerUp(player.x, player.y, ["self"], threatRange);
             }
             this.aiPUTarget.set(sessionId, target);
         }
@@ -827,7 +828,7 @@ export class GameRoom extends Room<{ state: GameState }> {
 
                 if (atTarget && gd && !gd.reachedFirst) gd.reachedFirst = true;
 
-                const useGoal = myDist <= 50 || (gd?.reachedFirst ?? true);
+                const useGoal = myDist <= this.cols * 2 || (gd?.reachedFirst ?? true);
                 if (useGoal) {
                     // Navigate toward star
                     for (const n of open) {
@@ -847,7 +848,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         } else if (behavior === "chaotic") {
             const myDist = this.distanceMap[this.idx(player.x, player.y)];
             const hasPowerUps = this.state.powerUps.length > 0;
-            const useGoal = myDist <= 50 || !hasPowerUps;
+            const useGoal = myDist <= this.cols * 2 || !hasPowerUps;
 
             if (useGoal) {
                 for (const n of open) {
