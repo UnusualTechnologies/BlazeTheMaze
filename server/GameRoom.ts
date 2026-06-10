@@ -44,6 +44,7 @@ interface LobbyOptions {
     puFreeze?: number;
     puBeacon?: number;
     isPrivate?: boolean;
+    clientVersion?: string;
 }
 
 interface JoinOptions {
