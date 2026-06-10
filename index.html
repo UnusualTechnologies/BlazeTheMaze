@@ -350,8 +350,8 @@
             margin-bottom: 20px;
         }
 
-        /* Lobby always scrolls as one unified column — no inner scroll regions */
-        #lobby-layer {
+        /* Lobby screens always scroll as one unified column — no inner scroll regions */
+        #lobby-layer, #lobby-rules-layer {
             justify-content: flex-start;
             padding-top: 24px;
             padding-bottom: 24px;
@@ -714,7 +714,7 @@
             }
 
             /* On mobile, respect the notch safe area for lobby top padding */
-            #lobby-layer { padding-top: max(24px, env(safe-area-inset-top)); }
+            #lobby-layer, #lobby-rules-layer { padding-top: max(24px, env(safe-area-inset-top)); }
 
             /* Join code input fills available space */
             .join-group { width: 90%; }
@@ -765,7 +765,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.236</div>
+    <div id="version-number">v1.5.237</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -835,14 +835,23 @@
                 </div>
             </div>
 
-            <!-- Custom Lobby Menu -->
+            <!-- Custom Lobby: Player Selection -->
             <div id="lobby-layer" class="menu-overlay hidden">
                 <h1>Custom Game</h1>
                 <div id="slots-container">
                     <!-- Slots dynamically generated -->
                 </div>
-                
-                <!-- Match Settings Toggle -->
+                <div class="btn-group">
+                    <button class="action-btn secondary-btn" id="lobby-back-btn">Back</button>
+                    <button class="action-btn" id="lobby-rules-btn">Rules</button>
+                </div>
+            </div>
+
+            <!-- Custom Lobby: Rules / Power-ups -->
+            <div id="lobby-rules-layer" class="menu-overlay hidden">
+                <h1>Custom Game</h1>
+
+                <!-- Match Settings Panel -->
                 <div class="lobby-settings-panel">
                     <!-- Power-ups -->
                     <div style="display:flex; align-items:center; gap:10px;">
@@ -925,7 +934,7 @@
                 </div>
 
                 <div class="btn-group">
-                    <button class="action-btn secondary-btn" id="lobby-back-btn">Back</button>
+                    <button class="action-btn secondary-btn" id="rules-back-btn">Back</button>
                     <button class="action-btn" id="start-btn">Blaze!</button>
                 </div>
             </div>
@@ -1094,6 +1103,7 @@
         // UI Layers
         const initialMenu = document.getElementById('initial-menu');
         const lobbyLayer = document.getElementById('lobby-layer');
+        const lobbyRulesLayer = document.getElementById('lobby-rules-layer');
         const postMatchLayer = document.getElementById('post-match-layer');
         const hud = document.getElementById('hud');
         const hudBar = document.getElementById('hud-bar');
@@ -1109,6 +1119,8 @@
         const joinFriendBtn = document.getElementById('join-friend-btn');
         const joinCodeInput = document.getElementById('join-code-input');
         const lobbyBackBtn = document.getElementById('lobby-back-btn');
+        const lobbyRulesBtn = document.getElementById('lobby-rules-btn');
+        const rulesBackBtn = document.getElementById('rules-back-btn');
         const startBtn = document.getElementById('start-btn');
         const menuBtn = document.getElementById('menu-btn');
         const pmTitle = document.getElementById('pm-title');
@@ -2532,6 +2544,7 @@
             
             initialMenu.classList.add('hidden');
             lobbyLayer.classList.add('hidden');
+            lobbyRulesLayer.classList.add('hidden');
             postMatchLayer.classList.add('hidden');
             hud.classList.remove('hidden');
             hudBar.classList.remove('hidden');
@@ -2710,6 +2723,7 @@
             hud.classList.add('hidden');
             hudBar.classList.add('hidden');
             lobbyLayer.classList.add('hidden');
+            lobbyRulesLayer.classList.add('hidden');
             initialMenu.classList.remove('hidden');
             Synth.stopTension();
             Synth.muffle(true);
@@ -4003,10 +4017,27 @@
             lobbyLayer.classList.remove('hidden');
         });
 
+        // Players screen → back to main menu
         lobbyBackBtn.addEventListener('click', () => {
-            saveLobbyState(); // preserve edits even if the player backs out without starting
+            saveLobbyState();
             lobbyLayer.classList.add('hidden');
             initialMenu.classList.remove('hidden');
+        });
+
+        // Players screen → Rules screen
+        lobbyRulesBtn.addEventListener('click', () => {
+            saveLobbyState();
+            lobbyLayer.classList.add('hidden');
+            lobbyRulesLayer.scrollTop = 0;
+            lobbyRulesLayer.classList.remove('hidden');
+        });
+
+        // Rules screen → back to Players screen
+        rulesBackBtn.addEventListener('click', () => {
+            saveLobbyState();
+            lobbyRulesLayer.classList.add('hidden');
+            lobbyLayer.scrollTop = 0;
+            lobbyLayer.classList.remove('hidden');
         });
 
         // Start actions
