@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.273</div>
+    <div id="version-number">v1.5.274</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -4202,7 +4202,7 @@
             }
             window.electronAPI?.setRichPresence('In Lobby');
             let gridCompatChecked = false;
-            let gridNeedsSync = true; // set true on connect and after each round/match reset
+            let lastGridGeneration = -1; // rebuild local grid whenever state.gridGeneration changes
 
             // Update HUD to show the actual room code (prefer state.roomCode; falls back to room.roomId)
             const _updateRoomCodeDisplay = (code) => {
@@ -4230,10 +4230,13 @@
                 goal.x = state.goalX;
                 goal.y = state.goalY;
 
-                // Sync Maze Grid — only when the grid has actually changed (new round/connect),
-                // not on every 100ms timer tick which fires onStateChange unnecessarily.
-                if (gridNeedsSync && state.grid && state.grid.length > 0) {
-                    gridNeedsSync = false;
+                // Sync Maze Grid — rebuild whenever the server's gridGeneration counter
+                // changes (incremented each time generateMaze() runs). Falls back to the
+                // old flag for servers that don't yet send gridGeneration (legacy compat).
+                const _serverGen = state.gridGeneration ?? 0;
+                const _gridChanged = _serverGen !== lastGridGeneration;
+                if (_gridChanged && state.grid && state.grid.length > 0) {
+                    lastGridGeneration = _serverGen;
                     if (isCodeJoin && !gridCompatChecked) {
                         gridCompatChecked = true;
                         const { min, max } = getMazeLimits();
@@ -4591,7 +4594,6 @@
 
             // Server resets the match after 30 s (room was already unlocked at 25 s).
             room.onMessage("match_reset", () => {
-                gridNeedsSync = true; // new maze incoming with next state patch
                 clearInterval(matchEndTimerInterval);
                 matchEndTimerInterval = null;
                 Synth.stopTension();
@@ -4707,7 +4709,6 @@
             });
 
             room.onMessage("round_reset", () => {
-                gridNeedsSync = true; // new maze incoming with next state patch
                 if (roundFlashStart === null) roundFlashStart = performance.now(); // failsafe if msg arrives before countdown
 
                 // Snap every blazer to its spawn position immediately, before the server state

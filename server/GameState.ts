@@ -52,4 +52,9 @@ export class GameState extends Schema {
     @type("string") lastWinnerId: string = "";
     @type("string") lastWinnerColor: string = "";
     @type("number") lastWinnerScore: number = 0;
+    // Increments every time the maze is regenerated (new round / match reset).
+    // The client watches this to know when to rebuild its local grid — avoids
+    // the race where the new-maze state patch arrives before the round_reset
+    // message sets gridNeedsSync=true.
+    @type("number") gridGeneration: number = 0;
 }

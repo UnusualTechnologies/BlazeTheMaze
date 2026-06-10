@@ -929,6 +929,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     // --- Maze & Powerups ---
 
     generateMaze() {
+        this.state.gridGeneration++;   // signal to clients that the grid has changed
         for (let x = 0; x < this.cols; x++) {
             for (let y = 0; y < this.rows; y++) {
                 const cell = new Cell();
