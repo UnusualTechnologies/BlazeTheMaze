@@ -1058,8 +1058,13 @@ export class GameRoom extends Room<{ state: GameState }> {
     }
 
     checkCollisions(player: Player, sessionId: string) {
+        // Snapshot the cell the player physically stepped into — used for collision detection
+        // below so that a self-teleport effect doesn't shift the reference point and cause a
+        // second (cascading) teleport at the random landing position.
+        const movedToX = player.x, movedToY = player.y;
+
         // Power-up pickup (always active)
-        const puIndex = this.state.powerUps.findIndex(pu => pu.x === player.x && pu.y === player.y);
+        const puIndex = this.state.powerUps.findIndex(pu => pu.x === movedToX && pu.y === movedToY);
         if (puIndex !== -1) {
             const pu = this.state.powerUps[puIndex];
             this.state.powerUps.splice(puIndex, 1);
@@ -1074,10 +1079,12 @@ export class GameRoom extends Room<{ state: GameState }> {
             }
         }
 
-        // Player-player collisions (respects lobby setting)
+        // Player-player collisions (respects lobby setting).
+        // Always checked against movedToX/movedToY (the stepped-into cell), never the
+        // post-teleport position, so a self-teleport can't chain into a collision teleport.
         if (this.collisions) {
             this.state.players.forEach((other, sid) => {
-                if (sid !== sessionId && other.x === player.x && other.y === player.y) {
+                if (sid !== sessionId && other.x === movedToX && other.y === movedToY) {
                     this.teleportPlayer(player);
                     this.teleportPlayer(other);
                 }
