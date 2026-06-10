@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.257</div>
+    <div id="version-number">v1.5.258</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -4352,9 +4352,22 @@
                         // so any position change here would be the reset teleport arriving early.
                         if (gameState === 'ROUND_OVER_COUNTDOWN') return;
 
+                        // During the movement lock the local player hasn't sent any moves yet,
+                        // so the server position is authoritative and we should stay in sync.
+                        // After the lock expires, client prediction takes over and we skip small
+                        // server corrections to avoid jitter from stale broadcasts.
+                        const _moveLocked = performance.now() < roundMoveLockEnd;
+
                         // If player position changed drastically, trigger teleport animation
                         if (Math.abs(blazer.gridX - playerState.x) > 1 || Math.abs(blazer.gridY - playerState.y) > 1) {
-                            if (blazer.state === 'normal') {
+                            if (_moveLocked && (isLocal || blazer.isSecondaryLocal)) {
+                                // During the lock, silently snap — the blazer drifted (e.g. the player
+                                // was holding a key that processed client-side during the countdown)
+                                // but no moves were accepted by the server, so trust the server.
+                                blazer.gridX = playerState.x;
+                                blazer.gridY = playerState.y;
+                                blazer.updatePixelPos(true);
+                            } else if (blazer.state === 'normal') {
                                 // Smoke puff at departure point, drifting toward destination
                                 smokePuffs.push({
                                     fromX: blazer.gridX, fromY: blazer.gridY,
@@ -4373,11 +4386,13 @@
                             }
                         } else {
                             // Remote players: always sync from server.
-                            // Local player: skip entirely — client prediction is authoritative for
-                            // single-cell moves. The client uses the same wall data as the server,
+                            // Local player: skip during normal play — client prediction is authoritative
+                            // for single-cell moves. The client uses the same wall data as the server,
                             // so its canMove() checks are always correct. Applying server state here
                             // causes jitter because stale ticks (broadcast before the server processed
                             // the latest move) temporarily snap the player back one cell.
+                            // Exception: during the movement lock, sync the local player too so that
+                            // position is guaranteed correct when the lock expires.
                             if (!isLocal && !blazer.isSecondaryLocal) {
                                 const rdx = playerState.x - blazer.gridX;
                                 const rdy = playerState.y - blazer.gridY;
@@ -4385,6 +4400,11 @@
                                     blazer.lastDx = rdx;
                                     blazer.lastDy = rdy;
                                 }
+                                blazer.gridX = playerState.x;
+                                blazer.gridY = playerState.y;
+                            } else if (_moveLocked) {
+                                // Lock period: keep local player synced (no jitter risk — player
+                                // can't be sending moves that would race with this update).
                                 blazer.gridX = playerState.x;
                                 blazer.gridY = playerState.y;
                             }
