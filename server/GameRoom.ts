@@ -822,18 +822,18 @@ export class GameRoom extends Room<{ state: GameState }> {
             // Check power-up seeking first
             move = this.seekPowerUpIfThreatened(sessionId, player, open);
             if (!move) {
-                const myDist = this.distanceMap[this.idx(player.x, player.y)];
+                const aiDist = this.distanceMap[this.idx(player.x, player.y)];
                 const gd = this.guesserData.get(sessionId);
                 const atTarget = !gd || (player.x === gd.target.x && player.y === gd.target.y);
 
                 if (atTarget && gd && !gd.reachedFirst) gd.reachedFirst = true;
 
-                const useGoal = myDist <= this.cols * 2 || (gd?.reachedFirst ?? true);
+                const useGoal = aiDist <= this.cols * 2 || (gd?.reachedFirst ?? true);
                 if (useGoal) {
                     // Navigate toward star
                     for (const n of open) {
                         const d = this.distanceMap[this.idx(n.x, n.y)];
-                        if (d < myDist && (!move || d < this.distanceMap[this.idx(move.x, move.y)])) move = n;
+                        if (d < aiDist && (!move || d < this.distanceMap[this.idx(move.x, move.y)])) move = n;
                     }
                 } else if (gd && !atTarget) {
                     // Navigate toward random target
@@ -846,14 +846,14 @@ export class GameRoom extends Room<{ state: GameState }> {
             }
 
         } else if (behavior === "chaotic") {
-            const myDist = this.distanceMap[this.idx(player.x, player.y)];
+            const aiDist = this.distanceMap[this.idx(player.x, player.y)];
             const hasPowerUps = this.state.powerUps.length > 0;
-            const useGoal = myDist <= this.cols * 2 || !hasPowerUps;
+            const useGoal = aiDist <= this.cols * 2 || !hasPowerUps;
 
             if (useGoal) {
                 for (const n of open) {
                     const d = this.distanceMap[this.idx(n.x, n.y)];
-                    if (d < myDist && (!move || d < this.distanceMap[this.idx(move.x, move.y)])) move = n;
+                    if (d < aiDist && (!move || d < this.distanceMap[this.idx(move.x, move.y)])) move = n;
                 }
             } else {
                 // Seek the closest power-up (any type); cache target until picked up
