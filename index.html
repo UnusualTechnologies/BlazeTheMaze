@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.255</div>
+    <div id="version-number">v1.5.256</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -4560,6 +4560,16 @@
                 roundTimes = [];
                 matchTime = 0;
                 achRoundRocketHit = false;
+                // Snap blazers to spawn before the state patch arrives (same fix as round_reset)
+                const _mmX = Math.floor(cols / 2), _mmY = Math.floor(rows / 2);
+                const _mSpawn = [
+                    { x: 0, y: 0 }, { x: cols-1, y: 0 }, { x: 0, y: rows-1 }, { x: cols-1, y: rows-1 },
+                    { x: _mmX, y: 0 }, { x: _mmX, y: rows-1 }, { x: 0, y: _mmY }, { x: cols-1, y: _mmY },
+                ];
+                blazers.forEach(blazer => {
+                    const sp = _mSpawn[blazer.slotIndex];
+                    if (sp) { blazer.gridX = sp.x; blazer.gridY = sp.y; blazer.updatePixelPos(true); }
+                });
                 blazers.forEach(resetBlazerInputState);
 
                 if (pmJoinIntent) {
@@ -4655,6 +4665,29 @@
             room.onMessage("round_reset", () => {
                 gridNeedsSync = true; // new maze incoming with next state patch
                 if (roundFlashStart === null) roundFlashStart = performance.now(); // failsafe if msg arrives before countdown
+
+                // Snap every blazer to its spawn position immediately, before the server state
+                // patch (which carries the new spawn positions) arrives 1–2 ticks later.
+                // Without this, blazers sit at their end-of-round positions until the patch
+                // lands, which triggers a large-displacement teleport animation at the very
+                // start of the round — making it look like the player is being snapped back.
+                // Spawn positions are deterministic (same formula as the server's getSpawnPosition).
+                const _smX = Math.floor(cols / 2), _smY = Math.floor(rows / 2);
+                const _spawnPos = [
+                    { x: 0,        y: 0        }, // slot 0 — top-left
+                    { x: cols - 1, y: 0        }, // slot 1 — top-right
+                    { x: 0,        y: rows - 1 }, // slot 2 — bottom-left
+                    { x: cols - 1, y: rows - 1 }, // slot 3 — bottom-right
+                    { x: _smX,     y: 0        }, // slot 4 — mid top
+                    { x: _smX,     y: rows - 1 }, // slot 5 — mid bottom
+                    { x: 0,        y: _smY     }, // slot 6 — mid left
+                    { x: cols - 1, y: _smY     }, // slot 7 — mid right
+                ];
+                blazers.forEach(blazer => {
+                    const sp = _spawnPos[blazer.slotIndex];
+                    if (sp) { blazer.gridX = sp.x; blazer.gridY = sp.y; blazer.updatePixelPos(true); }
+                });
+
                 blazers.forEach(resetBlazerInputState);
                 initRound();
             });
