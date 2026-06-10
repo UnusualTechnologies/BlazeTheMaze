@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.259</div>
+    <div id="version-number">v1.5.260</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -4354,16 +4354,18 @@
 
                         // During the movement lock the local player hasn't sent any moves yet,
                         // so the server position is authoritative and we should stay in sync.
-                        // After the lock expires, client prediction takes over and we skip small
-                        // server corrections to avoid jitter from stale broadcasts.
-                        const _moveLocked = performance.now() < roundMoveLockEnd;
+                        // We extend this silent-sync window 1 s past lock expiry to absorb any
+                        // Colyseus state patches that were generated during the lock (showing spawn)
+                        // but arrive late — those stale patches would otherwise trigger a false
+                        // large-displacement snap once the player has moved 2+ cells away.
+                        const _moveGrace = performance.now() < roundMoveLockEnd + 1000;
 
                         // If player position changed drastically, trigger teleport animation
                         if (Math.abs(blazer.gridX - playerState.x) > 1 || Math.abs(blazer.gridY - playerState.y) > 1) {
-                            if (_moveLocked && (isLocal || blazer.isSecondaryLocal)) {
-                                // During the lock, silently snap — the blazer drifted (e.g. the player
-                                // was holding a key that processed client-side during the countdown)
-                                // but no moves were accepted by the server, so trust the server.
+                            if (_moveGrace && (isLocal || blazer.isSecondaryLocal)) {
+                                // During the lock + grace window, silently snap — the server
+                                // position may be a stale lock-era broadcast (player still at spawn)
+                                // rather than a real server-side teleport.  No animation or sound.
                                 blazer.gridX = playerState.x;
                                 blazer.gridY = playerState.y;
                                 blazer.updatePixelPos(true);
@@ -4391,8 +4393,8 @@
                             // so its canMove() checks are always correct. Applying server state here
                             // causes jitter because stale ticks (broadcast before the server processed
                             // the latest move) temporarily snap the player back one cell.
-                            // Exception: during the movement lock, sync the local player too so that
-                            // position is guaranteed correct when the lock expires.
+                            // Exception: during the lock + grace window, sync the local player too
+                            // so position is correct at lock expiry and stale patches are absorbed.
                             if (!isLocal && !blazer.isSecondaryLocal) {
                                 const rdx = playerState.x - blazer.gridX;
                                 const rdy = playerState.y - blazer.gridY;
@@ -4402,9 +4404,9 @@
                                 }
                                 blazer.gridX = playerState.x;
                                 blazer.gridY = playerState.y;
-                            } else if (_moveLocked) {
-                                // Lock period: keep local player synced (no jitter risk — player
-                                // can't be sending moves that would race with this update).
+                            } else if (_moveGrace) {
+                                // Lock + grace window: keep local player synced (no jitter risk
+                                // during lock; stale patches during grace are harmless to absorb).
                                 blazer.gridX = playerState.x;
                                 blazer.gridY = playerState.y;
                             }
