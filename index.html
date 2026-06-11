@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.286</div>
+    <div id="version-number">v1.5.288</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -4781,6 +4781,14 @@
                     me.targetGridX = data.x;
                     me.targetGridY = data.y;
                 }
+            });
+
+            // Authoritative movement unlock. The server sends this exactly when the round-start
+            // lock expires. Client and server use different clocks (Date.now vs performance.now)
+            // and network delay creates skew, so the client can't rely on a hard-coded timer.
+            // This message is the source of truth: movement is now legal.
+            room.onMessage("movement_unlock", () => {
+                roundMoveLockEnd = performance.now(); // expire the lock immediately
             });
 
             room.onMessage("round_reset", () => {

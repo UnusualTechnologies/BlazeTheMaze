@@ -228,6 +228,14 @@ export class GameRoom extends Room<{ state: GameState }> {
         // Log Round 1 assignments (subsequent rounds log via resetRound)
         this.logRoundStart();
 
+        // Schedule movement unlock broadcast. Client and server use different clocks
+        // (Date.now vs performance.now) and network delay creates skew, so the client
+        // can't safely rely on a hard-coded timer. Instead, the server sends an explicit
+        // "unlock" message when the lock expires, and the client respects that.
+        this.clock.setTimeout(() => {
+            this.broadcast("movement_unlock");
+        }, GameRoom.MOVE_LOCK_MS);
+
         if (options.isPrivate) this.setPrivate(true);
 
         // 100 ms tick — AI moves every 300–600 ms so 60 fps server ticks are pointless overhead
@@ -1367,6 +1375,11 @@ export class GameRoom extends Room<{ state: GameState }> {
         this.spawnPowerUps(this.spawnOptions);
         this.state.timer = 0;
         this.roundStartMs = Date.now();
+
+        // Schedule movement unlock broadcast (same as initMatch)
+        this.clock.setTimeout(() => {
+            this.broadcast("movement_unlock");
+        }, GameRoom.MOVE_LOCK_MS);
     }
 
     getSpawnPosition(slotIndex: number): { x: number; y: number } {
