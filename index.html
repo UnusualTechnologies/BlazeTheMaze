@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.290</div>
+    <div id="version-number">v1.5.295</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2793,6 +2793,7 @@
                 if (elapsed >= MATCH_END_WAIT) {
                     clearInterval(matchEndTimerInterval);
                     matchEndTimerInterval = null;
+                    if (btn && !pmJoinIntent) btn.style.display = 'none';
                 }
             }, 100);
         }
