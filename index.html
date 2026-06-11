@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.302</div>
+    <div id="version-number">v1.5.303</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1187,9 +1187,16 @@
         // Sync button visuals immediately so muted state is shown before any interaction.
         Synth._syncButtons();
 
-        // Start menu music on the very first user interaction (browsers block autoplay until then).
-        // Uses capture so it fires before any button handlers; once:true removes it immediately after.
-        // On web with no saved preference, also unmutes so clicking anywhere "starts" audio.
+        // Returning users (saved pref = unmuted): attempt autoplay immediately.
+        // Browsers remember the site and usually allow it; if blocked it fails silently
+        // and the first-interaction handler below picks it up instead.
+        if (!_webDefaultMuted && !Synth.isMusicMuted) {
+            Synth.init();
+            Synth.startMenuMusic();
+        }
+
+        // First user interaction: needed to unlock audio on fresh visits (web autoplay rules).
+        // Also handles new web visitors who need to click to opt in to audio.
         document.addEventListener('pointerdown', function _firstInteraction() {
             Synth.init();
             if (_webDefaultMuted) {
