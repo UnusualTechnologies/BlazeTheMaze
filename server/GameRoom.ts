@@ -268,7 +268,15 @@ export class GameRoom extends Room<{ state: GameState }> {
                 if (!player || player.isAI) return;
                 // Rate limit: max 20 moves/sec per client
                 const now = Date.now();
-                if (now - this.roundStartMs < GameRoom.MOVE_LOCK_MS) return;
+                if (now - this.roundStartMs < GameRoom.MOVE_LOCK_MS) {
+                    // Move arrived during the round-start lock window. Silently dropping it
+                    // desyncs the client: it predicted the move locally and gets no rejection,
+                    // so its position runs ahead of the server's (still at spawn). Every later
+                    // move is then a multi-cell jump → rejected → snap-back. Tell the client
+                    // its authoritative position so it stays pinned to spawn until truly unlocked.
+                    try { client.send("move_reject", { x: player.x, y: player.y }); } catch (_) {}
+                    return;
+                }
                 if (now < (this.frozenPlayers.get(client.sessionId) ?? 0)) return; // frozen
                 if (!this.allowMove(client.sessionId, now)) return; // burst-tolerant rate limit
                 // Validate the move is a single legal step: in-bounds, exactly one
@@ -276,6 +284,9 @@ export class GameRoom extends Room<{ state: GameState }> {
                 // and wall-hacking from modified clients.
                 if (!this.isLegalStep(player, message?.x, message?.y)) {
                     console.warn(`Illegal move from ${client.sessionId}: ${JSON.stringify(message)} (server: from (${player.x},${player.y}), round=${this.roundCount}, gridGen=${this.state.gridGeneration})`);
+                    // Authoritative correction: snap the client back to the server's real
+                    // position so a single bad move can't cascade into an 8-move drift.
+                    try { client.send("move_reject", { x: player.x, y: player.y }); } catch (_) {}
                     return;
                 }
                 this.lastInputTime.set(client.sessionId, now);

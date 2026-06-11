@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.285</div>
+    <div id="version-number">v1.5.286</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -4739,7 +4739,6 @@
                 if (!data || !Array.isArray(data.walls)) return;
                 const newCols = data.cols, newRows = data.rows;
                 if (data.walls.length !== newCols * newRows) return; // ignore malformed payloads
-                console.log(`[grid_sync] Received gen=${data.gen}, blazer0=(${blazers[0]?.gridX},${blazers[0]?.gridY})`);
                 cols = newCols;
                 rows = newRows;
                 const newGrid = [];
@@ -4762,8 +4761,29 @@
                 mazeCacheValid = false;
             });
 
+            // Authoritative move correction. The server sends this whenever it drops or
+            // rejects one of our moves (round-start lock window, illegal step, etc.). Without
+            // it, the client keeps predicting forward while the server stays put — the position
+            // drifts ahead by a cell per dropped move until sentMoves overflows (>8) and snaps
+            // back to spawn. Snapping on the FIRST rejection kills that cascade at the source.
+            room.onMessage("move_reject", (data) => {
+                if (!data || typeof data.x !== 'number') return;
+                const me = blazers.find(b => b.sessionId === room.sessionId);
+                if (!me) return;
+                // Only correct if we've actually drifted off the server's truth. Discard any
+                // in-flight predictions and snap to the authoritative cell; the render loop
+                // lerps the pixel position so this reads as a quick tug-back, not a jump.
+                if (me.gridX !== data.x || me.gridY !== data.y) {
+                    me.sentMoves = [];
+                    me.turnIntent = null;
+                    me.gridX = data.x;
+                    me.gridY = data.y;
+                    me.targetGridX = data.x;
+                    me.targetGridY = data.y;
+                }
+            });
+
             room.onMessage("round_reset", () => {
-                console.log(`[round_reset] Received, blazer0 before snap=(${blazers[0]?.gridX},${blazers[0]?.gridY})`);
                 if (roundFlashStart === null) roundFlashStart = performance.now(); // failsafe if msg arrives before countdown
                 // The new maze arrives authoritatively via the "grid_sync" message that the
                 // server broadcasts immediately after this (from generateMaze()). No need to
