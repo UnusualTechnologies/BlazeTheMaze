@@ -237,7 +237,6 @@ export class GameRoom extends Room<{ state: GameState }> {
         // can't safely rely on a hard-coded timer. Instead, the server sends an explicit
         // "unlock" message when the lock expires, and the client respects that.
         this.clock.setTimeout(() => {
-            console.log(`[movement_unlock] broadcast (round 1, ${Date.now() - this.roundStartMs}ms after round start)`);
             this.broadcast("movement_unlock");
         }, GameRoom.MOVE_LOCK_MS);
 
@@ -318,13 +317,14 @@ export class GameRoom extends Room<{ state: GameState }> {
                     this.moveRejectCounts.set(client.sessionId, rj);
                     return;
                 }
-                // Move accepted. If this client had moves dropped/rejected this round, log a
-                // one-line recovery summary so we can confirm the cascade is gone (expect small
-                // counts, not the old 8+ illegal march), then clear the counter.
-                if (rj.lockDrops > 0 || rj.illegal > 0) {
+                // Move accepted. If this client hit the round-start lock window this round,
+                // log a one-line recovery summary (canary — should be rare/zero now that the
+                // grace tolerance is in place), then clear the counter. Mid-round illegals from
+                // power-up teleports are already logged individually above, so don't double-log.
+                if (rj.lockDrops > 0) {
                     console.log(`[move_reject] ${client.sessionId} recovered: accepted move to ${JSON.stringify(message)} after ${rj.lockDrops} lock-drop(s) + ${rj.illegal} illegal this round`);
-                    this.moveRejectCounts.delete(client.sessionId);
                 }
+                if (rj.lockDrops > 0 || rj.illegal > 0) this.moveRejectCounts.delete(client.sessionId);
                 this.lastInputTime.set(client.sessionId, now);
                 player.x = message.x;
                 player.y = message.y;
@@ -1332,7 +1332,6 @@ export class GameRoom extends Room<{ state: GameState }> {
             this.aiCooldowns.set(sessionId, 0);
             if (player.isAI) this.initAIState(sessionId, player);
         });
-        console.log(`[resetRound] Player positions set: ${Array.from(this.state.players.entries()).map(([sid, p]) => `${sid}@slot${p.slotIndex}=(${p.x},${p.y})`).join(', ')}`);
     }
 
     logRoundStart() {
@@ -1394,7 +1393,6 @@ export class GameRoom extends Room<{ state: GameState }> {
 
         // Schedule movement unlock broadcast (same as initMatch)
         this.clock.setTimeout(() => {
-            console.log(`[movement_unlock] broadcast (round ${this.roundCount + 1}, ${Date.now() - this.roundStartMs}ms after round start)`);
             this.broadcast("movement_unlock");
         }, GameRoom.MOVE_LOCK_MS);
     }
