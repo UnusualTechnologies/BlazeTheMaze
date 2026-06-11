@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.299</div>
+    <div id="version-number">v1.5.300</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1035,9 +1035,14 @@
         }
 
         // --- BULLETPROOF AUDIO SYSTEM ---
+        // Default unmuted in Electron (no autoplay restrictions), muted on web.
+        // Saved preference in localStorage overrides the default.
+        const _isElectron = !!window.electronAPI;
+        const _savedMusicMuted = localStorage.getItem('blazeMusicMuted');
+        const _savedSfxMuted   = localStorage.getItem('blazeSfxMuted');
         const Synth = {
-            isMusicMuted: true,
-            isSfxMuted: true,
+            isMusicMuted: _savedMusicMuted !== null ? _savedMusicMuted === '1' : !_isElectron,
+            isSfxMuted:   _savedSfxMuted   !== null ? _savedSfxMuted   === '1' : !_isElectron,
             bgMusic:      new Audio('./assets/audio/music_game.ogg'),
             menuMusic:    new Audio('./assets/audio/music_menu.ogg'),
             tensionLoop:  new Audio('./assets/audio/music_tension.ogg'),
@@ -1166,10 +1171,12 @@
                         }
                     }
                 }
+                localStorage.setItem('blazeMusicMuted', this.isMusicMuted ? '1' : '0');
                 this._syncButtons();
             },
             toggleSfx() {
                 this.isSfxMuted = !this.isSfxMuted;
+                localStorage.setItem('blazeSfxMuted', this.isSfxMuted ? '1' : '0');
                 this._syncButtons();
             }
         };
