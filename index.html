@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.288</div>
+    <div id="version-number">v1.5.289</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2696,7 +2696,16 @@
             lastTime = performance.now();
             roundStartTime = performance.now();
             roundRingTime = performance.now();
-            const _lockDuration = (lockMs >= 0 && isFinite(lockMs)) ? lockMs : ROUND_START_MS * (2 / 3);
+            // Networked play: the SERVER decides exactly when movement unlocks (it sends a
+            // "movement_unlock" message when its lock expires). The client's local timer is only
+            // a failsafe in case that message is lost — so we set it LONGER than the server's lock
+            // (MOVE_LOCK_MS=3000) to guarantee the client never unlocks before the server. If the
+            // local timer fired first (even by ~13ms of clock skew), the player would move, get a
+            // move_reject, and snap back — the visible jump-back. Solo play has no server, so it
+            // keeps the original timer-based unlock.
+            const _networkedFailsafe = (ROUND_START_MS * (2 / 3)) + 1500; // 3000 server lock + 1500 latency margin
+            const _autoLock = room ? _networkedFailsafe : ROUND_START_MS * (2 / 3);
+            const _lockDuration = (lockMs >= 0 && isFinite(lockMs)) ? lockMs : _autoLock;
             roundMoveLockEnd = performance.now() + _lockDuration;
             roundUnlockFlashFired = (_lockDuration === 0); // no unlock flash if movement was never locked
             roundSonarsFired = 0;

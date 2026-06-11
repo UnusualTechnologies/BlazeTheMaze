@@ -532,6 +532,12 @@ export class GameRoom extends Room<{ state: GameState }> {
         if (this.roundOver && this.lastRoundWon) {
             client.send("round_won", this.lastRoundWon);
         }
+        // If this joiner arrived after the round-start lock window already elapsed, the
+        // scheduled movement_unlock broadcast has long fired. Send it directly so the
+        // client's buffered failsafe lock releases immediately instead of stalling.
+        if (Date.now() - this.roundStartMs >= GameRoom.MOVE_LOCK_MS) {
+            client.send("movement_unlock", {});
+        }
         console.log(`Client ${client.sessionId} assigned to slot ${assignedSlotIndex}`);
 
         // ── Telemetry: session start ───────────────────────────────────────────
