@@ -96,6 +96,9 @@ export class GameRoom extends Room<{ state: GameState }> {
     ownerSessionId: string = '';
     // Timestamp (Date.now()) when the current round started — AI and move messages are blocked
     roundStartMs: number = 0;
+    // Diagnostics: per-client count of moves dropped/rejected since the current round
+    // started, so the logs show reconciliation firing (and NOT cascading like before).
+    moveRejectCounts = new Map<string, { lockDrops: number; illegal: number }>();
     orbLeaderOnly: boolean = false;
     // Server-authoritative rockets. A rocket is spawned when a player collects a rocket
     // power-up; it walks the BFS path to the goal and teleports any non-owner it overlaps.
@@ -268,6 +271,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                 if (!player || player.isAI) return;
                 // Rate limit: max 20 moves/sec per client
                 const now = Date.now();
+                const rj = this.moveRejectCounts.get(client.sessionId) ?? { lockDrops: 0, illegal: 0 };
                 if (now - this.roundStartMs < GameRoom.MOVE_LOCK_MS) {
                     // Move arrived during the round-start lock window. Silently dropping it
                     // desyncs the client: it predicted the move locally and gets no rejection,
@@ -275,6 +279,11 @@ export class GameRoom extends Room<{ state: GameState }> {
                     // move is then a multi-cell jump → rejected → snap-back. Tell the client
                     // its authoritative position so it stays pinned to spawn until truly unlocked.
                     try { client.send("move_reject", { x: player.x, y: player.y }); } catch (_) {}
+                    rj.lockDrops++;
+                    this.moveRejectCounts.set(client.sessionId, rj);
+                    if (rj.lockDrops === 1) {
+                        console.log(`[move_reject] lock-drop for ${client.sessionId}: client tried ${JSON.stringify(message)} during lock (${Math.round(GameRoom.MOVE_LOCK_MS - (now - this.roundStartMs))}ms left), pinned to (${player.x},${player.y})`);
+                    }
                     return;
                 }
                 if (now < (this.frozenPlayers.get(client.sessionId) ?? 0)) return; // frozen
@@ -287,7 +296,16 @@ export class GameRoom extends Room<{ state: GameState }> {
                     // Authoritative correction: snap the client back to the server's real
                     // position so a single bad move can't cascade into an 8-move drift.
                     try { client.send("move_reject", { x: player.x, y: player.y }); } catch (_) {}
+                    rj.illegal++;
+                    this.moveRejectCounts.set(client.sessionId, rj);
                     return;
+                }
+                // Move accepted. If this client had moves dropped/rejected this round, log a
+                // one-line recovery summary so we can confirm the cascade is gone (expect small
+                // counts, not the old 8+ illegal march), then clear the counter.
+                if (rj.lockDrops > 0 || rj.illegal > 0) {
+                    console.log(`[move_reject] ${client.sessionId} recovered: accepted move to ${JSON.stringify(message)} after ${rj.lockDrops} lock-drop(s) + ${rj.illegal} illegal this round`);
+                    this.moveRejectCounts.delete(client.sessionId);
                 }
                 this.lastInputTime.set(client.sessionId, now);
                 player.x = message.x;
@@ -1282,6 +1300,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         this.state.timer = 0;
         this.roundStartMs = Date.now();
 
+        this.moveRejectCounts.clear(); // fresh per-round reconciliation diagnostics
         this.state.players.forEach((player, sessionId) => {
             const spawn = this.getSpawnPosition(player.slotIndex);
             player.x = spawn.x;
