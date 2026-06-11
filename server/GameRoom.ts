@@ -99,6 +99,11 @@ export class GameRoom extends Room<{ state: GameState }> {
     // Diagnostics: per-client count of moves dropped/rejected since the current round
     // started, so the logs show reconciliation firing (and NOT cascading like before).
     moveRejectCounts = new Map<string, { lockDrops: number; illegal: number }>();
+    // Tracks each player's cell before their most recent move — used for crossing/swap
+    // collision detection: if A moved X→Y and B moved Y→X in the same step, they passed
+    // through each other and should both be teleported even though they never occupied the
+    // same cell at the same server tick.
+    playerPrevPos = new Map<string, { x: number; y: number }>();
     orbLeaderOnly: boolean = false;
     // Server-authoritative rockets. A rocket is spawned when a player collects a rocket
     // power-up; it walks the BFS path to the goal and teleports any non-owner it overlaps.
@@ -326,6 +331,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                 }
                 if (rj.lockDrops > 0 || rj.illegal > 0) this.moveRejectCounts.delete(client.sessionId);
                 this.lastInputTime.set(client.sessionId, now);
+                this.playerPrevPos.set(client.sessionId, { x: player.x, y: player.y });
                 player.x = message.x;
                 player.y = message.y;
                 this.checkCollisions(player, client.sessionId);
@@ -352,6 +358,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                     return;
                 }
                 this.lastInputTime.set(client.sessionId, Date.now()); // host is active
+                this.playerPrevPos.set(aiId, { x: player.x, y: player.y });
                 player.x = x;
                 player.y = y;
                 this.checkCollisions(player, aiId);
@@ -597,6 +604,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         this.guesserData.delete(client.sessionId);
         this.aiPUTarget.delete(client.sessionId);
         this.aiCooldowns.delete(client.sessionId);
+        this.playerPrevPos.delete(client.sessionId);
 
         // ── Telemetry: session end ─────────────────────────────────────────────
         const _anal = this.clientAnalytics.get(client.sessionId);
@@ -989,6 +997,7 @@ export class GameRoom extends Room<{ state: GameState }> {
 
         // Remember where the player was before this move (for random anti-backtrack next tick)
         this.aiLastPos.set(sessionId, { x: player.x, y: player.y });
+        this.playerPrevPos.set(sessionId, { x: player.x, y: player.y });
 
         player.x = move.x;
         player.y = move.y;
@@ -1239,6 +1248,26 @@ export class GameRoom extends Room<{ state: GameState }> {
                     this.teleportPlayer(other, `collision-with-slot${player.slotIndex}`);
                 }
             });
+
+            // Crossing/swap collision: two players who swapped cells in the same step never
+            // share a cell at any server tick, so the check above misses them entirely.
+            // Example: human at A moves A→B while AI at B moves B→A — they pass through
+            // each other. Detect by comparing each player's previous position against the
+            // mover's current and previous cells.
+            const prev = this.playerPrevPos.get(sessionId);
+            if (prev) {
+                this.state.players.forEach((other, sid) => {
+                    if (sid === sessionId) return;
+                    const otherPrev = this.playerPrevPos.get(sid);
+                    if (!otherPrev) return;
+                    // other is now at mover's previous cell AND came from mover's current cell
+                    if (other.x === prev.x && other.y === prev.y &&
+                        otherPrev.x === movedToX && otherPrev.y === movedToY) {
+                        this.teleportPlayer(player, `crossing-slot${other.slotIndex}`);
+                        this.teleportPlayer(other, `crossing-slot${player.slotIndex}`);
+                    }
+                });
+            }
         }
 
         // Goal check
@@ -1325,6 +1354,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         this.roundStartMs = Date.now();
 
         this.moveRejectCounts.clear(); // fresh per-round reconciliation diagnostics
+        this.playerPrevPos.clear();    // stale crossing-detection data from previous round
         this.state.players.forEach((player, sessionId) => {
             const spawn = this.getSpawnPosition(player.slotIndex);
             player.x = spawn.x;
