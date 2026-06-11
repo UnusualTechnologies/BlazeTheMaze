@@ -1454,40 +1454,74 @@ export class GameRoom extends Room<{ state: GameState }> {
 
     teleportPlayer(player: Player, reason: string = "unknown") {
         const startX = player.x, startY = player.y;
-        let x = startX, y = startY;
-        const minDist = 15; // minimum BFS (maze-path) distance from start position
-        const minPlayerDist = 10; // minimum BFS distance from any other player
-        // BFS distance map from the player's current cell — respects walls
+
+        // Minimum BFS distance from the teleport source — scales with grid size so larger
+        // mazes feel proportionally displaced. 15 on a 15×15 grid, 20 on a 20×20, etc.
+        const minDist = Math.max(15, Math.max(this.cols, this.rows));
+        // Minimum BFS distance from any other player — keeps landing spots from being
+        // immediately adjacent to another player. Smaller than before (5 vs 10) so the
+        // player-proximity constraint doesn't dominate on crowded grids.
+        const minPlayerDist = 5;
+
+        // BFS from the player's current cell — used to enforce minDist.
         const fromStartDist = this.computeDistanceMap(startX, startY);
-        // Pre-compute BFS maps from every OTHER player so we can cheaply reject
-        // destinations that would land within minPlayerDist cells of anyone.
+        // BFS from every other player — used to enforce minPlayerDist.
         const otherPlayerMaps: number[][] = [];
-        this.state.players.forEach((p, sid) => {
+        this.state.players.forEach((p) => {
             if (p.x === startX && p.y === startY) return; // skip the player being teleported
             otherPlayerMaps.push(this.computeDistanceMap(p.x, p.y));
         });
-        const maxAttempts = this.cols * this.rows * 4;
-        let attempts = 0;
-        do {
-            x = Math.floor(Math.random() * this.cols);
-            y = Math.floor(Math.random() * this.rows);
-            attempts++;
-        } while (
-            attempts < maxAttempts &&
-            (
-                fromStartDist[this.idx(x, y)] < minDist ||  // too close to start via maze path
-                this.isReservedCell(x, y) ||
-                this.getDistance(x, y) <= 10 ||   // keep players away from the goal area
-                this.state.powerUps.some((pu: PowerUp) => pu.x === x && pu.y === y) ||
-                otherPlayerMaps.some(map => map[this.idx(x, y)] < minPlayerDist) // too close to another player
-            )
-        );
-        player.x = x;
-        player.y = y;
+
+        // Helper: does a cell pass a given constraint set?
+        const onPowerUp = (cx: number, cy: number) =>
+            this.state.powerUps.some((pu: PowerUp) => pu.x === cx && pu.y === cy);
+
+        // Build the full candidate list rather than retrying random positions — guarantees
+        // no silent fallthrough onto a power-up or invalid cell if the random loop exhausts.
+        const candidates: number[] = []; // flat indices for compact iteration
+        for (let cx = 0; cx < this.cols; cx++) {
+            for (let cy = 0; cy < this.rows; cy++) {
+                const i = this.idx(cx, cy);
+                if (fromStartDist[i] < minDist) continue;
+                if (this.isReservedCell(cx, cy)) continue;              // goal + spawn points
+                if (this.getDistance(cx, cy) <= 10) continue;           // too near the goal
+                if (onPowerUp(cx, cy)) continue;
+                if (otherPlayerMaps.some(m => m[i] < minPlayerDist)) continue;
+                candidates.push(i);
+            }
+        }
+
+        let destIdx = -1;
+        if (candidates.length > 0) {
+            destIdx = candidates[Math.floor(Math.random() * candidates.length)];
+        } else {
+            // Fallback: relax start-distance, goal-proximity, and player-proximity —
+            // but never land on a power-up or the goal cell itself.
+            const fallback: number[] = [];
+            for (let cx = 0; cx < this.cols; cx++) {
+                for (let cy = 0; cy < this.rows; cy++) {
+                    if (cx === this.state.goalX && cy === this.state.goalY) continue;
+                    if (onPowerUp(cx, cy)) continue;
+                    fallback.push(this.idx(cx, cy));
+                }
+            }
+            if (fallback.length > 0) {
+                destIdx = fallback[Math.floor(Math.random() * fallback.length)];
+                console.warn(`  TELEPORT fallback used for slot ${player.slotIndex} — full constraint list had no valid cells`);
+            }
+        }
+
+        if (destIdx >= 0) {
+            player.x = Math.floor(destIdx / this.rows);
+            player.y = destIdx % this.rows;
+        }
+        // If destIdx is still -1 (impossible in practice: would need every cell to be a
+        // power-up or the goal) the player stays put — better than corrupting state.
+
         // Authoritative teleport signal — the client plays the teleport animation when this
         // changes, rather than guessing from position displacement.
         player.teleportSeq = (player.teleportSeq + 1) & 0x7fffffff;
-        console.log(`  TELEPORT ${player.isAI ? 'AI' : 'HUMAN'} slot ${player.slotIndex} (${player.color})  (${startX},${startY}) → (${x},${y})  reason=${reason}  seq=${player.teleportSeq}`);
+        console.log(`  TELEPORT ${player.isAI ? 'AI' : 'HUMAN'} slot ${player.slotIndex} (${player.color})  (${startX},${startY}) → (${player.x},${player.y})  reason=${reason}  seq=${player.teleportSeq}`);
     }
 
     getDistance(x: number, y: number) {
