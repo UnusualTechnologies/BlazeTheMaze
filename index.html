@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.303</div>
+    <div id="version-number">v1.5.304</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1035,13 +1035,11 @@
         }
 
         // --- BULLETPROOF AUDIO SYSTEM ---
-        // Default unmuted in Electron (no autoplay restrictions), muted on web.
-        // Saved preference in localStorage overrides the default.
+        // Web: always starts muted — first click anywhere unmutes, then only buttons control it.
+        // Electron: starts unmuted (no autoplay restrictions); localStorage saves the preference.
         const _isElectron = !!window.electronAPI;
-        const _savedMusicMuted = localStorage.getItem('blazeMusicMuted');
-        const _savedSfxMuted   = localStorage.getItem('blazeSfxMuted');
-        // True when muted purely by web default (no saved preference) — first click will unmute.
-        const _webDefaultMuted = !_isElectron && _savedMusicMuted === null && _savedSfxMuted === null;
+        const _savedMusicMuted = _isElectron ? localStorage.getItem('blazeMusicMuted') : null;
+        const _savedSfxMuted   = _isElectron ? localStorage.getItem('blazeSfxMuted')   : null;
         const Synth = {
             isMusicMuted: _savedMusicMuted !== null ? _savedMusicMuted === '1' : !_isElectron,
             isSfxMuted:   _savedSfxMuted   !== null ? _savedSfxMuted   === '1' : !_isElectron,
@@ -1173,12 +1171,12 @@
                         }
                     }
                 }
-                localStorage.setItem('blazeMusicMuted', this.isMusicMuted ? '1' : '0');
+                if (_isElectron) localStorage.setItem('blazeMusicMuted', this.isMusicMuted ? '1' : '0');
                 this._syncButtons();
             },
             toggleSfx() {
                 this.isSfxMuted = !this.isSfxMuted;
-                localStorage.setItem('blazeSfxMuted', this.isSfxMuted ? '1' : '0');
+                if (_isElectron) localStorage.setItem('blazeSfxMuted', this.isSfxMuted ? '1' : '0');
                 this._syncButtons();
             }
         };
@@ -1187,27 +1185,21 @@
         // Sync button visuals immediately so muted state is shown before any interaction.
         Synth._syncButtons();
 
-        // Returning users (saved pref = unmuted): attempt autoplay immediately.
-        // Browsers remember the site and usually allow it; if blocked it fails silently
-        // and the first-interaction handler below picks it up instead.
-        if (!_webDefaultMuted && !Synth.isMusicMuted) {
+        if (_isElectron) {
+            // Electron: start menu music immediately — no autoplay restrictions.
             Synth.init();
             Synth.startMenuMusic();
-        }
-
-        // First user interaction: needed to unlock audio on fresh visits (web autoplay rules).
-        // Also handles new web visitors who need to click to opt in to audio.
-        document.addEventListener('pointerdown', function _firstInteraction() {
-            Synth.init();
-            if (_webDefaultMuted) {
+        } else {
+            // Web: always muted on load. First click anywhere unmutes and starts audio.
+            // After that, only the music/sfx buttons control the state.
+            document.addEventListener('pointerdown', function _firstInteraction() {
+                Synth.init();
                 Synth.isMusicMuted = false;
                 Synth.isSfxMuted   = false;
-                localStorage.setItem('blazeMusicMuted', '0');
-                localStorage.setItem('blazeSfxMuted',   '0');
                 Synth._syncButtons();
-            }
-            Synth.startMenuMusic();
-        }, { once: true, capture: true });
+                Synth.startMenuMusic();
+            }, { once: true, capture: true });
+        }
 
         const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
