@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.300</div>
+    <div id="version-number">v1.5.301</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1181,6 +1181,9 @@
             }
         };
         // --- END AUDIO SYSTEM ---
+
+        // Sync button visuals immediately so muted state is shown before any interaction.
+        Synth._syncButtons();
 
         // Start menu music on the very first user interaction (browsers block autoplay until then).
         // Uses capture so it fires before any button handlers; once:true removes it immediately after.
