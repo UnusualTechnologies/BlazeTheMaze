@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.296</div>
+    <div id="version-number">v1.5.297</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1042,41 +1042,93 @@
         const Synth = {
             isMusicMuted: true,
             isSfxMuted: true,
-            bgMusic: new Audio('./assets/audio/music.ogg'),
-            tensionLoop: new Audio('./assets/audio/music_tension.ogg'),
+            bgMusic:      new Audio('./assets/audio/music_game.ogg'),
+            menuMusic:    new Audio('./assets/audio/music_menu.ogg'),
+            tensionLoop:  new Audio('./assets/audio/music_tension.ogg'),
+            victoryMusic: new Audio('./assets/audio/music_victory.ogg'),
+            defeatMusic:  new Audio('./assets/audio/music_fail.ogg'),
             _tensionActive: false,
+            _menuMusicActive: false,
             init() {
                 this.bgMusic.loop = true;
                 this.bgMusic.volume = 0.4;
-                this.bgMusic.onerror = () => {
-                    if (typeof Sentry !== 'undefined') Sentry.captureMessage('Audio file missing: music.ogg', 'warning');
-                };
+                this._setupTrack(this.bgMusic, 'music_game.ogg');
+                this.menuMusic.loop = true;
+                this.menuMusic.volume = 0.35;
+                this._setupTrack(this.menuMusic, 'music_menu.ogg');
                 this.tensionLoop.loop = true;
                 this.tensionLoop.volume = 0;
-                this.tensionLoop.onerror = () => {
-                    if (typeof Sentry !== 'undefined') Sentry.captureMessage('Audio file missing: music_tension.ogg', 'warning');
-                };
+                this._setupTrack(this.tensionLoop, 'music_tension.ogg');
+                this._setupTrack(this.victoryMusic, 'music_victory.ogg');
+                this._setupTrack(this.defeatMusic, 'music_fail.ogg');
                 this._syncButtons();
+            },
+            _setupTrack(audio, filename) {
+                audio.onerror = () => {
+                    console.warn(`[Audio] Missing: ${filename}`);
+                    if (typeof Sentry !== 'undefined') Sentry.captureMessage(`Audio file missing: ${filename}`, 'warning');
+                };
             },
             _syncButtons() {
                 document.querySelectorAll('.music-btn').forEach(b => b.classList.toggle('muted', this.isMusicMuted));
                 document.querySelectorAll('.sfx-btn').forEach(b => b.classList.toggle('muted', this.isSfxMuted));
             },
-            playSound(filename) {
+            playSound(filename, volume = 0.6) {
                 if (this.isSfxMuted) return;
                 const audio = new Audio('./assets/audio/' + filename);
-                audio.volume = 0.6;
+                audio.volume = volume;
                 audio.onerror = () => {
+                    console.warn(`[Audio] Missing SFX: ${filename}`);
                     if (typeof Sentry !== 'undefined') Sentry.captureMessage(`Audio file missing: ${filename}`, 'warning');
                 };
                 audio.play().catch(() => {});
             },
-            turn(isPlayer) { if (isPlayer) this.playSound('turn.ogg'); },
-            bonk(isPlayer) { if (isPlayer) this.playSound('bonk.ogg'); },
-            zip() { this.playSound('zip.ogg'); },
-            glitch() { this.playSound('glitch.ogg'); },
-            win() { this.playSound('win.ogg'); },
+            // SFX triggers
+            turn(isPlayer)  { if (isPlayer) this.playSound('turn.ogg'); },
+            bonk(isPlayer)  { if (isPlayer) this.playSound('bonk.ogg'); },
+            zip()           { this.playSound('zip.ogg'); },
+            glitch()        { this.playSound('glitch.ogg'); },
+            win()           { this.playSound('win.ogg'); },
             rocketHitStar() { this.playSound('rocket_hit_star.ogg'); },
+            rocketLaunch()  { this.playSound('rocket_launch.ogg', 0.55); },
+            rocketHit()     { this.playSound('rocket_hit.ogg', 0.7); },
+            freezeCast()    { this.playSound('freeze_cast.ogg'); },
+            freezeThaw()    { this.playSound('freeze_thaw.ogg'); },
+            puPickupSelf()  { this.playSound('pu_pickup_self.ogg'); },
+            puPickupOpp()   { this.playSound('pu_pickup_opp.ogg'); },
+            puPickupMystery(){ this.playSound('pu_pickup_mystery.ogg'); },
+            countdownBeep() { this.playSound('countdown_beep.ogg', 0.5); },
+            roundStart()    { this.playSound('round_start.ogg'); },
+            roundWinSelf()  { this.playSound('round_win_self.ogg'); },
+            roundWinOther() { this.playSound('round_win_other.ogg'); },
+            matchWinSelf()  { this.playSound('match_win.ogg', 0.8); },
+            matchLoseSelf() { this.playSound('match_lose.ogg', 0.8); },
+            uiClick()       { this.playSound('ui_click.ogg', 0.4); },
+            playerJoin()    { this.playSound('player_join.ogg', 0.5); },
+            playerLeave()   { this.playSound('player_leave.ogg', 0.4); },
+            codeCopied()    { this.playSound('code_copied.ogg', 0.5); },
+            // Music control
+            startMenuMusic() {
+                this._menuMusicActive = true;
+                if (this.isMusicMuted) return;
+                this.menuMusic.currentTime = 0;
+                this.menuMusic.play().catch(() => {});
+            },
+            stopMenuMusic() {
+                this._menuMusicActive = false;
+                this.menuMusic.pause();
+                this.menuMusic.currentTime = 0;
+            },
+            playVictoryStinger() {
+                if (this.isMusicMuted) return;
+                this.victoryMusic.currentTime = 0;
+                this.victoryMusic.play().catch(() => {});
+            },
+            playDefeatStinger() {
+                if (this.isMusicMuted) return;
+                this.defeatMusic.currentTime = 0;
+                this.defeatMusic.play().catch(() => {});
+            },
             startTension() {
                 this._tensionActive = true;
                 if (this.isMusicMuted) return;
@@ -1103,12 +1155,17 @@
                 this.isMusicMuted = !this.isMusicMuted;
                 if (this.isMusicMuted) {
                     this.bgMusic.pause();
+                    this.menuMusic.pause();
                     this.tensionLoop.pause();
                 } else {
-                    this.bgMusic.play().catch(() => {});
-                    if (this._tensionActive) {
-                        this.tensionLoop.volume = 0.35;
-                        this.tensionLoop.play().catch(() => {});
+                    if (this._menuMusicActive) {
+                        this.menuMusic.play().catch(() => {});
+                    } else {
+                        this.bgMusic.play().catch(() => {});
+                        if (this._tensionActive) {
+                            this.tensionLoop.volume = 0.35;
+                            this.tensionLoop.play().catch(() => {});
+                        }
                     }
                 }
                 this._syncButtons();
@@ -1237,6 +1294,7 @@
         let roundTimes = [];
         let matchEndTimerInterval = null;
         let pmJoinIntent = false; // true when user clicks the "join next game" button
+        let _lastCountdownBeepSec = -1;
         const ROUND_START_MS = 4500;   // total ring animation duration — pulse 3 fires at exactly 3s (4500 * 2/3 = 3000ms)
         let roundRingTime = null;      // set every round; drives ring, labels, and movement lock
         let roundSonarsFired = 0;      // how many goal-sonar pings have fired this round-start
@@ -1775,6 +1833,7 @@
                             if (b.sessionId === this.ownerSessionId) return; // activator is immune
                             this.hitTargets.add(b.sessionId);
                             screenShake = 10;
+                            Synth.rocketHit();
                             for(let i=0; i<15; i++) { if (particles.length < 200) particles.push(new Particle(this.pixelX, this.pixelY, this.color)); }
                             // The hit/teleport is resolved server-side (the server simulates the
                             // rocket); onStateChange drives the victim's teleport visual. We only
@@ -1979,6 +2038,11 @@
 
             update(dt) {
                 const now = performance.now();
+
+                // Detect freeze thaw for local player
+                const _nowFrozen = this.frozenUntil > 0 && Date.now() < this.frozenUntil;
+                if (this.isPlayer && this.isActuallyLocal() && this._wasFrozen && !_nowFrozen) Synth.freezeThaw();
+                this._wasFrozen = _nowFrozen;
 
                 if (this.isPlayer && this.state === 'normal' && this.isActuallyLocal() && now >= roundMoveLockEnd && Date.now() >= this.frozenUntil) {
                     // Pick up any live speed change from the lobby dropdown
@@ -2709,6 +2773,9 @@
             roundMoveLockEnd = performance.now() + _lockDuration;
             roundUnlockFlashFired = (_lockDuration === 0); // no unlock flash if movement was never locked
             roundSonarsFired = 0;
+            _lastCountdownBeepSec = -1;
+            Synth.stopMenuMusic();
+            Synth.roundStart();
             Synth.muffle(false);
         }
 
@@ -2826,7 +2893,8 @@
             initialMenu.classList.remove('hidden');
             Synth.stopTension();
             Synth.muffle(true);
-            
+            Synth.startMenuMusic();
+
             generateMaze();
             blazers = [];
             powerUps = [];
@@ -3634,6 +3702,10 @@
             if (gameState === 'ROUND_OVER_COUNTDOWN') {
                 roundCountdown -= dt;
                 const secondsLeft = Math.ceil(roundCountdown / 1000);
+                if (secondsLeft !== _lastCountdownBeepSec && secondsLeft >= 1 && secondsLeft <= 3) {
+                    _lastCountdownBeepSec = secondsLeft;
+                    Synth.countdownBeep();
+                }
 
                 ctx.save();
 
@@ -4084,6 +4156,7 @@
             const text = el?.tagName === 'INPUT' ? el.value : el?.innerText;
             if (!el || !text) return;
             navigator.clipboard?.writeText(text).catch(() => {});
+            Synth.codeCopied();
             el.classList.add('copied-flash');
             setTimeout(() => el.classList.remove('copied-flash'), 800);
         });
@@ -4092,6 +4165,9 @@
         document.addEventListener('click', e => {
             if (e.target.closest('.music-btn')) { e.target.closest('.music-btn').blur(); Synth.toggleMusic(); }
             else if (e.target.closest('.sfx-btn')) { e.target.closest('.sfx-btn').blur(); Synth.toggleSfx(); }
+            else if (e.target.closest('.action-btn, .menu-btn, .back-btn, .lobby-back-btn, #start-btn, #menu-btn, #pm-next-game-btn')) {
+                Synth.uiClick();
+            }
         });
 
         // Menu Navigation
@@ -4311,6 +4387,22 @@
                 prevPowerUps.forEach(prev => {
                     if (powerUps.some(p => p.x === prev.x && p.y === prev.y)) return; // still exists
 
+                    // Identify the collector (player standing on the pickup cell)
+                    let collectorIsLocal = false;
+                    let collectorSid = null;
+                    state.players.forEach((ps, sid) => {
+                        if (ps.x === prev.x && ps.y === prev.y) {
+                            collectorSid = sid;
+                            if (sid === room.sessionId) collectorIsLocal = true;
+                        }
+                    });
+
+                    // PU pickup sounds — only for the local collector
+                    if (collectorIsLocal) {
+                        if (prev.type === 'opponents') Synth.puPickupOpp();
+                        else if (prev.type === 'self')  Synth.puPickupSelf();
+                    }
+
                     if (prev.type === 'opponents') {
                         // Burst animation for orb collection
                         let hitColor = null;
@@ -4332,7 +4424,6 @@
                         // Use a position-based ID so all clients produce the same dedup key for rocket_hit.
                         const rocketId = `r${prev.x}-${prev.y}`;
                         if (!rockets.some(r => r.id === rocketId)) {
-                            // Find the collector's color and sessionId (player standing on the pickup cell)
                             let collectorColor = '#ff6600';
                             let collectorSessionId = null;
                             state.players.forEach((ps, sid) => {
@@ -4341,6 +4432,7 @@
                                     collectorSessionId = sid;
                                 }
                             });
+                            if (collectorSessionId === room.sessionId) Synth.rocketLaunch();
                             rockets.push(new Rocket(prev.x, prev.y, collectorColor, rocketId, collectorSessionId));
                         }
                     }
@@ -4491,6 +4583,9 @@
                     scores[wId] = state.lastWinnerScore;
                     updateScoreboard();
                     if (state.matchOver) {
+                        const _catchupWinner = blazers.find(b => b.id === wId);
+                        if (_catchupWinner?.isLocal) { Synth.matchWinSelf(); Synth.playVictoryStinger(); }
+                        else { Synth.matchLoseSelf(); Synth.playDefeatStinger(); }
                         gameState = 'MATCH_OVER';
                         Synth.stopTension();
                         Synth.muffle(true);
@@ -4543,7 +4638,14 @@
                     scores[winnerId] = winnerScore;
                     updateScoreboard();
 
-                    if (winnerBlazer?.isLocal) Synth.win();
+                    if (winnerBlazer?.isLocal) {
+                        Synth.win();
+                        Synth.matchWinSelf();
+                        Synth.playVictoryStinger();
+                    } else {
+                        Synth.matchLoseSelf();
+                        Synth.playDefeatStinger();
+                    }
                     Synth.stopTension();
                     Synth.muffle(true);
                     gameState = 'MATCH_OVER';
@@ -4585,6 +4687,8 @@
                     // Score stays at oldScore visually until the animation lands (at 2 s).
                     // onStateChange is guarded to skip syncing this player during the window.
                     if (winnerScore === WINS_TO_MATCH - 1) Synth.startTension();
+                    if (winnerBlazer?.isLocal) Synth.roundWinSelf();
+                    else Synth.roundWinOther();
                     gameState = 'ROUND_OVER_COUNTDOWN';
                     currentWinner = winnerBlazer || { id: winnerId, color: winnerColor };
                     roundCountdown = 3000;
@@ -4710,6 +4814,7 @@
             });
 
             room.onMessage("freeze", ({ collectorSessionId, duration }) => {
+                if (collectorSessionId === room.sessionId) Synth.freezeCast();
                 const freezeUntil = Date.now() + duration;
                 blazers.forEach(b => {
                     if (b.sessionId !== collectorSessionId) b.frozenUntil = freezeUntil;
@@ -4722,6 +4827,10 @@
             });
 
             room.onMessage("mystery_resolved", ({ x, y, resolvedType, collectorSessionId }) => {
+                if (collectorSessionId === room.sessionId) {
+                    Synth.puPickupMystery();
+                    if (resolvedType === 'rocket') Synth.rocketLaunch();
+                }
                 if (resolvedType === 'rocket') {
                     const rocketId = `mr${x}-${y}`; // "mr" prefix avoids collision with normal rocket pickup ids
                     if (!rockets.some(r => r.id === rocketId)) {
