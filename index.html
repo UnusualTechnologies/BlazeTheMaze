@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.289</div>
+    <div id="version-number">v1.5.290</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -4835,7 +4835,6 @@
                         blazer.sentMoves = []; // discard stale predictions from last round
                     }
                 });
-                console.log(`[round_reset] After snap: blazer0=(${blazers[0]?.gridX},${blazers[0]?.gridY}), gridGen=${lastGridGeneration}, cols=${cols}, rows=${rows}`);
 
                 blazers.forEach(resetBlazerInputState);
                 initRound();

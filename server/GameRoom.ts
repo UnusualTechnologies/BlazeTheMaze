@@ -111,6 +111,10 @@ export class GameRoom extends Room<{ state: GameState }> {
     static readonly WINS_TO_MATCH   = 3;               // rounds needed to win a match
     static readonly IDLE_TIMEOUT_MS = 3 * 60 * 1000;  // 3 minutes
     static readonly MOVE_LOCK_MS    = 3000;            // movement blocked at round start — matches client pulse-3 unlock (4500ms * 2/3)
+    static readonly MOVE_LOCK_GRACE_MS = 200;          // tolerance at the tail of the lock: a legal single-step move arriving
+                                                       // in the final 200ms is accepted, not dropped. Absorbs small client/server
+                                                       // clock skew (~13–30ms observed) so a player who unlocks a hair early
+                                                       // isn't snapped back. Grid is long-synced by this point, so it's safe.
     static readonly MOVE_REFILL_MS  = 50;              // one move token regenerates every 50ms → 20 moves/sec sustained
     static readonly MOVE_BURST      = 8;               // max moves accepted back-to-back — absorbs network jitter without dropping
     static readonly ROCKET_STEP_MS  = 50;              // ms per rocket cell — mirrors the client rocket's moveInterval
@@ -233,6 +237,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         // can't safely rely on a hard-coded timer. Instead, the server sends an explicit
         // "unlock" message when the lock expires, and the client respects that.
         this.clock.setTimeout(() => {
+            console.log(`[movement_unlock] broadcast (round 1, ${Date.now() - this.roundStartMs}ms after round start)`);
             this.broadcast("movement_unlock");
         }, GameRoom.MOVE_LOCK_MS);
 
@@ -280,7 +285,12 @@ export class GameRoom extends Room<{ state: GameState }> {
                 // Rate limit: max 20 moves/sec per client
                 const now = Date.now();
                 const rj = this.moveRejectCounts.get(client.sessionId) ?? { lockDrops: 0, illegal: 0 };
-                if (now - this.roundStartMs < GameRoom.MOVE_LOCK_MS) {
+                const lockElapsed = now - this.roundStartMs;
+                // Hard lock for the bulk of the window; grace tolerance at the tail. A move in the
+                // final GRACE ms is allowed through to normal validation (must still be a legal
+                // single step) rather than dropped — this is what stops the round-start jump-back
+                // for clients whose unlock fires a few ms before the server's.
+                if (lockElapsed < GameRoom.MOVE_LOCK_MS - GameRoom.MOVE_LOCK_GRACE_MS) {
                     // Move arrived during the round-start lock window. Silently dropping it
                     // desyncs the client: it predicted the move locally and gets no rejection,
                     // so its position runs ahead of the server's (still at spawn). Every later
@@ -290,7 +300,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                     rj.lockDrops++;
                     this.moveRejectCounts.set(client.sessionId, rj);
                     if (rj.lockDrops === 1) {
-                        console.log(`[move_reject] lock-drop for ${client.sessionId}: client tried ${JSON.stringify(message)} during lock (${Math.round(GameRoom.MOVE_LOCK_MS - (now - this.roundStartMs))}ms left), pinned to (${player.x},${player.y})`);
+                        console.log(`[move_reject] lock-drop for ${client.sessionId}: client tried ${JSON.stringify(message)} during lock (${Math.round(GameRoom.MOVE_LOCK_MS - lockElapsed)}ms left), pinned to (${player.x},${player.y})`);
                     }
                     return;
                 }
@@ -1384,6 +1394,7 @@ export class GameRoom extends Room<{ state: GameState }> {
 
         // Schedule movement unlock broadcast (same as initMatch)
         this.clock.setTimeout(() => {
+            console.log(`[movement_unlock] broadcast (round ${this.roundCount + 1}, ${Date.now() - this.roundStartMs}ms after round start)`);
             this.broadcast("movement_unlock");
         }, GameRoom.MOVE_LOCK_MS);
     }
