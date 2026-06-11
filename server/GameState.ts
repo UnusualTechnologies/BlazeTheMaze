@@ -53,8 +53,9 @@ export class GameState extends Schema {
     @type("string") lastWinnerColor: string = "";
     @type("number") lastWinnerScore: number = 0;
     // Increments every time the maze is regenerated (new round / match reset).
-    // The client watches this to know when to rebuild its local grid — avoids
-    // the race where the new-maze state patch arrives before the round_reset
-    // message sets gridNeedsSync=true.
+    // The authoritative grid is delivered to clients via the reliable "grid_sync"
+    // message (see GameRoom.broadcastGridSync); this counter is the fallback signal
+    // the client's onStateChange uses to rebuild from schema state if a grid_sync was
+    // ever missed (e.g. reconnection), so the two paths don't double-rebuild.
     @type("number") gridGeneration: number = 0;
 }
