@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.298</div>
+    <div id="version-number">v1.5.299</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1106,6 +1106,7 @@
             // Music control
             startMenuMusic() {
                 this._menuMusicActive = true;
+                this.bgMusic.pause(); // stop game music underneath
                 if (this.isMusicMuted) return;
                 this.menuMusic.currentTime = 0;
                 this.menuMusic.play().catch(() => {});
@@ -1139,6 +1140,7 @@
                 this.tensionLoop.volume = 0;
             },
             startMusic() {
+                this.stopMenuMusic(); // stop menu music before game music starts
                 if (!this.isMusicMuted) {
                     this.bgMusic.play().catch(() => {});
                 }
@@ -1172,6 +1174,13 @@
             }
         };
         // --- END AUDIO SYSTEM ---
+
+        // Start menu music on the very first user interaction (browsers block autoplay until then).
+        // Uses capture so it fires before any button handlers; once:true removes it immediately after.
+        document.addEventListener('pointerdown', function _firstInteraction() {
+            Synth.init();
+            Synth.startMenuMusic();
+        }, { once: true, capture: true });
 
         const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
