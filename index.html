@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.295</div>
+    <div id="version-number">v1.5.296</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -4914,6 +4914,8 @@
             const STAR_LAGS = [0.055, 0.115, 0.195];
 
             let t = 0, hue = 0, last = performance.now();
+            const blazerTrail = []; // {x, y} history for comet trail
+            const TRAIL_LEN = 28;
 
             function getRect() {
                 return document.getElementById('game-container').getBoundingClientRect();
@@ -4934,7 +4936,43 @@
 
             function drawTrailStar(cx, cy, outerR, starHue, alpha) {
                 if (outerR < 1) return;
-                const innerR = outerR * 0.407; // matches in-game ratio (0.22/0.54)
+                const innerR = outerR * 0.407;
+                const time = performance.now() / 500;
+
+                // Mini orbiting sparkle stars (5, matching in-game goal aesthetic)
+                const miniCount = 5;
+                for (let i = 0; i < miniCount; i++) {
+                    const phase   = (i / miniCount) * Math.PI * 2;
+                    const orbitR  = outerR * (1.05 + (i % 2) * 0.14);
+                    const wobble  = Math.sin(time * 1.5 + phase * 2) * outerR * 0.065;
+                    const orbitAng = phase + time * (0.65 + i * 0.07);
+                    const mx = Math.cos(orbitAng) * (orbitR + wobble);
+                    const my = Math.sin(orbitAng) * (orbitR + wobble);
+                    const mOuter = outerR * (0.098 + Math.sin(time * 2.2 + phase) * 0.013);
+                    const mInner = mOuter * 0.4;
+                    const mHue   = ((starHue + i * 72 + time * 60) % 360 + 360) % 360;
+                    c.save();
+                    c.translate(cx + mx, cy + my);
+                    c.rotate(time * 3 * (i % 2 === 0 ? 1 : -1));
+                    c.globalAlpha = alpha * 0.85;
+                    c.beginPath();
+                    for (let j = 0; j < 10; j++) {
+                        const a = j * Math.PI / 5 - Math.PI / 2;
+                        const r = j % 2 === 0 ? mOuter : mInner;
+                        j === 0 ? c.moveTo(Math.cos(a)*r, Math.sin(a)*r)
+                                : c.lineTo(Math.cos(a)*r, Math.sin(a)*r);
+                    }
+                    c.closePath();
+                    c.fillStyle = '#050510';
+                    c.fill();
+                    c.lineWidth   = Math.max(0.5, mOuter * 0.4);
+                    c.strokeStyle = `hsl(${mHue},100%,70%)`;
+                    c.shadowBlur  = mOuter * 3;
+                    c.shadowColor = `hsl(${mHue},100%,70%)`;
+                    c.stroke();
+                    c.restore();
+                }
+
                 c.save();
                 c.translate(cx, cy);
                 c.rotate(starHue * 0.025);
@@ -4955,7 +4993,7 @@
                 c.shadowBlur  = outerR * 1.4;
                 c.shadowColor = `hsl(${starHue},100%,62%)`;
                 c.stroke();
-                // Central bright spark matching in-game star
+                // Central bright spark
                 c.shadowBlur  = outerR * 1.2;
                 c.shadowColor = `hsl(${starHue},100%,70%)`;
                 c.fillStyle   = '#ffffff';
@@ -4977,7 +5015,30 @@
                 const pos2 = perimPos(t + 0.001);
                 const travelAngle = Math.atan2(pos2.y - pos.y, pos2.x - pos.x);
 
+                blazerTrail.push({ x: pos.x, y: pos.y });
+                if (blazerTrail.length > TRAIL_LEN) blazerTrail.shift();
+
                 c.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+                // Comet trail behind the blazer (matches in-game trail style)
+                if (blazerTrail.length > 1) {
+                    c.save();
+                    for (let i = 1; i < blazerTrail.length; i++) {
+                        const frac = i / blazerTrail.length;
+                        c.lineWidth    = Math.max(0.5, BLAZER_R * (0.22 + frac * 0.58));
+                        c.strokeStyle  = color;
+                        c.globalAlpha  = frac * 0.45;
+                        c.shadowBlur   = BLAZER_R * frac * 1.5;
+                        c.shadowColor  = color;
+                        c.beginPath();
+                        c.moveTo(blazerTrail[i-1].x, blazerTrail[i-1].y);
+                        c.lineTo(blazerTrail[i].x,   blazerTrail[i].y);
+                        c.stroke();
+                    }
+                    c.shadowBlur  = 0;
+                    c.globalAlpha = 1;
+                    c.restore();
+                }
 
                 // Compute per-frame lag so stars are always physically touching
                 const _pr = gameContainer.getBoundingClientRect();
