@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.297</div>
+    <div id="version-number">v1.5.298</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -958,10 +958,6 @@
                     <div style="display:flex; align-items:center; gap:10px;">
                         <input type="checkbox" id="orb-leader-toggle" checked style="width:20px; height:20px; cursor:pointer;">
                         <label for="orb-leader-toggle" style="font-size:1.2rem; cursor:pointer; user-select:none;">Teleport Other: Target Leader Only</label>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <input type="checkbox" id="tap-only-toggle" style="width:20px; height:20px; cursor:pointer;">
-                        <label for="tap-only-toggle" style="font-size:1.2rem; cursor:pointer; user-select:none;">Tap Only Controls</label>
                     </div>
                     <div style="display:flex; align-items:center; gap:10px;">
                         <label for="move-speed-select" style="font-size:1.2rem;">Player Speed:</label>
@@ -1226,7 +1222,7 @@
         const puFreezeInput   = document.getElementById('pu-freeze-input');
         const puBeaconInput   = document.getElementById('pu-beacon-input');
         const orbLeaderToggle = document.getElementById('orb-leader-toggle');
-        const tapOnlyToggle   = document.getElementById('tap-only-toggle');
+        const tapOnlyToggle   = { checked: false }; // removed from UI — hold-to-move always active
         const moveSpeedSelect = document.getElementById('move-speed-select');
         const pmNextGameBtn   = document.getElementById('pm-next-game-btn');
 
@@ -1578,7 +1574,6 @@
                 puBeacon:      puBeaconInput.value,
                 collisions:    document.getElementById('collisions-toggle').checked,
                 orbLeader:     orbLeaderToggle.checked,
-                tapOnly:       tapOnlyToggle.checked,
                 moveSpeed:     moveSpeedSelect.value,
                 slots:         lobbySlots.map(s => ({
                     mode:        s.typeSelect.value,
@@ -1627,7 +1622,6 @@
             puBeaconInput.value  = s.puBeacon;
             document.getElementById('collisions-toggle').checked = s.collisions;
             orbLeaderToggle.checked = s.orbLeader;
-            tapOnlyToggle.checked   = s.tapOnly ?? false;
             if (s.moveSpeed) moveSpeedSelect.value = s.moveSpeed;
             // 4. Restore the actual manual-flag state (not the all-locked state from step 1)
             puManualFlags      = new Set(s.puManualFlags);
