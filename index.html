@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.328</div>
+    <div id="version-number">v1.5.329</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1060,8 +1060,6 @@
                 'heartbeat_single.ogg': 0.5,
                 'music_victory.ogg':    0.6,
                 'music_fail.ogg':       0.6,
-                'turn.ogg':             0.6,
-                'bonk.ogg':             0.6,
                 'zip.ogg':              0.6,
                 'glitch.ogg':           0.6,
                 'win.ogg':              0.6,
@@ -1119,8 +1117,6 @@
                 audio.play().catch(() => {});
             },
             // SFX triggers
-            turn(isPlayer)  { if (isPlayer) this.playSound('turn.ogg'); },
-            bonk(isPlayer)  { if (isPlayer) this.playSound('bonk.ogg'); },
             zip()           { this.playSound('zip.ogg'); },
             glitch()        { this.playSound('glitch.ogg'); },
             win()           { this.playSound('win.ogg'); },
@@ -2192,7 +2188,6 @@
             }
 
             triggerBonk(dx, dy) {
-                if (this.bonkTimer <= 0) Synth.bonk(this.isPlayer);
                 this.bonkDx = dx;
                 this.bonkDy = dy;
                 this.bonkTimer = 1.0;
@@ -2216,7 +2211,6 @@
                 if (gameState !== 'PLAYING') return;
 
                 if (dx !== this.lastDx || dy !== this.lastDy) {
-                    Synth.turn(this.isPlayer);
                     this.lastDx = dx;
                     this.lastDy = dy;
                     this.dirStreak = 0; // reset on direction change
