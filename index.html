@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.337</div>
+    <div id="version-number">v1.5.338</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3001,7 +3001,7 @@
             const _rawTimer = (room && room.state && typeof room.state.timer === 'number') ? room.state.timer : 0;
             const serverElapsedMs = _rawTimer * 1000;
             const remainingLockMs = Math.max(0, MOVE_LOCK_MS - serverElapsedMs);
-            initRound(remainingLockMs, true); // mid-game join — suppress countdown beep
+            initRound(remainingLockMs, remainingLockMs === 0); // suppress beep only if lock already expired
         }
 
         // lockMs: how long to lock movement from now. -1 (default) = full 3-second lock.
