@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.359</div>
+    <div id="version-number">v1.5.360</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3704,7 +3704,7 @@
                     ctx.lineDashOffset = 0;
                 } else if (p.type === 'rocket') {
                     const nowMs = performance.now();
-                    const flashSlot = Math.floor((nowMs % 2000) / (2000 / playerColors.length)) % playerColors.length;
+                    const flashSlot = Math.floor((nowMs % 4000) / (4000 / playerColors.length)) % playerColors.length;
                     const pickupColor = playerColors[flashSlot];
                     ctx.rotate((nowMs / 12000) * Math.PI * 2);
                     // 50% dimmer as a static pickup — it was too bright/distracting on the maze.
