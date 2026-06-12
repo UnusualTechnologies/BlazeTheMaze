@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.341</div>
+    <div id="version-number">v1.5.342</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1900,6 +1900,42 @@
             }
         }
         
+        function drawDiscBlade(ctx, radius, color, shadowBlur = 14) {
+            const TEETH = 10;
+            const innerR = radius * 0.55;
+            const toothR = radius;
+            ctx.save();
+            ctx.shadowColor = color;
+            ctx.shadowBlur = shadowBlur;
+            // Outer serrated ring
+            ctx.beginPath();
+            for (let i = 0; i < TEETH; i++) {
+                const a0 = (i / TEETH) * Math.PI * 2;
+                const amid = a0 + Math.PI / TEETH;
+                const a1 = ((i + 1) / TEETH) * Math.PI * 2;
+                if (i === 0) ctx.moveTo(Math.cos(a0) * innerR, Math.sin(a0) * innerR);
+                else ctx.lineTo(Math.cos(a0) * innerR, Math.sin(a0) * innerR);
+                ctx.lineTo(Math.cos(amid) * toothR, Math.sin(amid) * toothR);
+                ctx.lineTo(Math.cos(a1) * innerR, Math.sin(a1) * innerR);
+            }
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.globalAlpha = 0.92;
+            ctx.fill();
+            // Inner hub circle
+            ctx.beginPath();
+            ctx.arc(0, 0, innerR * 0.38, 0, Math.PI * 2);
+            ctx.fillStyle = '#111';
+            ctx.globalAlpha = 1;
+            ctx.fill();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = Math.max(1, radius * 0.07);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            ctx.globalAlpha = 1;
+            ctx.restore();
+        }
+
         function drawHelixCorkscrew(ctx, phase, HR, HH, N, lw, color, shadowBlur = 10) {
             const TURNS = 2.5;
             const hpts = [];
@@ -2027,16 +2063,22 @@
             }
 
             draw() {
-                // Comet trail — glowing line segments, fading toward the tail
+                const now = performance.now();
+                // Flash colour: cycle through playerColors at 300ms cadence, settles on owner's colour
+                const flashSlot = Math.floor(now / 300) % playerColors.length;
+                const flashColor = playerColors[flashSlot];
+                const bladeColor = (now % 300 < 220) ? flashColor : this.color;
+
+                // Comet trail — glowing line segments, fading toward the tail, coloured like the blade
                 if (this.trail.length > 1) {
                     ctx.save();
                     ctx.lineCap = 'round';
                     ctx.lineJoin = 'round';
-                    ctx.shadowColor = this.color;
+                    ctx.shadowColor = bladeColor;
                     for (let i = 1; i < this.trail.length; i++) {
-                        const frac = i / this.trail.length; // 0=oldest gap, 1=newest gap
+                        const frac = i / this.trail.length;
                         ctx.lineWidth = Math.max(1, cellSize * 0.14 * frac);
-                        ctx.strokeStyle = this.color;
+                        ctx.strokeStyle = bladeColor;
                         ctx.globalAlpha = frac * 0.7;
                         ctx.shadowBlur = 10 * frac;
                         ctx.beginPath();
@@ -2049,15 +2091,10 @@
                     ctx.restore();
                 }
 
-                const HR    = cellSize * 0.12;
-                const HH    = cellSize * 0.38;
-                const N     = 48;
-                const lw    = Math.max(1.5, cellSize * 0.06);
-                const phase = performance.now() / 150;
                 ctx.save();
                 ctx.translate(this.pixelX, this.pixelY);
-                ctx.rotate(this.angle + Math.PI / 2);
-                drawHelixCorkscrew(ctx, phase, HR, HH, N, lw, this.color);
+                ctx.rotate(now / 80); // spin fast
+                drawDiscBlade(ctx, cellSize * 0.38, bladeColor);
                 ctx.restore();
             }
         }
@@ -6409,7 +6446,7 @@
                 requestAnimationFrame(tick);
             }
             requestAnimationFrame(tick);
-        // Animated corkscrew for all rocket icon canvases (HUD legend + custom menu)
+        // Animated disc blade for all rocket icon canvases (HUD legend + custom menu)
         (function animateRocketCanvases() {
             const CSS = 22, dpr = window.devicePixelRatio || 1;
             const ctxs = ['rocket-legend-canvas', 'rocket-custom-canvas'].map(id => {
@@ -6422,17 +6459,17 @@
                 return c;
             }).filter(Boolean);
             if (!ctxs.length) return;
-            const HR = CSS * 0.19, HH = CSS * 0.52, N = 48;
-            const lw = Math.max(1, CSS * 0.07), slotMs = 700;
-            function drawCork(c, ts) {
+            function drawBlade(c, ts) {
                 c.clearRect(0, 0, CSS, CSS);
-                const corColor = playerColors[Math.floor((ts * 0.6) / slotMs) % playerColors.length] || '#ff3300';
+                const flashSlot = Math.floor(ts / 300) % playerColors.length;
+                const bladeColor = (ts % 300 < 220) ? playerColors[flashSlot] : (playerColors[0] || '#ff3300');
                 c.save();
                 c.translate(CSS / 2, CSS / 2);
-                drawHelixCorkscrew(c, ts / 150, HR, HH, N, lw, corColor, 6);
+                c.rotate(ts / 80);
+                drawDiscBlade(c, CSS * 0.44, bladeColor, 6);
                 c.restore();
             }
-            function frame(ts) { ctxs.forEach(c => drawCork(c, ts)); requestAnimationFrame(frame); }
+            function frame(ts) { ctxs.forEach(c => drawBlade(c, ts)); requestAnimationFrame(frame); }
             requestAnimationFrame(frame);
         })();
 
