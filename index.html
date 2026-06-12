@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.325</div>
+    <div id="version-number">v1.5.326</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2108,8 +2108,8 @@
                 this.speedGlow = 0; // 0→1: white hot-streak glow (ramps dirStreak 3→6)
                 this.speedBlur = 0;  // 0–1 smoothed, drives motion-blur ghost opacity
 
-                // Speed-boost: 5 consecutive cells each ≤ baseCooldown → drop interval to 100ms
-                this._recentMoveGaps = []; // last 4 inter-move gaps (real ms)
+                // Speed-boost: 6 consecutive cells each ≤ baseCooldown → drop interval to 100ms
+                this._recentMoveGaps = []; // last 5 inter-move gaps (real ms)
                 this._lastMoveTs     = 0;  // real timestamp of last executed move
                 this._speedBoostActive = false;
 
@@ -2233,9 +2233,9 @@
                         this._recentMoveGaps = [];
                     } else {
                         this._recentMoveGaps.push(gap);
-                        if (this._recentMoveGaps.length > 4) this._recentMoveGaps.shift();
-                        // Activate once we have 4 fast gaps in a row (= 5 cells at max pace)
-                        if (this._recentMoveGaps.length === 4 && !this._speedBoostActive) {
+                        if (this._recentMoveGaps.length > 5) this._recentMoveGaps.shift();
+                        // Activate once we have 5 fast gaps in a row (= 6 cells at max pace)
+                        if (this._recentMoveGaps.length === 5 && !this._speedBoostActive) {
                             this._speedBoostActive = true;
                             Synth.speedBoost();
                         }
