@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.330</div>
+    <div id="version-number">v1.5.331</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3001,13 +3001,14 @@
             const _rawTimer = (room && room.state && typeof room.state.timer === 'number') ? room.state.timer : 0;
             const serverElapsedMs = _rawTimer * 1000;
             const remainingLockMs = Math.max(0, MOVE_LOCK_MS - serverElapsedMs);
-            initRound(remainingLockMs);
+            initRound(remainingLockMs, true); // mid-game join — suppress countdown beep
         }
 
         // lockMs: how long to lock movement from now. -1 (default) = full 3-second lock.
         // 0 = no lock (round already in progress). Positive = partial remaining lock.
         // NaN/Infinity treated as -1 (full lock) so a bad caller can't permanently lock movement.
-        function initRound(lockMs = -1) {
+        // midGameJoin: true when joining a round already in progress — suppresses the countdown beep.
+        function initRound(lockMs = -1, midGameJoin = false) {
             gameState = 'INITIALIZING'; // Temporarily change state to block draw() recursion
             bgTintR = bgTintG = bgTintB = 0; // reset so leader tint fades in fresh each round
             document.body.style.backgroundColor = '#000000';
@@ -3069,7 +3070,7 @@
             roundSonarsFired = 0;
             Synth.stopMenuMusic();
             Synth.stopHeartbeat();
-            if (_lockDuration > 0) Synth.countdownBeep();
+            if (_lockDuration > 0 && !midGameJoin) Synth.countdownBeep();
             Synth.muffle(false);
         }
 
