@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.349</div>
+    <div id="version-number">v1.5.350</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -928,7 +928,7 @@
                     </div>
                     <div style="display:flex; align-items:center; gap:10px;">
                         <canvas id="rocket-custom-canvas" class="pu-legend-icon" width="44" height="44"></canvas>
-                        <label for="pu-rocket-input" style="font-size:1.2rem;">Homing missile:</label>
+                        <label for="pu-rocket-input" style="font-size:1.2rem;">Warp Wheel:</label>
                         <input type="number" id="pu-rocket-input" value="5" min="0" max="20" inputmode="numeric" style="font-size:1.1rem; padding:5px; width:80px; text-align:center;">
                     </div>
                     <div style="display:flex; align-items:center; gap:10px;">
@@ -991,7 +991,7 @@
                 </div>
                 <div class="pu-legend-row">
                     <canvas id="rocket-legend-canvas" class="pu-legend-icon" width="44" height="44"></canvas>
-                    <span>Homing missile</span>
+                    <span>Warp Wheel</span>
                 </div>
                 <div class="pu-legend-row">
                     <svg class="pu-legend-icon" viewBox="-16 -16 32 32">
@@ -1660,7 +1660,7 @@
         // ── Auto-scale power-up counts and grid size to player count ─────────
         // Formulas (n = number of active players):
         //   Teleport Other / Self : 7 − (n−1)          [−1 per extra player, base 6 at 1p]
-        //   Homing Missiles       : 4  − ⌊(n−1)/2⌋    [−1 per 2 extra players]
+        //   Warp Wheels           : 4  − ⌊(n−1)/2⌋    [−1 per 2 extra players]
         //   Mirror Controls       : 0  (off by default)
         //   Grid Size             : 20 (1-2p) → 21 (3-4p) → 22 (5-6p) → 23 (7-8p)
         // Inputs that were manually edited (puManualFlags / gridSizeManualFlag) are left unchanged.
@@ -1697,7 +1697,7 @@
          * Apply maze dimensions and power-up counts scaled to the current player count.
          * Grid: 20 (1-2p) → 21 (3-4p) → 22 (5-6p) → 23 (7-8p)
          * Teleport leader / self: 10, 9, 8, 7  (-1 per bracket)
-         * Homing missile:         5,  4, 3, 2  (-1 per bracket)
+         * Warp Wheel:             5,  4, 3, 2  (-1 per bracket)
          * All other power-ups: 0
          * Always overrides current values regardless of manual-edit flags.
          */

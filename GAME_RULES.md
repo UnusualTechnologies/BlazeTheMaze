@@ -91,8 +91,8 @@ Teleports all other players away from the collector. In `orb_leader_only` mode, 
 ### Self (cyan)
 Teleports the collector away from their current position.
 
-### Rocket (orange) — `ROCKET_STEP_MS = 50 ms/cell`
-Server-authoritative homing missile. Travels the BFS-optimal path toward the goal at 50 ms per cell. Teleports any non-owner player it overlaps. Dies on reaching the goal or hitting a dead-end with no improving BFS move. The collector is immune.
+### Warp Wheel (orange) — `ROCKET_STEP_MS = 50 ms/cell`
+Server-authoritative Warp Wheel. Travels the BFS-optimal path toward the goal at 50 ms per cell. Teleports any non-owner player it overlaps. Dies on reaching the goal or hitting a dead-end with no improving BFS move. The collector is immune.
 
 ### Mirror (magenta) — 3 000 ms
 Reverses all directional input for every player **except** the collector. Affected players are shown with a white outline.
