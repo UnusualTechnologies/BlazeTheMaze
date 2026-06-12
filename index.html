@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.315</div>
+    <div id="version-number">v1.5.316</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1052,18 +1052,52 @@
             _tensionActive:   false,
             _menuMusicActive: false,
             _heartbeatActive: false,
+            // Master volume table — all defaults live here. Debug panel reads/writes this.
+            _volumes: {
+                'music_game.ogg':      0.32,
+                'music_menu.ogg':      0.35,
+                'music_tension.ogg':   0.35,
+                'heartbeat.ogg':       0.5,
+                'music_victory.ogg':   0.6,
+                'music_fail.ogg':      0.6,
+                'turn.ogg':            0.6,
+                'bonk.ogg':            0.6,
+                'zip.ogg':             0.6,
+                'glitch.ogg':          0.6,
+                'win.ogg':             0.6,
+                'rocket_hit_star.ogg': 0.6,
+                'rocket_launch.ogg':   0.55,
+                'rocket_hit.ogg':      0.7,
+                'freeze_cast.ogg':     0.6,
+                'freeze_thaw.ogg':     0.6,
+                'pu_pickup_self.ogg':  0.6,
+                'pu_pickup_opp.ogg':   0.6,
+                'pu_pickup_mystery.ogg':0.6,
+                'countdown_beep.ogg':  0.5,
+                'countdown.ogg':       0.6,
+                'speed.ogg':           0.6,
+                'round_start.ogg':     0.6,
+                'round_win_self.ogg':  0.6,
+                'round_win_other.ogg': 0.6,
+                'match_win.ogg':       0.8,
+                'match_lose.ogg':      0.8,
+                'ui_click.ogg':        0.4,
+                'player_join.ogg':     0.5,
+                'player_leave.ogg':    0.4,
+                'code_copied.ogg':     0.5,
+            },
             init() {
                 this.bgMusic.loop = true;
-                this.bgMusic.volume = 0.32;
+                this.bgMusic.volume = this._volumes['music_game.ogg'];
                 this._setupTrack(this.bgMusic, 'music_game.ogg');
                 this.menuMusic.loop = true;
-                this.menuMusic.volume = 0.35;
+                this.menuMusic.volume = this._volumes['music_menu.ogg'];
                 this._setupTrack(this.menuMusic, 'music_menu.ogg');
                 this.tensionLoop.loop = true;
-                this.tensionLoop.volume = 0;
+                this.tensionLoop.volume = 0; // starts silent; set when tension activates
                 this._setupTrack(this.tensionLoop, 'music_tension.ogg');
                 this.heartbeatLoop.loop = true;
-                this.heartbeatLoop.volume = 0.5;
+                this.heartbeatLoop.volume = this._volumes['heartbeat.ogg'];
                 this._setupTrack(this.heartbeatLoop, 'heartbeat.ogg');
                 this._setupTrack(this.victoryMusic, 'music_victory.ogg');
                 this._setupTrack(this.defeatMusic, 'music_fail.ogg');
@@ -1082,7 +1116,7 @@
             playSound(filename, volume = 0.6) {
                 if (this.isSfxMuted) return;
                 const audio = new Audio('./assets/audio/' + filename);
-                audio.volume = volume;
+                audio.volume = this._volumes[filename] ?? volume;
                 audio.onerror = () => {
                     console.warn(`[Audio] Missing SFX: ${filename}`);
                     if (typeof Sentry !== 'undefined') Sentry.captureMessage(`Audio file missing: ${filename}`, 'warning');
@@ -1093,7 +1127,7 @@
             playMusicSound(filename, volume = 0.6) {
                 if (this.isMusicMuted) return;
                 const audio = new Audio('./assets/audio/' + filename);
-                audio.volume = volume;
+                audio.volume = this._volumes[filename] ?? volume;
                 audio.onerror = () => console.warn(`[Audio] Missing: ${filename}`);
                 audio.play().catch(() => {});
             },
@@ -1150,7 +1184,7 @@
                 this._tensionActive = true;
                 if (this.isMusicMuted) return;
                 this.tensionLoop.currentTime = 0;
-                this.tensionLoop.volume = 0.35;
+                this.tensionLoop.volume = this._volumes['music_tension.ogg'];
                 this.tensionLoop.play().catch(() => {});
             },
             stopTension() {
@@ -1178,8 +1212,10 @@
                 }
             },
             muffle(isMuffled) {
-                this.bgMusic.volume = isMuffled ? 0.12 : 0.32;
-                if (this._tensionActive) this.tensionLoop.volume = isMuffled ? 0.1 : 0.35;
+                const gv = this._volumes['music_game.ogg'];
+                const tv = this._volumes['music_tension.ogg'];
+                this.bgMusic.volume = isMuffled ? gv * 0.375 : gv;
+                if (this._tensionActive) this.tensionLoop.volume = isMuffled ? tv * 0.285 : tv;
             },
             toggleMusic() {
                 this.isMusicMuted = !this.isMusicMuted;
@@ -1194,7 +1230,7 @@
                     } else {
                         this.bgMusic.play().catch(() => {});
                         if (this._tensionActive) {
-                            this.tensionLoop.volume = 0.35;
+                            this.tensionLoop.volume = this._volumes['music_tension.ogg'];
                             this.tensionLoop.play().catch(() => {});
                         }
                         if (this._heartbeatActive) {
@@ -1212,6 +1248,129 @@
             }
         };
         // --- END AUDIO SYSTEM ---
+
+        // ── DEBUG VOLUME PANEL ────────────────────────────────────────────────────
+        // Temporary widget for tuning volumes. Remove once values are locked in.
+        (function buildDebugAudioPanel() {
+            const LOOP_ENTRIES = [
+                { label: 'music_game',    file: 'music_game.ogg',    obj: () => Synth.bgMusic },
+                { label: 'music_menu',    file: 'music_menu.ogg',    obj: () => Synth.menuMusic },
+                { label: 'music_tension', file: 'music_tension.ogg', obj: () => Synth.tensionLoop },
+                { label: 'heartbeat',     file: 'heartbeat.ogg',     obj: () => Synth.heartbeatLoop },
+                { label: 'music_victory', file: 'music_victory.ogg', obj: () => Synth.victoryMusic },
+                { label: 'music_fail',    file: 'music_fail.ogg',    obj: () => Synth.defeatMusic },
+            ];
+            const LOOP_FILES = new Set(LOOP_ENTRIES.map(e => e.file));
+
+            const panel = document.createElement('div');
+            panel.id = 'debug-audio-panel';
+            Object.assign(panel.style, {
+                position: 'fixed', right: '10px', top: '50%', transform: 'translateY(-50%)',
+                background: 'rgba(0,0,0,0.88)', color: '#ddd', padding: '8px 10px',
+                borderRadius: '8px', fontFamily: 'monospace', fontSize: '11px',
+                width: '230px', maxHeight: '82vh', overflowY: 'auto',
+                zIndex: '9999', border: '1px solid #555', lineHeight: '1.2',
+            });
+
+            const addSection = (title) => {
+                const el = document.createElement('div');
+                Object.assign(el.style, { margin: '7px 0 3px', fontSize: '10px', color: '#777',
+                    borderTop: '1px solid #333', paddingTop: '4px' });
+                el.textContent = title;
+                panel.appendChild(el);
+            };
+
+            const addRow = (label, file, audioObjGetter) => {
+                const vol = Synth._volumes[file] ?? 0.6;
+                const row = document.createElement('div');
+                Object.assign(row.style, { display: 'flex', alignItems: 'center', margin: '2px 0', gap: '4px' });
+
+                const lbl = document.createElement('span');
+                Object.assign(lbl.style, { width: '100px', overflow: 'hidden', textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap', color: '#aaa', fontSize: '10px', cursor: 'default' });
+                lbl.title = file;
+                lbl.textContent = label;
+
+                const slider = document.createElement('input');
+                slider.type = 'range'; slider.min = 0; slider.max = 1; slider.step = 0.01;
+                slider.value = vol;
+                Object.assign(slider.style, { flex: '1', accentColor: '#7af', cursor: 'pointer' });
+
+                const valSpan = document.createElement('span');
+                Object.assign(valSpan.style, { width: '32px', textAlign: 'right', color: '#7af', fontSize: '11px' });
+                valSpan.textContent = vol.toFixed(2);
+
+                slider.addEventListener('input', () => {
+                    const v = parseFloat(slider.value);
+                    valSpan.textContent = v.toFixed(2);
+                    Synth._volumes[file] = v;
+                    if (audioObjGetter) audioObjGetter().volume = v;
+                });
+
+                row.appendChild(lbl); row.appendChild(slider); row.appendChild(valSpan);
+                panel.appendChild(row);
+            };
+
+            // Header with collapse toggle
+            const header = document.createElement('div');
+            Object.assign(header.style, { fontWeight: 'bold', marginBottom: '4px', fontSize: '12px',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' });
+            header.innerHTML = '<span>🔊 Vol Debug</span><span id="dbg-toggle" style="color:#7af;user-select:none;">▲</span>';
+            panel.appendChild(header);
+
+            const body = document.createElement('div');
+            body.id = 'dbg-body';
+            panel.appendChild(body);
+
+            header.addEventListener('click', () => {
+                const collapsed = body.style.display === 'none';
+                body.style.display = collapsed ? '' : 'none';
+                document.getElementById('dbg-toggle').textContent = collapsed ? '▲' : '▼';
+            });
+
+            // Helper that appends to body instead of panel
+            const origAppend = panel.appendChild.bind(panel);
+            const addSectionB = (t) => { const e = document.createElement('div');
+                Object.assign(e.style, { margin:'7px 0 3px', fontSize:'10px', color:'#777', borderTop:'1px solid #333', paddingTop:'4px' });
+                e.textContent = t; body.appendChild(e); };
+            const addRowB = (label, file, getter) => {
+                const vol = Synth._volumes[file] ?? 0.6;
+                const row = document.createElement('div');
+                Object.assign(row.style, { display:'flex', alignItems:'center', margin:'2px 0', gap:'4px' });
+                const lbl = document.createElement('span');
+                Object.assign(lbl.style, { width:'100px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:'#aaa', fontSize:'10px', cursor:'default' });
+                lbl.title = file; lbl.textContent = label;
+                const slider = document.createElement('input');
+                slider.type='range'; slider.min=0; slider.max=1; slider.step=0.01; slider.value=vol;
+                Object.assign(slider.style, { flex:'1', accentColor:'#7af', cursor:'pointer' });
+                const valSpan = document.createElement('span');
+                Object.assign(valSpan.style, { width:'32px', textAlign:'right', color:'#7af', fontSize:'11px' });
+                valSpan.textContent = vol.toFixed(2);
+                slider.addEventListener('input', () => {
+                    const v = parseFloat(slider.value);
+                    valSpan.textContent = v.toFixed(2);
+                    Synth._volumes[file] = v;
+                    if (getter) getter().volume = v;
+                });
+                row.appendChild(lbl); row.appendChild(slider); row.appendChild(valSpan);
+                body.appendChild(row);
+            };
+
+            addSectionB('── Loops (music btn) ──');
+            LOOP_ENTRIES.forEach(e => addRowB(e.label, e.file, e.obj));
+
+            addSectionB('── One-shot stingers ──');
+            ['win.ogg','round_win_self.ogg','round_win_other.ogg','match_win.ogg','match_lose.ogg']
+                .forEach(f => addRowB(f.replace('.ogg',''), f, null));
+
+            addSectionB('── SFX (sfx btn) ──');
+            Object.keys(Synth._volumes)
+                .filter(f => !LOOP_FILES.has(f) &&
+                    !['win.ogg','round_win_self.ogg','round_win_other.ogg','match_win.ogg','match_lose.ogg'].includes(f))
+                .forEach(f => addRowB(f.replace('.ogg',''), f, null));
+
+            document.body.appendChild(panel);
+        })();
 
         // Sync button visuals immediately so muted state is shown before any interaction.
         Synth._syncButtons();
