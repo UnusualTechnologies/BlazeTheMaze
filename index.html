@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.316</div>
+    <div id="version-number">v1.5.317</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2487,8 +2487,9 @@
                 const blurTarget = Math.min(1, Math.max(0, (this.dirStreak - 1) / 2));
                 this.speedBlur += (blurTarget - this.speedBlur) * 0.22;
 
-                // Speed glow: snap to full at dirStreak >= 3, lerp back down when it drops
-                const glowTarget = this.dirStreak >= 3 ? 1 : 0;
+                // Speed glow follows _speedBoostActive — has correct timing/silence guards,
+                // so single taps and held-still never trigger white.
+                const glowTarget = this._speedBoostActive ? 1 : 0;
                 if (glowTarget > this.speedGlow) this.speedGlow = glowTarget; // instant on
                 else this.speedGlow += (glowTarget - this.speedGlow) * 0.15;  // smooth off
 
