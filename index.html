@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.338</div>
+    <div id="version-number">v1.5.339</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3316,9 +3316,9 @@
             // Tension pulse: mirrors AI threat range (cols*2) so flash/heartbeat/AI all react together
             const TENSION_THRESHOLD = cols * 2;
             if (closestBlazer && minDist <= TENSION_THRESHOLD && gameState === 'PLAYING') {
-                // Cubic ramp: 5% at threshold, 30% at 1 cell — subtle throughout, peaks at goal
+                // Cubic ramp: 10% at threshold, 35% at 1 cell — subtle throughout, peaks at goal
                 const t = Math.max(0, Math.min(1, (TENSION_THRESHOLD - minDist) / (TENSION_THRESHOLD - 1)));
-                const tension = 0.05 + Math.pow(t, 3) * 0.25;
+                const tension = 0.10 + Math.pow(t, 3) * 0.25;
                 const aboutToWin = (scores[closestBlazer.id] ?? 0) >= WINS_TO_MATCH - 1;
                 const maxAlpha = aboutToWin ? 0.80 : 0.58;
                 // Pulse rate accelerates as blazer closes in (120ms → 55ms)
