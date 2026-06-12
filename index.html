@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.340</div>
+    <div id="version-number">v1.5.341</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -4920,6 +4920,7 @@
                         startWinnerLap(wColor);
                     } else {
                         gameState = 'ROUND_OVER_COUNTDOWN';
+                        Synth.stopHeartbeat();
                         currentWinner = blazers.find(b => b.id === wId) || { id: wId, color: wColor };
                         roundCountdown = 3000;
                         startVictoryStars(wColor);
@@ -5005,6 +5006,7 @@
                     // onStateChange is guarded to skip syncing this player during the window.
                     if (winnerBlazer?.isLocal) { Synth.win(); }
                     gameState = 'ROUND_OVER_COUNTDOWN';
+                    Synth.stopHeartbeat();
                     currentWinner = winnerBlazer || { id: winnerId, color: winnerColor };
                     roundCountdown = 3000;
                     startVictoryStars(winnerColor);
