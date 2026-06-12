@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.357</div>
+    <div id="version-number">v1.5.358</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3703,8 +3703,6 @@
                     ctx.setLineDash([]);
                     ctx.lineDashOffset = 0;
                 } else if (p.type === 'rocket') {
-                    const pulse = 1 + Math.sin(time * 3) * 0.1;
-                    ctx.scale(pulse, pulse);
                     const nowMs = performance.now();
                     const flashSlot = Math.floor((nowMs % 2000) / (2000 / playerColors.length)) % playerColors.length;
                     const pickupColor = playerColors[flashSlot];
