@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.310</div>
+    <div id="version-number">v1.5.311</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1948,6 +1948,7 @@
                 this.lastDx = 0;
                 this.lastDy = 0;
                 this.dirStreak = 0;  // consecutive cells in the same direction
+                this.speedGlow = 0; // 0→1: white hot-streak glow (ramps dirStreak 3→6)
                 this.speedBlur = 0;  // 0–1 smoothed, drives motion-blur ghost opacity
 
                 this.heldDirections = [];
@@ -2256,6 +2257,10 @@
                 const blurTarget = Math.min(1, Math.max(0, (this.dirStreak - 1) / 2));
                 this.speedBlur += (blurTarget - this.speedBlur) * 0.22;
 
+                // Speed glow: ramps 0→1 as dirStreak goes 3→6
+                const glowTarget = Math.min(1, Math.max(0, (this.dirStreak - 3) / 3));
+                this.speedGlow += (glowTarget - this.speedGlow) * 0.15;
+
                 if (this.flashTimer > 0) this.flashTimer -= dt * 0.005;
                 if (this.bonkTimer > 0) this.bonkTimer -= dt * 0.01;
 
@@ -2288,6 +2293,22 @@
                         ctx.moveTo(this.trail[i-1].x, this.trail[i-1].y);
                         ctx.lineTo(this.trail[i].x, this.trail[i].y);
                         ctx.stroke();
+                    }
+                    // Speed-glow white overlay on trail
+                    if (this.speedGlow > 0.01 && !isMirrored) {
+                        ctx.shadowColor = '#ffffff';
+                        for (let i = 1; i < this.trail.length; i++) {
+                            const frac = i / this.trail.length;
+                            ctx.lineWidth = Math.max(0.5, size * (0.22 + frac * 0.58));
+                            ctx.strokeStyle = '#ffffff';
+                            ctx.globalAlpha = frac * 0.5 * this.speedGlow;
+                            ctx.shadowBlur = 8 * this.speedGlow * frac;
+                            ctx.beginPath();
+                            ctx.moveTo(this.trail[i-1].x, this.trail[i-1].y);
+                            ctx.lineTo(this.trail[i].x, this.trail[i].y);
+                            ctx.stroke();
+                        }
+                        ctx.shadowBlur = 0;
                     }
                     ctx.restore();
                 }
@@ -2400,6 +2421,24 @@
                 }
                 ctx.shadowBlur = 0;
                 ctx.globalAlpha = 1;
+
+                // Speed-glow white outline — brightens at dirStreak 3→6 without washing out the fill colour
+                if (this.speedGlow > 0.01 && !isFrozen && !isMirrored) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, -cellSize * 0.4);
+                    ctx.lineTo(cellSize * 0.25, cellSize * 0.25);
+                    ctx.lineTo(0, cellSize * 0.1);
+                    ctx.lineTo(-cellSize * 0.25, cellSize * 0.25);
+                    ctx.closePath();
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = Math.max(1, size * 0.28) * this.speedGlow;
+                    ctx.globalAlpha = 0.85 * this.speedGlow;
+                    ctx.shadowBlur = 16 * this.speedGlow;
+                    ctx.shadowColor = '#ffffff';
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                    ctx.globalAlpha = 1;
+                }
 
                 // Red outline while mirror controls are active
                 if (isMirrored) {
