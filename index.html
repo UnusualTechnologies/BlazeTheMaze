@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.336</div>
+    <div id="version-number">v1.5.337</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -867,18 +867,23 @@
             <!-- Custom Lobby: Player Selection -->
             <div id="lobby-layer" class="menu-overlay hidden">
                 <h1>Custom Game</h1>
-                <div id="slots-container">
-                    <!-- Slots dynamically generated -->
-                </div>
                 <div class="btn-group">
                     <button class="action-btn secondary-btn" id="lobby-back-btn">Back</button>
                     <button class="action-btn" id="lobby-rules-btn">Maze settings</button>
+                </div>
+                <div id="slots-container">
+                    <!-- Slots dynamically generated -->
                 </div>
             </div>
 
             <!-- Custom Lobby: Rules / Power-ups -->
             <div id="lobby-rules-layer" class="menu-overlay hidden">
                 <h1>Custom Game</h1>
+
+                <div class="btn-group">
+                    <button class="action-btn secondary-btn" id="rules-back-btn">Back</button>
+                    <button class="action-btn" id="start-btn">Blaze!</button>
+                </div>
 
                 <div class="rules-panel-wrap">
                 <button class="action-btn tertiary-btn" id="apply-player-defaults-btn">Reset settings to default</button>
@@ -971,11 +976,6 @@
                     </div>
                 </div>
                 </div><!-- /.rules-panel-wrap -->
-
-                <div class="btn-group">
-                    <button class="action-btn secondary-btn" id="rules-back-btn">Back</button>
-                    <button class="action-btn" id="start-btn">Blaze!</button>
-                </div>
             </div>
         </div>
 
