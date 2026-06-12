@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.318</div>
+    <div id="version-number">v1.5.319</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1045,46 +1045,35 @@
             isSfxMuted:   _savedSfxMuted   !== null ? _savedSfxMuted   === '1' : !_isElectron,
             bgMusic:       new Audio('./assets/audio/music_game.ogg'),
             menuMusic:     new Audio('./assets/audio/music_menu.ogg'),
-            tensionLoop:   new Audio('./assets/audio/music_tension.ogg'),
             victoryMusic:  new Audio('./assets/audio/music_victory.ogg'),
             defeatMusic:   new Audio('./assets/audio/music_fail.ogg'),
             heartbeatLoop: new Audio('./assets/audio/heartbeat.ogg'),
-            _tensionActive:   false,
             _menuMusicActive: false,
             _heartbeatActive: false,
             // Master volume table — all defaults live here. Debug panel reads/writes this.
             _volumes: {
-                'music_game.ogg':      0.32,
-                'music_menu.ogg':      0.35,
-                'music_tension.ogg':   0.35,
-                'heartbeat.ogg':       0.5,
-                'music_victory.ogg':   0.6,
-                'music_fail.ogg':      0.6,
-                'turn.ogg':            0.6,
-                'bonk.ogg':            0.6,
-                'zip.ogg':             0.6,
-                'glitch.ogg':          0.6,
-                'win.ogg':             0.6,
-                'rocket_hit_star.ogg': 0.6,
-                'rocket_launch.ogg':   0.55,
-                'rocket_hit.ogg':      0.7,
-                'freeze_cast.ogg':     0.6,
-                'freeze_thaw.ogg':     0.6,
-                'pu_pickup_self.ogg':  0.6,
-                'pu_pickup_opp.ogg':   0.6,
+                'music_game.ogg':       0.32,
+                'music_menu.ogg':       0.35,
+                'heartbeat.ogg':        0.5,
+                'music_victory.ogg':    0.6,
+                'music_fail.ogg':       0.6,
+                'turn.ogg':             0.6,
+                'bonk.ogg':             0.6,
+                'zip.ogg':              0.6,
+                'glitch.ogg':           0.6,
+                'win.ogg':              0.6,
+                'rocket_hit_star.ogg':  0.6,
+                'rocket_launch.ogg':    0.55,
+                'rocket_hit.ogg':       0.7,
+                'freeze_cast.ogg':      0.6,
+                'freeze_thaw.ogg':      0.6,
+                'pu_pickup_self.ogg':   0.6,
+                'pu_pickup_opp.ogg':    0.6,
                 'pu_pickup_mystery.ogg':0.6,
-                'countdown_beep.ogg':  0.5,
-                'countdown.ogg':       0.6,
-                'speed.ogg':           0.6,
-                'round_start.ogg':     0.6,
-                'round_win_self.ogg':  0.6,
-                'round_win_other.ogg': 0.6,
-                'match_win.ogg':       0.8,
-                'match_lose.ogg':      0.8,
-                'ui_click.ogg':        0.4,
-                'player_join.ogg':     0.5,
-                'player_leave.ogg':    0.4,
-                'code_copied.ogg':     0.5,
+                'countdown_beep.ogg':   0.5,
+                'countdown.ogg':        0.6,
+                'speed.ogg':            0.6,
+                'ui_click.ogg':         0.4,
             },
             init() {
                 this.bgMusic.loop = true;
@@ -1093,9 +1082,6 @@
                 this.menuMusic.loop = true;
                 this.menuMusic.volume = this._volumes['music_menu.ogg'];
                 this._setupTrack(this.menuMusic, 'music_menu.ogg');
-                this.tensionLoop.loop = true;
-                this.tensionLoop.volume = 0; // starts silent; set when tension activates
-                this._setupTrack(this.tensionLoop, 'music_tension.ogg');
                 this.heartbeatLoop.loop = true;
                 this.heartbeatLoop.volume = this._volumes['heartbeat.ogg'];
                 this._setupTrack(this.heartbeatLoop, 'heartbeat.ogg');
@@ -1148,15 +1134,7 @@
             countdownBeep() { this.playSound('countdown_beep.ogg', 0.5); },
             countdownVoice(){ this.playSound('countdown.ogg'); },
             speedBoost()    { this.playSound('speed.ogg'); },
-            roundStart()    { this.playSound('round_start.ogg'); },
-            roundWinSelf()  { this.playMusicSound('round_win_self.ogg'); },
-            roundWinOther() { this.playMusicSound('round_win_other.ogg'); },
-            matchWinSelf()  { this.playMusicSound('match_win.ogg', 0.8); },
-            matchLoseSelf() { this.playMusicSound('match_lose.ogg', 0.8); },
             uiClick()       { this.playSound('ui_click.ogg', 0.4); },
-            playerJoin()    { this.playSound('player_join.ogg', 0.5); },
-            playerLeave()   { this.playSound('player_leave.ogg', 0.4); },
-            codeCopied()    { this.playSound('code_copied.ogg', 0.5); },
             // Music control
             startMenuMusic() {
                 this._menuMusicActive = true;
@@ -1180,19 +1158,6 @@
                 this.defeatMusic.currentTime = 0;
                 this.defeatMusic.play().catch(() => {});
             },
-            startTension() {
-                this._tensionActive = true;
-                if (this.isMusicMuted) return;
-                this.tensionLoop.currentTime = 0;
-                this.tensionLoop.volume = this._volumes['music_tension.ogg'];
-                this.tensionLoop.play().catch(() => {});
-            },
-            stopTension() {
-                this._tensionActive = false;
-                this.tensionLoop.pause();
-                this.tensionLoop.currentTime = 0;
-                this.tensionLoop.volume = 0;
-            },
             startHeartbeat() {
                 if (this._heartbeatActive) return;
                 this._heartbeatActive = true;
@@ -1213,26 +1178,19 @@
             },
             muffle(isMuffled) {
                 const gv = this._volumes['music_game.ogg'];
-                const tv = this._volumes['music_tension.ogg'];
                 this.bgMusic.volume = isMuffled ? gv * 0.375 : gv;
-                if (this._tensionActive) this.tensionLoop.volume = isMuffled ? tv * 0.285 : tv;
             },
             toggleMusic() {
                 this.isMusicMuted = !this.isMusicMuted;
                 if (this.isMusicMuted) {
                     this.bgMusic.pause();
                     this.menuMusic.pause();
-                    this.tensionLoop.pause();
                     this.heartbeatLoop.pause();
                 } else {
                     if (this._menuMusicActive) {
                         this.menuMusic.play().catch(() => {});
                     } else {
                         this.bgMusic.play().catch(() => {});
-                        if (this._tensionActive) {
-                            this.tensionLoop.volume = this._volumes['music_tension.ogg'];
-                            this.tensionLoop.play().catch(() => {});
-                        }
                         if (this._heartbeatActive) {
                             this.heartbeatLoop.play().catch(() => {});
                         }
@@ -1255,7 +1213,6 @@
             const LOOP_ENTRIES = [
                 { label: 'music_game',    file: 'music_game.ogg',    obj: () => Synth.bgMusic },
                 { label: 'music_menu',    file: 'music_menu.ogg',    obj: () => Synth.menuMusic },
-                { label: 'music_tension', file: 'music_tension.ogg', obj: () => Synth.tensionLoop },
                 { label: 'heartbeat',     file: 'heartbeat.ogg',     obj: () => Synth.heartbeatLoop },
                 { label: 'music_victory', file: 'music_victory.ogg', obj: () => Synth.victoryMusic },
                 { label: 'music_fail',    file: 'music_fail.ogg',    obj: () => Synth.defeatMusic },
@@ -1360,13 +1317,12 @@
             LOOP_ENTRIES.forEach(e => addRowB(e.label, e.file, e.obj));
 
             addSectionB('── One-shot stingers ──');
-            ['win.ogg','round_win_self.ogg','round_win_other.ogg','match_win.ogg','match_lose.ogg']
+            ['win.ogg']
                 .forEach(f => addRowB(f.replace('.ogg',''), f, null));
 
             addSectionB('── SFX (sfx btn) ──');
             Object.keys(Synth._volumes)
-                .filter(f => !LOOP_FILES.has(f) &&
-                    !['win.ogg','round_win_self.ogg','round_win_other.ogg','match_win.ogg','match_lose.ogg'].includes(f))
+                .filter(f => !LOOP_FILES.has(f) && f !== 'win.ogg')
                 .forEach(f => addRowB(f.replace('.ogg',''), f, null));
 
             document.body.appendChild(panel);
@@ -3099,7 +3055,6 @@
             _lastCountdownBeepSec = -1;
             Synth.stopMenuMusic();
             Synth.stopHeartbeat();
-            Synth.roundStart();
             // Play the 3-second voice countdown aligned to the move-lock window
             if (_lockDuration > 0) Synth.countdownVoice();
             Synth.muffle(false);
@@ -3217,7 +3172,7 @@
             lobbyLayer.classList.add('hidden');
             lobbyRulesLayer.classList.add('hidden');
             initialMenu.classList.remove('hidden');
-            Synth.stopTension(); Synth.stopHeartbeat();
+            Synth.stopHeartbeat();
             Synth.muffle(true);
             Synth.startMenuMusic();
 
@@ -4493,7 +4448,6 @@
             const text = el?.tagName === 'INPUT' ? el.value : el?.innerText;
             if (!el || !text) return;
             navigator.clipboard?.writeText(text).catch(() => {});
-            Synth.codeCopied();
             el.classList.add('copied-flash');
             setTimeout(() => el.classList.remove('copied-flash'), 800);
         });
@@ -4930,10 +4884,10 @@
                     updateScoreboard();
                     if (state.matchOver) {
                         const _catchupWinner = blazers.find(b => b.id === wId);
-                        if (_catchupWinner?.isLocal) { Synth.matchWinSelf(); Synth.playVictoryStinger(); }
-                        else { Synth.matchLoseSelf(); Synth.playDefeatStinger(); }
+                        if (_catchupWinner?.isLocal) { Synth.playVictoryStinger(); }
+                        else { Synth.playDefeatStinger(); }
                         gameState = 'MATCH_OVER';
-                        Synth.stopTension(); Synth.stopHeartbeat();
+                        Synth.stopHeartbeat();
                         Synth.muffle(true);
                         postMatchLayer.style.setProperty('--winner-color', wColor);
                         postMatchLayer.classList.add('winner-pulse');
@@ -4986,13 +4940,11 @@
 
                     if (winnerBlazer?.isLocal) {
                         Synth.win();
-                        Synth.matchWinSelf();
                         Synth.playVictoryStinger();
                     } else {
-                        Synth.matchLoseSelf();
                         Synth.playDefeatStinger();
                     }
-                    Synth.stopTension(); Synth.stopHeartbeat();
+                    Synth.stopHeartbeat();
                     Synth.muffle(true);
                     gameState = 'MATCH_OVER';
 
@@ -5032,9 +4984,7 @@
                     // Round win (not match): animate the score label flying to the new column.
                     // Score stays at oldScore visually until the animation lands (at 2 s).
                     // onStateChange is guarded to skip syncing this player during the window.
-                    if (winnerScore === WINS_TO_MATCH - 1) Synth.startTension();
-                    if (winnerBlazer?.isLocal) { Synth.win(); Synth.roundWinSelf(); }
-                    else Synth.roundWinOther();
+                    if (winnerBlazer?.isLocal) { Synth.win(); }
                     gameState = 'ROUND_OVER_COUNTDOWN';
                     currentWinner = winnerBlazer || { id: winnerId, color: winnerColor };
                     roundCountdown = 3000;
@@ -5078,7 +5028,7 @@
             room.onMessage("match_reset", () => {
                 clearInterval(matchEndTimerInterval);
                 matchEndTimerInterval = null;
-                Synth.stopTension(); Synth.stopHeartbeat();
+                Synth.stopHeartbeat();
 
                 // Reset client-side match state
                 scores = {};
