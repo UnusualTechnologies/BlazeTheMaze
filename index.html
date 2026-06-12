@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.343</div>
+    <div id="version-number">v1.5.344</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -959,20 +959,6 @@
                     <div style="display:flex; align-items:center; gap:10px;">
                         <input type="checkbox" id="collisions-toggle" checked style="width:20px; height:20px; cursor:pointer;">
                         <label for="collisions-toggle" style="font-size:1.2rem; cursor:pointer; user-select:none;">Enable Collisions</label>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <input type="checkbox" id="orb-leader-toggle" checked style="width:20px; height:20px; cursor:pointer;">
-                        <label for="orb-leader-toggle" style="font-size:1.2rem; cursor:pointer; user-select:none;">Teleport Other: Target Leader Only</label>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <label for="move-speed-select" style="font-size:1.2rem;">Player Speed:</label>
-                        <select id="move-speed-select" style="font-size:1.1rem; padding:5px; background:#111; color:#fff; border:1px solid #555; border-radius:4px; cursor:pointer;">
-                            <option value="100">Fast (100 ms)</option>
-                            <option value="125">125 ms</option>
-                            <option value="150" selected>Normal (150 ms)</option>
-                            <option value="175">175 ms</option>
-                            <option value="200">Slow (200 ms)</option>
-                        </select>
                     </div>
                 </div>
                 </div><!-- /.rules-panel-wrap -->
@@ -1397,9 +1383,7 @@
         const puMysteryInput  = document.getElementById('pu-mystery-input');
         const puFreezeInput   = document.getElementById('pu-freeze-input');
         const puBeaconInput   = document.getElementById('pu-beacon-input');
-        const orbLeaderToggle = document.getElementById('orb-leader-toggle');
         const tapOnlyToggle   = { checked: false }; // removed from UI — hold-to-move always active
-        const moveSpeedSelect = document.getElementById('move-speed-select');
         const pmNextGameBtn   = document.getElementById('pm-next-game-btn');
 
         const WINS_TO_MATCH = 3; // must stay in sync with GameRoom.WINS_TO_MATCH on the server
@@ -1749,8 +1733,6 @@
                 puFreeze:      puFreezeInput.value,
                 puBeacon:      puBeaconInput.value,
                 collisions:    document.getElementById('collisions-toggle').checked,
-                orbLeader:     orbLeaderToggle.checked,
-                moveSpeed:     moveSpeedSelect.value,
                 slots:         lobbySlots.map(s => ({
                     mode:        s.typeSelect.value,
                     control:     s.controlSelect.value,
@@ -1797,8 +1779,6 @@
             puFreezeInput.value  = s.puFreeze;
             puBeaconInput.value  = s.puBeacon;
             document.getElementById('collisions-toggle').checked = s.collisions;
-            orbLeaderToggle.checked = s.orbLeader;
-            if (s.moveSpeed) moveSpeedSelect.value = s.moveSpeed;
             // 4. Restore the actual manual-flag state (not the all-locked state from step 1)
             puManualFlags      = new Set(s.puManualFlags);
             gridSizeManualFlag = s.gridSizeManual;
@@ -2325,9 +2305,6 @@
                 this._wasFrozen = _nowFrozen;
 
                 if (this.isPlayer && this.state === 'normal' && this.isActuallyLocal() && now >= roundMoveLockEnd && Date.now() >= this.frozenUntil) {
-                    // Pick up any live speed change from the lobby dropdown
-                    this.moveCooldown = parseInt(moveSpeedSelect.value, 10) || 150;
-
                     // Deactivate speed boost if inputs have gone silent for longer than one base interval
                     if (this._speedBoostActive && this._lastMoveTs > 0 && now - this._lastMoveTs > this.moveCooldown * 1.5) {
                         this._killBoost();
@@ -5620,7 +5597,7 @@
         puMystery: parseInt(puMysteryInput.value, 10) || 0,
         puFreeze:  parseInt(puFreezeInput.value,  10) || 0,
                 puBeacon:  parseInt(puBeaconInput.value,  10) || 0,
-                orbLeaderOnly: orbLeaderToggle.checked,
+                orbLeaderOnly: true,
                 slots: lobbySlots.map(s => ({
                     mode: s.typeSelect.value,
                     id: s.id,
