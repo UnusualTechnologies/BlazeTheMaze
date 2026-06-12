@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.333</div>
+    <div id="version-number">v1.5.334</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1168,12 +1168,10 @@
             },
             _scheduleHeartbeat(immediate) {
                 if (!this._heartbeatActive) return;
-                // dist ≤8 → 300ms (max speed), dist threshold → 1000ms; capped at 8 cells
-                const HEARTBEAT_FAST_DIST = 8;
-                const maxDist = (this._heartbeatThreshold ?? 20) - HEARTBEAT_FAST_DIST;
-                const clampedDist = Math.max(HEARTBEAT_FAST_DIST, this._heartbeatDist);
-                const t = Math.max(0, Math.min(1, (clampedDist - HEARTBEAT_FAST_DIST) / maxDist));
-                const interval = Math.round(300 + t * 700);
+                // dist 1 → 300ms, dist threshold → 2000ms; cubic so it stays slow far out and accelerates near goal
+                const threshold = this._heartbeatThreshold ?? 20;
+                const tInv = Math.max(0, Math.min(1, (this._heartbeatDist - 1) / (threshold - 1)));
+                const interval = Math.round(300 + Math.pow(tInv, 3) * 1700);
                 const delay = immediate ? 0 : interval;
                 this._heartbeatTimer = setTimeout(() => {
                     if (!this._heartbeatActive) return;
@@ -3318,9 +3316,9 @@
             // Tension pulse: mirrors AI threat range (cols*2) so flash/heartbeat/AI all react together
             const TENSION_THRESHOLD = cols * 2;
             if (closestBlazer && minDist <= TENSION_THRESHOLD && gameState === 'PLAYING') {
-                const TENSION_FAST_DIST = 8; // full intensity from here to the goal
-                const remapped = Math.max(0, (Math.max(TENSION_FAST_DIST, minDist) - TENSION_FAST_DIST) / (TENSION_THRESHOLD - TENSION_FAST_DIST));
-                const tension = Math.pow(1 - remapped, 3);
+                // Cubic ramp: 0% at threshold, 100% at 1 cell — stays subtle far out, peaks last cell
+                const t = Math.max(0, Math.min(1, (TENSION_THRESHOLD - minDist) / (TENSION_THRESHOLD - 1)));
+                const tension = Math.pow(t, 3);
                 const aboutToWin = (scores[closestBlazer.id] ?? 0) >= WINS_TO_MATCH - 1;
                 const maxAlpha = aboutToWin ? 0.80 : 0.58;
                 // Pulse rate accelerates as blazer closes in (120ms → 55ms)
