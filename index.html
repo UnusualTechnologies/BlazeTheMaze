@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.313</div>
+    <div id="version-number">v1.5.314</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1052,7 +1052,7 @@
             _menuMusicActive: false,
             init() {
                 this.bgMusic.loop = true;
-                this.bgMusic.volume = 0.4;
+                this.bgMusic.volume = 0.32;
                 this._setupTrack(this.bgMusic, 'music_game.ogg');
                 this.menuMusic.loop = true;
                 this.menuMusic.volume = 0.35;
@@ -1084,12 +1084,20 @@
                 };
                 audio.play().catch(() => {});
             },
+            // One-shot stingers controlled by the music button, not the SFX button
+            playMusicSound(filename, volume = 0.6) {
+                if (this.isMusicMuted) return;
+                const audio = new Audio('./assets/audio/' + filename);
+                audio.volume = volume;
+                audio.onerror = () => console.warn(`[Audio] Missing: ${filename}`);
+                audio.play().catch(() => {});
+            },
             // SFX triggers
             turn(isPlayer)  { if (isPlayer) this.playSound('turn.ogg'); },
             bonk(isPlayer)  { if (isPlayer) this.playSound('bonk.ogg'); },
             zip()           { this.playSound('zip.ogg'); },
             glitch()        { this.playSound('glitch.ogg'); },
-            win()           { this.playSound('win.ogg'); },
+            win()           { this.playMusicSound('win.ogg'); },
             rocketHitStar() { this.playSound('rocket_hit_star.ogg'); },
             rocketLaunch()  { this.playSound('rocket_launch.ogg', 0.55); },
             rocketHit()     { this.playSound('rocket_hit.ogg', 0.7); },
@@ -1100,10 +1108,10 @@
             puPickupMystery(){ this.playSound('pu_pickup_mystery.ogg'); },
             countdownBeep() { this.playSound('countdown_beep.ogg', 0.5); },
             roundStart()    { this.playSound('round_start.ogg'); },
-            roundWinSelf()  { this.playSound('round_win_self.ogg'); },
-            roundWinOther() { this.playSound('round_win_other.ogg'); },
-            matchWinSelf()  { this.playSound('match_win.ogg', 0.8); },
-            matchLoseSelf() { this.playSound('match_lose.ogg', 0.8); },
+            roundWinSelf()  { this.playMusicSound('round_win_self.ogg'); },
+            roundWinOther() { this.playMusicSound('round_win_other.ogg'); },
+            matchWinSelf()  { this.playMusicSound('match_win.ogg', 0.8); },
+            matchLoseSelf() { this.playMusicSound('match_lose.ogg', 0.8); },
             uiClick()       { this.playSound('ui_click.ogg', 0.4); },
             playerJoin()    { this.playSound('player_join.ogg', 0.5); },
             playerLeave()   { this.playSound('player_leave.ogg', 0.4); },
@@ -1151,7 +1159,7 @@
                 }
             },
             muffle(isMuffled) {
-                this.bgMusic.volume = isMuffled ? 0.15 : 0.4;
+                this.bgMusic.volume = isMuffled ? 0.12 : 0.32;
                 if (this._tensionActive) this.tensionLoop.volume = isMuffled ? 0.1 : 0.35;
             },
             toggleMusic() {
