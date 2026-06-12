@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.306</div>
+    <div id="version-number">v1.5.307</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2198,6 +2198,8 @@
                     if (this.stateTimer <= 0) {
                         this.state = 'teleport_in';
                         this.stateTimer = 1.0;
+                        // gridX/gridY already set to destination when teleport fired;
+                        // updatePixelPos(true) snaps pixelX/pixelY to the new cell now.
                         this.gridX = this.targetGridX;
                         this.gridY = this.targetGridY;
                         this.updatePixelPos(true);
@@ -4530,6 +4532,12 @@
                             }
                             blazer.targetGridX = playerState.x;
                             blazer.targetGridY = playerState.y;
+                            // Snap logical position immediately so the blazer is at the destination
+                            // for game logic from frame 1. pixelX/pixelY stays at the departure
+                            // pixel (updatePixelPos is skipped during teleport_out) so the visual
+                            // still shrinks at the old cell then reappears at the new one.
+                            blazer.gridX = playerState.x;
+                            blazer.gridY = playerState.y;
                             blazer.sentMoves = []; // pre-teleport predictions are moot now
                         } else if (blazer.state === 'teleport_out' || blazer.state === 'teleport_in') {
                             // Mid-teleport animation with no new teleport — leave it alone so the
