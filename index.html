@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.308</div>
+    <div id="version-number">v1.5.309</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3580,6 +3580,13 @@
             // 3 countdown pulses: big → mid → small, each expanding outward from the blazer
             // Pulse 3 finishes exactly when movement unlocks; blazer briefly flashes white at that moment
             if (roundRingTime !== null) {
+                // Countdown beeps: fire once per second while movement is locked (3→2→1)
+                const _lockSecsLeft = Math.ceil((roundMoveLockEnd - now) / 1000);
+                if (_lockSecsLeft !== _lastCountdownBeepSec && _lockSecsLeft >= 1 && _lockSecsLeft <= 3) {
+                    _lastCountdownBeepSec = _lockSecsLeft;
+                    Synth.countdownBeep();
+                }
+
                 const ringElapsed = now - roundRingTime;
                 const ringDuration = ROUND_START_MS;
                 if (ringElapsed < ringDuration) {
@@ -3726,11 +3733,6 @@
             if (gameState === 'ROUND_OVER_COUNTDOWN') {
                 roundCountdown -= dt;
                 const secondsLeft = Math.ceil(roundCountdown / 1000);
-                if (secondsLeft !== _lastCountdownBeepSec && secondsLeft >= 1 && secondsLeft <= 3) {
-                    _lastCountdownBeepSec = secondsLeft;
-                    Synth.countdownBeep();
-                }
-
                 ctx.save();
 
                 const titleSize = Math.max(20, width * 0.06);
