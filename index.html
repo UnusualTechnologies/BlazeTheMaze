@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.329</div>
+    <div id="version-number">v1.5.330</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1071,7 +1071,6 @@
                 'pu_pickup_self.ogg':   0.6,
                 'pu_pickup_opp.ogg':    0.6,
                 'pu_pickup_mystery.ogg':0.6,
-                'countdown_beep.ogg':   0.5,
                 'countdown.ogg':        0.6,
                 'speed.ogg':            0.6,
                 'ui_click.ogg':         0.4,
@@ -1128,8 +1127,7 @@
             puPickupSelf()  { this.playSound('pu_pickup_self.ogg'); },
             puPickupOpp()   { this.playSound('pu_pickup_opp.ogg'); },
             puPickupMystery(){ this.playSound('pu_pickup_mystery.ogg'); },
-            countdownBeep() { this.playSound('countdown_beep.ogg', 0.5); },
-            countdownVoice(){ this.playSound('countdown.ogg'); },
+            countdownBeep() { this.playSound('countdown.ogg'); },
             speedBoost()    { this.playSound('speed.ogg'); },
             uiClick()       { this.playSound('ui_click.ogg', 0.4); },
             // Music control
@@ -1468,7 +1466,7 @@
         let roundTimes = [];
         let matchEndTimerInterval = null;
         let pmJoinIntent = false; // true when user clicks the "join next game" button
-        let _lastCountdownBeepSec = -1;
+
         const ROUND_START_MS = 4500;   // total ring animation duration — pulse 3 fires at exactly 3s (4500 * 2/3 = 3000ms)
         let roundRingTime = null;      // set every round; drives ring, labels, and movement lock
         let roundSonarsFired = 0;      // how many goal-sonar pings have fired this round-start
@@ -3069,11 +3067,9 @@
             roundMoveLockEnd = performance.now() + _lockDuration;
             roundUnlockFlashFired = (_lockDuration === 0); // no unlock flash if movement was never locked
             roundSonarsFired = 0;
-            _lastCountdownBeepSec = -1;
             Synth.stopMenuMusic();
             Synth.stopHeartbeat();
-            // Play the 3-second voice countdown aligned to the move-lock window
-            if (_lockDuration > 0) Synth.countdownVoice();
+            if (_lockDuration > 0) Synth.countdownBeep();
             Synth.muffle(false);
         }
 
@@ -3864,13 +3860,6 @@
             // 3 countdown pulses: big → mid → small, each expanding outward from the blazer
             // Pulse 3 finishes exactly when movement unlocks; blazer briefly flashes white at that moment
             if (roundRingTime !== null) {
-                // Countdown beeps: fire once per second while movement is locked (3→2→1)
-                const _lockSecsLeft = Math.ceil((roundMoveLockEnd - now) / 1000);
-                if (_lockSecsLeft !== _lastCountdownBeepSec && _lockSecsLeft >= 1 && _lockSecsLeft <= 3) {
-                    _lastCountdownBeepSec = _lockSecsLeft;
-                    Synth.countdownBeep();
-                }
-
                 const ringElapsed = now - roundRingTime;
                 const ringDuration = ROUND_START_MS;
                 if (ringElapsed < ringDuration) {
