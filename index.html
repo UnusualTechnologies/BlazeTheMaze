@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.344</div>
+    <div id="version-number">v1.5.346</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3653,9 +3653,9 @@
                     const pulse = 1 + Math.sin(time * 3) * 0.1;
                     ctx.scale(pulse, pulse);
                     const nowMs = performance.now();
-                    const flashSlot = Math.floor(nowMs / 300) % playerColors.length;
-                    const pickupColor = (nowMs % 300 < 220) ? playerColors[flashSlot] : playerColors[0];
-                    ctx.rotate(nowMs / 80);
+                    const flashSlot = Math.floor((nowMs % 2000) / (2000 / playerColors.length)) % playerColors.length;
+                    const pickupColor = playerColors[flashSlot];
+                    ctx.rotate((nowMs / 6000) * Math.PI * 2);
                     drawDiscBlade(ctx, cellSize * 0.38, pickupColor);
                 } else if (p.type === 'mirror') {
                     // 4 solid white outward arrows — matches menu icon polygons
@@ -6432,11 +6432,11 @@
             if (!ctxs.length) return;
             function drawBlade(c, ts) {
                 c.clearRect(0, 0, CSS, CSS);
-                const flashSlot = Math.floor(ts / 300) % playerColors.length;
-                const bladeColor = (ts % 300 < 220) ? playerColors[flashSlot] : (playerColors[0] || '#ff3300');
+                const flashSlot = Math.floor((ts % 2000) / (2000 / playerColors.length)) % playerColors.length;
+                const bladeColor = playerColors[flashSlot] || '#ff3300';
                 c.save();
                 c.translate(CSS / 2, CSS / 2);
-                c.rotate(ts / 80);
+                c.rotate((ts / 6000) * Math.PI * 2);
                 drawDiscBlade(c, CSS * 0.44, bladeColor, 6);
                 c.restore();
             }
