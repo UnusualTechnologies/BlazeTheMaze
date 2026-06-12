@@ -848,6 +848,9 @@ export class GameRoom extends Room<{ state: GameState }> {
     private seekPowerUpIfThreatened(sessionId: string, player: Player, open: { x: number; y: number }[]): { x: number; y: number } | null {
         const threatRange = this.cols * 2;
         const myDist = this.distanceMap[this.idx(player.x, player.y)];
+        // If we're close enough to win ourselves, sprint for the goal — never detour for a power-up.
+        const sprintThreshold = Math.ceil(this.cols / 2);
+        if (myDist <= sprintThreshold) { this.aiPUTarget.set(sessionId, null); return null; }
         let threatened = false;
         this.state.players.forEach((other, sid) => {
             if (sid === sessionId) return;
