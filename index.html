@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.307</div>
+    <div id="version-number">v1.5.308</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -4717,7 +4717,7 @@
                     // Score stays at oldScore visually until the animation lands (at 2 s).
                     // onStateChange is guarded to skip syncing this player during the window.
                     if (winnerScore === WINS_TO_MATCH - 1) Synth.startTension();
-                    if (winnerBlazer?.isLocal) Synth.roundWinSelf();
+                    if (winnerBlazer?.isLocal) { Synth.win(); Synth.roundWinSelf(); }
                     else Synth.roundWinOther();
                     gameState = 'ROUND_OVER_COUNTDOWN';
                     currentWinner = winnerBlazer || { id: winnerId, color: winnerColor };
