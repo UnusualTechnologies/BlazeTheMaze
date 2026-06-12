@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.320</div>
+    <div id="version-number">v1.5.321</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1047,14 +1047,16 @@
             menuMusic:     new Audio('./assets/audio/music_menu.ogg'),
             victoryMusic:  new Audio('./assets/audio/music_victory.ogg'),
             defeatMusic:   new Audio('./assets/audio/music_fail.ogg'),
-            heartbeatLoop: new Audio('./assets/audio/heartbeat.ogg'),
+            heartbeatSingle: new Audio('./assets/audio/heartbeat_single.ogg'),
             _menuMusicActive: false,
             _heartbeatActive: false,
+            _heartbeatTimer:  null,
+            _heartbeatDist:   Infinity,
             // Master volume table — all defaults live here. Debug panel reads/writes this.
             _volumes: {
                 'music_game.ogg':       0.32,
                 'music_menu.ogg':       0.35,
-                'heartbeat.ogg':        0.5,
+                'heartbeat_single.ogg': 0.5,
                 'music_victory.ogg':    0.6,
                 'music_fail.ogg':       0.6,
                 'turn.ogg':             0.6,
@@ -1082,9 +1084,7 @@
                 this.menuMusic.loop = true;
                 this.menuMusic.volume = this._volumes['music_menu.ogg'];
                 this._setupTrack(this.menuMusic, 'music_menu.ogg');
-                this.heartbeatLoop.loop = true;
-                this.heartbeatLoop.volume = this._volumes['heartbeat.ogg'];
-                this._setupTrack(this.heartbeatLoop, 'heartbeat.ogg');
+                this._setupTrack(this.heartbeatSingle, 'heartbeat_single.ogg');
                 this._setupTrack(this.victoryMusic, 'music_victory.ogg');
                 this._setupTrack(this.defeatMusic, 'music_fail.ogg');
                 this._syncButtons();
@@ -1158,17 +1158,31 @@
                 this.defeatMusic.currentTime = 0;
                 this.defeatMusic.play().catch(() => {});
             },
-            startHeartbeat() {
-                if (this._heartbeatActive) return;
+            startHeartbeat(dist) {
+                this._heartbeatDist = dist;
+                if (this._heartbeatActive) return; // already ticking; dist updated above, next beat picks it up
                 this._heartbeatActive = true;
-                if (this.isMusicMuted) return;
-                this.heartbeatLoop.currentTime = 0;
-                this.heartbeatLoop.play().catch(() => {});
+                this._scheduleHeartbeat(true); // immediate first beat
             },
             stopHeartbeat() {
                 this._heartbeatActive = false;
-                this.heartbeatLoop.pause();
-                this.heartbeatLoop.currentTime = 0;
+                if (this._heartbeatTimer) { clearTimeout(this._heartbeatTimer); this._heartbeatTimer = null; }
+            },
+            _scheduleHeartbeat(immediate) {
+                if (!this._heartbeatActive) return;
+                // dist 1 → 300ms, dist 8 → 1000ms (linear interpolation)
+                const t = Math.max(0, Math.min(1, (this._heartbeatDist - 1) / 7));
+                const interval = Math.round(300 + t * 700);
+                const delay = immediate ? 0 : interval;
+                this._heartbeatTimer = setTimeout(() => {
+                    if (!this._heartbeatActive) return;
+                    if (!this.isSfxMuted) {
+                        this.heartbeatSingle.currentTime = 0;
+                        this.heartbeatSingle.volume = this._volumes['heartbeat_single.ogg'];
+                        this.heartbeatSingle.play().catch(() => {});
+                    }
+                    this._scheduleHeartbeat(false);
+                }, delay);
             },
             startMusic() {
                 this.stopMenuMusic(); // stop menu music before game music starts
@@ -1185,15 +1199,11 @@
                 if (this.isMusicMuted) {
                     this.bgMusic.pause();
                     this.menuMusic.pause();
-                    this.heartbeatLoop.pause();
                 } else {
                     if (this._menuMusicActive) {
                         this.menuMusic.play().catch(() => {});
                     } else {
                         this.bgMusic.play().catch(() => {});
-                        if (this._heartbeatActive) {
-                            this.heartbeatLoop.play().catch(() => {});
-                        }
                     }
                 }
                 if (_isElectron) localStorage.setItem('blazeMusicMuted', this.isMusicMuted ? '1' : '0');
@@ -1213,7 +1223,6 @@
             const LOOP_ENTRIES = [
                 { label: 'music_game',    file: 'music_game.ogg',    obj: () => Synth.bgMusic },
                 { label: 'music_menu',    file: 'music_menu.ogg',    obj: () => Synth.menuMusic },
-                { label: 'heartbeat',     file: 'heartbeat.ogg',     obj: () => Synth.heartbeatLoop },
                 { label: 'music_victory', file: 'music_victory.ogg', obj: () => Synth.victoryMusic },
                 { label: 'music_fail',    file: 'music_fail.ogg',    obj: () => Synth.defeatMusic },
             ];
@@ -3262,7 +3271,7 @@
                 const localBlazer = blazers.find(b => b.isActuallyLocal?.() ?? b.isLocal);
                 const localDist = localBlazer ? (distanceMap[localBlazer.gridX]?.[localBlazer.gridY] ?? Infinity) : Infinity;
                 const HEARTBEAT_THRESHOLD = 8;
-                if (localDist <= HEARTBEAT_THRESHOLD) Synth.startHeartbeat();
+                if (localDist <= HEARTBEAT_THRESHOLD) Synth.startHeartbeat(localDist);
                 else Synth.stopHeartbeat();
             }
 
