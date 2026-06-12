@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.334</div>
+    <div id="version-number">v1.5.335</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1168,10 +1168,10 @@
             },
             _scheduleHeartbeat(immediate) {
                 if (!this._heartbeatActive) return;
-                // dist 1 → 300ms, dist threshold → 2000ms; cubic so it stays slow far out and accelerates near goal
+                // dist 1 → 400ms, dist threshold → 2000ms; cubic so it stays slow far out and accelerates near goal
                 const threshold = this._heartbeatThreshold ?? 20;
                 const tInv = Math.max(0, Math.min(1, (this._heartbeatDist - 1) / (threshold - 1)));
-                const interval = Math.round(300 + Math.pow(tInv, 3) * 1700);
+                const interval = Math.round(400 + Math.pow(tInv, 3) * 1600);
                 const delay = immediate ? 0 : interval;
                 this._heartbeatTimer = setTimeout(() => {
                     if (!this._heartbeatActive) return;
@@ -2102,8 +2102,8 @@
                 this.speedGlow = 0; // 0→1: white hot-streak glow (ramps dirStreak 3→6)
                 this.speedBlur = 0;  // 0–1 smoothed, drives motion-blur ghost opacity
 
-                // Speed-boost: 5 consecutive fast cells, ≤2 direction changes, no wall bumps
-                this._recentMoveGaps = []; // last 4 inter-move gaps (real ms)
+                // Speed-boost: 6 consecutive fast cells, ≤2 direction changes, no wall bumps
+                this._recentMoveGaps = []; // last 5 inter-move gaps (real ms)
                 this._lastMoveTs     = 0;  // real timestamp of last executed move
                 this._speedBoostActive = false;
                 this._dirChangeCount = 0;  // direction changes since last 3-cell straight run
@@ -2239,9 +2239,9 @@
                         this._recentMoveGaps = [];
                     } else {
                         this._recentMoveGaps.push(gap);
-                        if (this._recentMoveGaps.length > 4) this._recentMoveGaps.shift();
-                        // Activate once we have 4 fast gaps in a row (= 5 cells at max pace)
-                        if (this._recentMoveGaps.length === 4 && !this._speedBoostActive) {
+                        if (this._recentMoveGaps.length > 5) this._recentMoveGaps.shift();
+                        // Activate once we have 5 fast gaps in a row (= 6 cells at max pace)
+                        if (this._recentMoveGaps.length === 5 && !this._speedBoostActive) {
                             this._speedBoostActive = true;
                             Synth.speedBoost();
                         }
@@ -3316,9 +3316,9 @@
             // Tension pulse: mirrors AI threat range (cols*2) so flash/heartbeat/AI all react together
             const TENSION_THRESHOLD = cols * 2;
             if (closestBlazer && minDist <= TENSION_THRESHOLD && gameState === 'PLAYING') {
-                // Cubic ramp: 0% at threshold, 100% at 1 cell — stays subtle far out, peaks last cell
+                // Cubic ramp: 5% at threshold, 30% at 1 cell — subtle throughout, peaks at goal
                 const t = Math.max(0, Math.min(1, (TENSION_THRESHOLD - minDist) / (TENSION_THRESHOLD - 1)));
-                const tension = Math.pow(t, 3);
+                const tension = 0.05 + Math.pow(t, 3) * 0.25;
                 const aboutToWin = (scores[closestBlazer.id] ?? 0) >= WINS_TO_MATCH - 1;
                 const maxAlpha = aboutToWin ? 0.80 : 0.58;
                 // Pulse rate accelerates as blazer closes in (120ms → 55ms)
