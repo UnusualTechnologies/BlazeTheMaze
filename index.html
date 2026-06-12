@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.321</div>
+    <div id="version-number">v1.5.322</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1170,8 +1170,8 @@
             },
             _scheduleHeartbeat(immediate) {
                 if (!this._heartbeatActive) return;
-                // dist 1 → 300ms, dist 8 → 1000ms (linear interpolation)
-                const t = Math.max(0, Math.min(1, (this._heartbeatDist - 1) / 7));
+                // dist 1 → 300ms, dist 20 → 1000ms (linear interpolation)
+                const t = Math.max(0, Math.min(1, (this._heartbeatDist - 1) / 19));
                 const interval = Math.round(300 + t * 700);
                 const delay = immediate ? 0 : interval;
                 this._heartbeatTimer = setTimeout(() => {
@@ -3270,7 +3270,7 @@
             if (gameState === 'PLAYING' && distanceMap.length > 0) {
                 const localBlazer = blazers.find(b => b.isActuallyLocal?.() ?? b.isLocal);
                 const localDist = localBlazer ? (distanceMap[localBlazer.gridX]?.[localBlazer.gridY] ?? Infinity) : Infinity;
-                const HEARTBEAT_THRESHOLD = 8;
+                const HEARTBEAT_THRESHOLD = 20;
                 if (localDist <= HEARTBEAT_THRESHOLD) Synth.startHeartbeat(localDist);
                 else Synth.stopHeartbeat();
             }
@@ -3308,9 +3308,10 @@
                 ctx.fillRect(0, 0, width, height);
             }
 
-            // Tension pulse: trigger scales with both maze dims so large mazes still get tension
-            if (closestBlazer && minDist <= cols + rows && gameState === 'PLAYING') {
-                const tension = Math.pow(Math.min(1 - minDist / (cols + rows), 0.5), 3);
+            // Tension pulse: fixed 20-cell threshold, linear ramp 0→1 as leader closes in
+            const TENSION_THRESHOLD = 20;
+            if (closestBlazer && minDist <= TENSION_THRESHOLD && gameState === 'PLAYING') {
+                const tension = 1 - minDist / TENSION_THRESHOLD;
                 const aboutToWin = (scores[closestBlazer.id] ?? 0) >= WINS_TO_MATCH - 1;
                 const maxAlpha = aboutToWin ? 0.80 : 0.58;
                 // Pulse rate accelerates as blazer closes in (120ms → 55ms)
