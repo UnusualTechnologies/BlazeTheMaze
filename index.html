@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.317</div>
+    <div id="version-number">v1.5.318</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1268,7 +1268,7 @@
                 position: 'fixed', right: '10px', top: '50%', transform: 'translateY(-50%)',
                 background: 'rgba(0,0,0,0.88)', color: '#ddd', padding: '8px 10px',
                 borderRadius: '8px', fontFamily: 'monospace', fontSize: '11px',
-                width: '230px', maxHeight: '82vh', overflowY: 'auto',
+                width: '340px', maxHeight: '82vh', overflowY: 'auto',
                 zIndex: '9999', border: '1px solid #555', lineHeight: '1.2',
             });
 
@@ -1286,7 +1286,7 @@
                 Object.assign(row.style, { display: 'flex', alignItems: 'center', margin: '2px 0', gap: '4px' });
 
                 const lbl = document.createElement('span');
-                Object.assign(lbl.style, { width: '100px', overflow: 'hidden', textOverflow: 'ellipsis',
+                Object.assign(lbl.style, { width: '160px', overflow: 'hidden', textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap', color: '#aaa', fontSize: '10px', cursor: 'default' });
                 lbl.title = file;
                 lbl.textContent = label;
@@ -1338,7 +1338,7 @@
                 const row = document.createElement('div');
                 Object.assign(row.style, { display:'flex', alignItems:'center', margin:'2px 0', gap:'4px' });
                 const lbl = document.createElement('span');
-                Object.assign(lbl.style, { width:'100px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:'#aaa', fontSize:'10px', cursor:'default' });
+                Object.assign(lbl.style, { width:'160px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:'#aaa', fontSize:'10px', cursor:'default' });
                 lbl.title = file; lbl.textContent = label;
                 const slider = document.createElement('input');
                 slider.type='range'; slider.min=0; slider.max=1; slider.step=0.01; slider.value=vol;
