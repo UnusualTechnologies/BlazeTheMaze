@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.322</div>
+    <div id="version-number">v1.5.323</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1049,9 +1049,10 @@
             defeatMusic:   new Audio('./assets/audio/music_fail.ogg'),
             heartbeatSingle: new Audio('./assets/audio/heartbeat_single.ogg'),
             _menuMusicActive: false,
-            _heartbeatActive: false,
-            _heartbeatTimer:  null,
-            _heartbeatDist:   Infinity,
+            _heartbeatActive:    false,
+            _heartbeatTimer:     null,
+            _heartbeatDist:      Infinity,
+            _heartbeatThreshold: 20,
             // Master volume table — all defaults live here. Debug panel reads/writes this.
             _volumes: {
                 'music_game.ogg':       0.32,
@@ -1158,9 +1159,10 @@
                 this.defeatMusic.currentTime = 0;
                 this.defeatMusic.play().catch(() => {});
             },
-            startHeartbeat(dist) {
-                this._heartbeatDist = dist;
-                if (this._heartbeatActive) return; // already ticking; dist updated above, next beat picks it up
+            startHeartbeat(dist, threshold) {
+                this._heartbeatDist      = dist;
+                this._heartbeatThreshold = threshold ?? this._heartbeatThreshold ?? 20;
+                if (this._heartbeatActive) return; // already ticking; dist/threshold updated, next beat picks them up
                 this._heartbeatActive = true;
                 this._scheduleHeartbeat(true); // immediate first beat
             },
@@ -1170,8 +1172,9 @@
             },
             _scheduleHeartbeat(immediate) {
                 if (!this._heartbeatActive) return;
-                // dist 1 → 300ms, dist 20 → 1000ms (linear interpolation)
-                const t = Math.max(0, Math.min(1, (this._heartbeatDist - 1) / 19));
+                // dist 1 → 300ms, dist threshold → 1000ms (linear interpolation)
+                const maxDist = (this._heartbeatThreshold ?? 20) - 1;
+                const t = Math.max(0, Math.min(1, (this._heartbeatDist - 1) / maxDist));
                 const interval = Math.round(300 + t * 700);
                 const delay = immediate ? 0 : interval;
                 this._heartbeatTimer = setTimeout(() => {
@@ -3270,8 +3273,8 @@
             if (gameState === 'PLAYING' && distanceMap.length > 0) {
                 const localBlazer = blazers.find(b => b.isActuallyLocal?.() ?? b.isLocal);
                 const localDist = localBlazer ? (distanceMap[localBlazer.gridX]?.[localBlazer.gridY] ?? Infinity) : Infinity;
-                const HEARTBEAT_THRESHOLD = 20;
-                if (localDist <= HEARTBEAT_THRESHOLD) Synth.startHeartbeat(localDist);
+                const HEARTBEAT_THRESHOLD = cols * 2;
+                if (localDist <= HEARTBEAT_THRESHOLD) Synth.startHeartbeat(localDist, HEARTBEAT_THRESHOLD);
                 else Synth.stopHeartbeat();
             }
 
@@ -3308,8 +3311,8 @@
                 ctx.fillRect(0, 0, width, height);
             }
 
-            // Tension pulse: fixed 20-cell threshold, linear ramp 0→1 as leader closes in
-            const TENSION_THRESHOLD = 20;
+            // Tension pulse: mirrors AI threat range (cols*2) so flash/heartbeat/AI all react together
+            const TENSION_THRESHOLD = cols * 2;
             if (closestBlazer && minDist <= TENSION_THRESHOLD && gameState === 'PLAYING') {
                 const tension = 1 - minDist / TENSION_THRESHOLD;
                 const aboutToWin = (scores[closestBlazer.id] ?? 0) >= WINS_TO_MATCH - 1;
