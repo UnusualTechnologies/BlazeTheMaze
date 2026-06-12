@@ -1193,6 +1193,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                 });
                 const leaderPlayer = leaderSid ? this.state.players.get(leaderSid) : null;
                 if (leaderPlayer) this.teleportPlayer(leaderPlayer, "pu-opponents-leader");
+                else this.teleportPlayer(player, "pu-self"); // sole player — send yourself to the back
             } else {
                 this.state.players.forEach((p, sid) => {
                     if (sid !== sessionId) this.teleportPlayer(p, "pu-opponents");
