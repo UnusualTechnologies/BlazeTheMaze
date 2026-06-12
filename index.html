@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.309</div>
+    <div id="version-number">v1.5.310</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1801,6 +1801,8 @@
                 this.angle = 0;
                 this.stepsTaken = 0;
                 this.hitTargets = new Set(); // prevents double-reporting the same target
+                this.trail = [];
+                this.maxTrail = 14;
             }
 
             update(dt) {
@@ -1810,6 +1812,10 @@
                 const target = gridToPixel(this.gridX, this.gridY);
                 this.pixelX += (target.x - this.pixelX) * 0.52;
                 this.pixelY += (target.y - this.pixelY) * 0.52;
+
+                // Record pixel position for trail
+                this.trail.push({ x: this.pixelX, y: this.pixelY });
+                if (this.trail.length > this.maxTrail) this.trail.shift();
 
                 if (this.moveTimer >= this.moveInterval) {
                     this.moveTimer = 0;
@@ -1873,6 +1879,25 @@
             }
 
             draw() {
+                // Comet trail — fading glowing dots, oldest dimmer and smaller
+                if (this.trail.length > 1) {
+                    const len = this.trail.length;
+                    ctx.save();
+                    for (let i = 0; i < len - 1; i++) {
+                        const frac = (i + 1) / len; // 0 (oldest) → 1 (newest)
+                        ctx.globalAlpha = frac * 0.55;
+                        ctx.fillStyle = this.color;
+                        ctx.shadowBlur = 10 * frac;
+                        ctx.shadowColor = this.color;
+                        ctx.beginPath();
+                        ctx.arc(this.trail[i].x, this.trail[i].y, cellSize * 0.09 * frac, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    ctx.globalAlpha = 1;
+                    ctx.shadowBlur = 0;
+                    ctx.restore();
+                }
+
                 const HR    = cellSize * 0.12;
                 const HH    = cellSize * 0.38;
                 const N     = 48;
