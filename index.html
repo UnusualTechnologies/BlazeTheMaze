@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.361</div>
+    <div id="version-number">v1.5.362</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2271,37 +2271,25 @@
                     this.lastDx = dx;
                     this.lastDy = dy;
                     this.dirStreak = 0; // reset on direction change
-                    // Count direction changes — too many kills the streak
-                    this._dirChangeCount++;
-                    if (this._dirChangeCount > 2) {
-                        this._killBoost();
-                        this._dirChangeCount = 0;
-                    }
+                    this._killBoost();  // any direction change kills the streak
                 }
                 this.dirStreak++; // 1 on first step in a direction, 3+ = max blur
-                // After 3 cells in the same direction, forgive accumulated direction changes
-                if (this.dirStreak === 3) this._dirChangeCount = 0;
 
                 this.gridX += dx;
                 this.gridY += dy;
                 const _moveNow = performance.now();
                 this.lastExecuteTime = _moveNow;
 
-                // Speed-boost tracking (direction-independent: purely about move frequency)
+                // Speed-boost tracking: corridor-based — activate after 4 cells straight (>3 before a turn)
                 if (this._lastMoveTs > 0) {
                     const gap = _moveNow - this._lastMoveTs;
                     const tolerance = this.moveCooldown * 1.15; // 15% grace for input jitter
                     if (gap > tolerance) {
-                        // Too slow — clear streak and deactivate boost
+                        // Stopped moving — kill streak
                         this._killBoost();
-                    } else if (_moveNow < this._boostCooldownUntil) {
-                        // In cooldown — keep gaps cleared so streak must be earned fresh after
-                        this._recentMoveGaps = [];
-                    } else {
-                        this._recentMoveGaps.push(gap);
-                        if (this._recentMoveGaps.length > 5) this._recentMoveGaps.shift();
-                        // Activate once we have 5 fast gaps in a row (= 6 cells at max pace)
-                        if (this._recentMoveGaps.length === 5 && !this._speedBoostActive) {
+                    } else if (_moveNow >= this._boostCooldownUntil) {
+                        // Activate once we've taken more than 3 steps in the same direction
+                        if (this.dirStreak === 4 && !this._speedBoostActive) {
                             this._speedBoostActive = true;
                             Synth.speedBoost();
                         }
