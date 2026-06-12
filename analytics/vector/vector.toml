@@ -1,0 +1,36 @@
+[sources.http_events]
+type = "http_server"
+address = "0.0.0.0:8080"
+encoding.codec = "json"
+
+[transforms.enrich]
+type = "remap"
+inputs = ["http_events"]
+source = '''
+  # Use client timestamp if provided, otherwise stamp with server receive time
+  if !exists(.timestamp) || .timestamp == "" {
+    .timestamp = now()
+  }
+  # Drop internal Vector metadata fields so ClickHouse skip_unknown_fields handles them
+  del(.source_type)
+'''
+
+[sinks.clickhouse]
+type = "clickhouse"
+inputs = ["enrich"]
+endpoint = "http://clickhouse:8123"
+database = "analytics"
+table = "events"
+skip_unknown_fields = true
+
+[sinks.clickhouse.auth]
+strategy = "basic"
+user = "analytics"
+password = "${CLICKHOUSE_PASSWORD}"
+
+[sinks.clickhouse.batch]
+timeout_secs = 5
+max_events = 1000
+
+[sinks.clickhouse.encoding]
+timestamp_format = "rfc3339"

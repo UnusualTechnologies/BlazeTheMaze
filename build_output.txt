@@ -1,0 +1,8 @@
+
+> blaze-the-maze@1.0.0 build
+> set CSC_IDENTITY_AUTO_DISCOVERY=false && electron-builder --win
+
+  • electron-builder  version=24.13.3 os=10.0.26200
+  • loaded configuration  file=package.json ("build" field)
+  • packaging       platform=win32 arch=x64 electron=30.5.1 appOutDir=dist\win-unpacked
+  • building        target=portable file=dist\Blaze The Maze 1.0.0.exe archs=x64
