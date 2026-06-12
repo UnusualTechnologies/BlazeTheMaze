@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.327</div>
+    <div id="version-number">v1.5.328</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2108,10 +2108,11 @@
                 this.speedGlow = 0; // 0→1: white hot-streak glow (ramps dirStreak 3→6)
                 this.speedBlur = 0;  // 0–1 smoothed, drives motion-blur ghost opacity
 
-                // Speed-boost: 6 consecutive cells each ≤ baseCooldown → drop interval to 100ms
+                // Speed-boost: 6 consecutive fast cells, ≤2 direction changes, no wall bumps
                 this._recentMoveGaps = []; // last 5 inter-move gaps (real ms)
                 this._lastMoveTs     = 0;  // real timestamp of last executed move
                 this._speedBoostActive = false;
+                this._dirChangeCount = 0;  // direction changes since last 3-cell straight run
 
                 this.heldDirections = [];
                 this.turnIntent = null;
@@ -2195,6 +2196,10 @@
                 this.bonkDx = dx;
                 this.bonkDy = dy;
                 this.bonkTimer = 1.0;
+                // Wall bump kills the speed streak
+                this._speedBoostActive = false;
+                this._recentMoveGaps = [];
+                this._dirChangeCount = 0;
             }
 
             /**
@@ -2215,8 +2220,17 @@
                     this.lastDx = dx;
                     this.lastDy = dy;
                     this.dirStreak = 0; // reset on direction change
+                    // Count direction changes — too many kills the streak
+                    this._dirChangeCount++;
+                    if (this._dirChangeCount > 2) {
+                        this._speedBoostActive = false;
+                        this._recentMoveGaps = [];
+                        this._dirChangeCount = 0;
+                    }
                 }
                 this.dirStreak++; // 1 on first step in a direction, 3+ = max blur
+                // After 3 cells in the same direction, forgive accumulated direction changes
+                if (this.dirStreak === 3) this._dirChangeCount = 0;
 
                 this.gridX += dx;
                 this.gridY += dy;
@@ -2956,6 +2970,7 @@
             blazer._speedBoostActive = false;
             blazer._recentMoveGaps = [];
             blazer._lastMoveTs = 0;
+            blazer._dirChangeCount = 0;
         }
 
         function initMatch() {
@@ -4818,6 +4833,7 @@
                             // Teleport always breaks the speed boost
                             blazer._speedBoostActive = false;
                             blazer._recentMoveGaps = [];
+                            blazer._dirChangeCount = 0;
                         } else if (blazer.state === 'teleport_out' || blazer.state === 'teleport_in') {
                             // Mid-teleport animation with no new teleport — leave it alone so the
                             // animation can finish landing on its target.
