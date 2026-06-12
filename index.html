@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.324</div>
+    <div id="version-number">v1.5.325</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1123,7 +1123,7 @@
             bonk(isPlayer)  { if (isPlayer) this.playSound('bonk.ogg'); },
             zip()           { this.playSound('zip.ogg'); },
             glitch()        { this.playSound('glitch.ogg'); },
-            win()           { this.playMusicSound('win.ogg'); },
+            win()           { this.playSound('win.ogg'); },
             rocketHitStar() { this.playSound('rocket_hit_star.ogg'); },
             rocketLaunch()  { this.playSound('rocket_launch.ogg', 0.55); },
             rocketHit()     { this.playSound('rocket_hit.ogg', 0.7); },
@@ -1150,12 +1150,14 @@
                 this.menuMusic.currentTime = 0;
             },
             playVictoryStinger() {
-                if (this.isMusicMuted) return;
+                if (this.isSfxMuted) return;
+                this.victoryMusic.volume = this._volumes['music_victory.ogg'];
                 this.victoryMusic.currentTime = 0;
                 this.victoryMusic.play().catch(() => {});
             },
             playDefeatStinger() {
-                if (this.isMusicMuted) return;
+                if (this.isSfxMuted) return;
+                this.defeatMusic.volume = this._volumes['music_fail.ogg'];
                 this.defeatMusic.currentTime = 0;
                 this.defeatMusic.play().catch(() => {});
             },
@@ -1226,8 +1228,6 @@
             const LOOP_ENTRIES = [
                 { label: 'music_game',    file: 'music_game.ogg',    obj: () => Synth.bgMusic },
                 { label: 'music_menu',    file: 'music_menu.ogg',    obj: () => Synth.menuMusic },
-                { label: 'music_victory', file: 'music_victory.ogg', obj: () => Synth.victoryMusic },
-                { label: 'music_fail',    file: 'music_fail.ogg',    obj: () => Synth.defeatMusic },
             ];
             const LOOP_FILES = new Set(LOOP_ENTRIES.map(e => e.file));
 
@@ -1328,13 +1328,9 @@
             addSectionB('── Loops (music btn) ──');
             LOOP_ENTRIES.forEach(e => addRowB(e.label, e.file, e.obj));
 
-            addSectionB('── One-shot stingers ──');
-            ['win.ogg']
-                .forEach(f => addRowB(f.replace('.ogg',''), f, null));
-
             addSectionB('── SFX (sfx btn) ──');
             Object.keys(Synth._volumes)
-                .filter(f => !LOOP_FILES.has(f) && f !== 'win.ogg')
+                .filter(f => !LOOP_FILES.has(f))
                 .forEach(f => addRowB(f.replace('.ogg',''), f, null));
 
             document.body.appendChild(panel);
