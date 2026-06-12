@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.311</div>
+    <div id="version-number">v1.5.312</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1951,6 +1951,11 @@
                 this.speedGlow = 0; // 0→1: white hot-streak glow (ramps dirStreak 3→6)
                 this.speedBlur = 0;  // 0–1 smoothed, drives motion-blur ghost opacity
 
+                // Speed-boost: 3 consecutive cells each ≤ baseCooldown → drop interval to 100ms
+                this._recentMoveGaps = []; // last 2 inter-move gaps (real ms)
+                this._lastMoveTs     = 0;  // real timestamp of last executed move
+                this._speedBoostActive = false;
+
                 this.heldDirections = [];
                 this.turnIntent = null;
                 this.swipeIntent = null;
@@ -2058,8 +2063,28 @@
 
                 this.gridX += dx;
                 this.gridY += dy;
-                this.lastExecuteTime = performance.now();
-                this.lastMoveTime = Math.min(this.lastMoveTime + this.moveCooldown, performance.now());
+                const _moveNow = performance.now();
+                this.lastExecuteTime = _moveNow;
+
+                // Speed-boost tracking (direction-independent: purely about move frequency)
+                if (this._lastMoveTs > 0) {
+                    const gap = _moveNow - this._lastMoveTs;
+                    const tolerance = this.moveCooldown * 1.15; // 15% grace for input jitter
+                    if (gap > tolerance) {
+                        // Too slow — clear streak and deactivate boost
+                        this._speedBoostActive = false;
+                        this._recentMoveGaps = [];
+                    } else {
+                        this._recentMoveGaps.push(gap);
+                        if (this._recentMoveGaps.length > 2) this._recentMoveGaps.shift();
+                        // Activate once we have 2 fast gaps in a row (= 3 cells at max pace)
+                        if (this._recentMoveGaps.length === 2) this._speedBoostActive = true;
+                    }
+                }
+                this._lastMoveTs = _moveNow;
+
+                const _eff = this._speedBoostActive ? Math.min(100, this.moveCooldown) : this.moveCooldown;
+                this.lastMoveTime = Math.min(this.lastMoveTime + _eff, _moveNow);
                 
                 // Authoritative local check for sending moves to server
                 const isActuallyLocal = (room && room.sessionId) ? (this.sessionId === room.sessionId) : this.isLocal;
@@ -2095,12 +2120,21 @@
                 if (this.isPlayer && this.state === 'normal' && this.isActuallyLocal() && now >= roundMoveLockEnd && Date.now() >= this.frozenUntil) {
                     // Pick up any live speed change from the lobby dropdown
                     this.moveCooldown = parseInt(moveSpeedSelect.value, 10) || 150;
+
+                    // Deactivate speed boost if inputs have gone silent for longer than one base interval
+                    if (this._speedBoostActive && this._lastMoveTs > 0 && now - this._lastMoveTs > this.moveCooldown * 1.5) {
+                        this._speedBoostActive = false;
+                        this._recentMoveGaps = [];
+                    }
+
+                    const effectiveCooldown = this._speedBoostActive ? Math.min(100, this.moveCooldown) : this.moveCooldown;
+
                     // If the schedule fell more than 2 periods behind (frozen, locked, tab hidden, etc.),
                     // reset it so at most one move fires immediately — no catch-up burst.
-                    if (now - this.lastMoveTime > this.moveCooldown * 2) {
-                        this.lastMoveTime = now - this.moveCooldown;
+                    if (now - this.lastMoveTime > effectiveCooldown * 2) {
+                        this.lastMoveTime = now - effectiveCooldown;
                     }
-                    if (now - this.lastMoveTime >= this.moveCooldown) {
+                    if (now - this.lastMoveTime >= effectiveCooldown) {
                         let moved = false;
                         const mirrored = this.mirrorUntil > 0 && Date.now() < this.mirrorUntil;
 
@@ -2757,6 +2791,9 @@
             blazer.bonkTimer = 0;
             blazer.bonkDx = 0;
             blazer.bonkDy = 0;
+            blazer._speedBoostActive = false;
+            blazer._recentMoveGaps = [];
+            blazer._lastMoveTs = 0;
         }
 
         function initMatch() {
@@ -4605,6 +4642,9 @@
                             blazer.gridX = playerState.x;
                             blazer.gridY = playerState.y;
                             blazer.sentMoves = []; // pre-teleport predictions are moot now
+                            // Teleport always breaks the speed boost
+                            blazer._speedBoostActive = false;
+                            blazer._recentMoveGaps = [];
                         } else if (blazer.state === 'teleport_out' || blazer.state === 'teleport_in') {
                             // Mid-teleport animation with no new teleport — leave it alone so the
                             // animation can finish landing on its target.
