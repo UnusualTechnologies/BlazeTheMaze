@@ -757,6 +757,17 @@ export class GameRoom extends Room<{ state: GameState }> {
         if (this.activeRockets.length === 0) return;
         for (const rocket of this.activeRockets) {
             rocket.accumMs += dt;
+            // Catch a player who walked onto the rocket's current cell since the last step
+            // (it can sit on a cell between 50 ms steps within a 100 ms tick).
+            if (rocket.x >= 0) {
+                this.state.players.forEach((p, sid) => {
+                    if (sid === rocket.ownerSessionId || rocket.hit.has(sid)) return;
+                    if (p.x === rocket.x && p.y === rocket.y) {
+                        rocket.hit.add(sid);
+                        this.teleportPlayer(p, "rocket");
+                    }
+                });
+            }
             while (rocket.accumMs >= GameRoom.ROCKET_STEP_MS && rocket.x >= 0) {
                 rocket.accumMs -= GameRoom.ROCKET_STEP_MS;
                 if (rocket.x === this.state.goalX && rocket.y === this.state.goalY) {
@@ -776,13 +787,27 @@ export class GameRoom extends Room<{ state: GameState }> {
                     if (nd < bestDist) { bestDist = nd; best = { x: nx, y: ny }; }
                 }
                 if (!best) { rocket.x = -1; break; } // dead-end / no improving move
+                // Remember the cell the rocket is leaving so we can catch a head-on pass.
+                const fromX = rocket.x, fromY = rocket.y;
                 rocket.x = best.x;
                 rocket.y = best.y;
                 this.state.players.forEach((p, sid) => {
                     if (sid === rocket.ownerSessionId || rocket.hit.has(sid)) return;
+                    // Direct hit: the player is on the cell the rocket just entered.
                     if (p.x === rocket.x && p.y === rocket.y) {
                         rocket.hit.add(sid);
                         this.teleportPlayer(p, "rocket");
+                        return;
+                    }
+                    // Crossing/swap: the rocket moved fromX,fromY -> rocket.x,rocket.y while
+                    // the player moved the opposite way (rocket.x,rocket.y -> fromX,fromY),
+                    // so they passed through each other without ever sharing a cell. Mirrors
+                    // the player-vs-player crossing detection.
+                    const prev = this.playerPrevPos.get(sid);
+                    if (p.x === fromX && p.y === fromY &&
+                        prev && prev.x === rocket.x && prev.y === rocket.y) {
+                        rocket.hit.add(sid);
+                        this.teleportPlayer(p, "rocket-crossing");
                     }
                 });
             }

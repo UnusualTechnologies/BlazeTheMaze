@@ -98,7 +98,7 @@ Teleports all other players away from the collector. In `orb_leader_only` mode, 
 Teleports the collector away from their current position.
 
 ### Warp Wheel (orange) — `ROCKET_STEP_MS = 50 ms/cell`
-Server-authoritative Warp Wheel. Travels the BFS-optimal path toward the goal at 50 ms per cell. Teleports any non-owner player it overlaps. Dies on reaching the goal or hitting a dead-end with no improving BFS move. The collector is immune.
+Server-authoritative Warp Wheel. Travels the BFS-optimal path toward the goal at 50 ms per cell. Teleports any non-owner player it overlaps. Overlap is detected three ways so a player can't slip past: (1) a direct hit when the wheel steps onto the player's cell, (2) a head-on crossing/swap when the wheel and player exchange cells in the same step (mirrors player-vs-player crossing detection), and (3) a between-step scan of the wheel's current cell, since it can rest on a cell between 50 ms steps within a 100 ms server tick. Dies on reaching the goal or hitting a dead-end with no improving BFS move. The collector is immune.
 
 ### Mirror (magenta) — 3 000 ms
 Reverses all directional input for every player **except** the collector. Affected players are shown with a white outline.
