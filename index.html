@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.370</div>
+    <div id="version-number">v1.5.371</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1519,6 +1519,9 @@
         let roundTimes = [];
         let matchEndTimerInterval = null;
         let pmJoinIntent = false; // true when user clicks the "join next game" button
+        // Networked first-join: defer the start-countdown beep decision to the first state sync,
+        // where state.timer is reliable. Beep only if we joined at the true round start.
+        let pendingStartCountdown = false;
 
         const ROUND_START_MS = 4500;   // total ring animation duration — pulse 3 fires at exactly 3s (4500 * 2/3 = 3000ms)
         let roundRingTime = null;      // set every round; drives ring, labels, and movement lock
@@ -3085,17 +3088,18 @@
             const _rawTimer = (room && room.state && typeof room.state.timer === 'number') ? room.state.timer : 0;
             const serverElapsedMs = _rawTimer * 1000;
             const remainingLockMs = Math.max(0, MOVE_LOCK_MS - serverElapsedMs);
-            // The countdown beep must NEVER play on this first-join path. The room runs
-            // continuously (AI fill the slots), so a human always joins a round already in
-            // progress — they are never "there from the start". Players who ARE present when a
-            // round genuinely begins hear the beep via the round_reset/match_reset broadcasts,
-            // which call initRound() with the beep enabled. We also can't trust state.timer here
-            // anyway: the first state patch may not have applied yet, so it often still reads 0
-            // (that stale 0 was why a 15s-late join still beeped). The freeze still works — the
-            // remaining lock is applied, and the server's per-client movement_unlock releases it
-            // in sync with everyone — and the concentric rings still show (roundRingTime in
-            // initRound, independent of the beep).
-            initRound(remainingLockMs, true); // midGameJoin = true → never beep on first join
+            // Countdown beep policy on this first-init path:
+            //  • Solo (no room): always a genuine start → play the beep now.
+            //  • Networked: we CANNOT trust state.timer synchronously here — the first state
+            //    patch often hasn't applied yet, so it still reads 0 (that stale 0 was why a
+            //    15s-late join still beeped). So we defer the decision: suppress the beep now and
+            //    re-evaluate on the first onStateChange (below), where state.timer is real. The
+            //    beep then plays only if we joined at the true round start (timer ≈ 0), i.e. we
+            //    started/created the game rather than dropped into a round already underway.
+            //    Freeze (remainingLockMs + the server's movement_unlock) and the concentric rings
+            //    (roundRingTime in initRound) are unaffected either way.
+            if (room) pendingStartCountdown = true;
+            initRound(remainingLockMs, !!room); // networked: suppress beep here, decide on first sync
         }
 
         // lockMs: how long to lock movement from now. -1 (default) = full 3-second lock.
@@ -3280,6 +3284,7 @@
             lobbyLayer.classList.add('hidden');
             lobbyRulesLayer.classList.add('hidden');
             initialMenu.classList.remove('hidden');
+            pendingStartCountdown = false; // cancel any deferred start beep
             Synth.stopAllSfx(); // kill any in-flight game SFX (countdown beep, speed, stingers, …)
             Synth.muffle(true);
             Synth.startMenuMusic();
@@ -4715,6 +4720,16 @@
 
                 // Update timer from server
                 timerElement.innerText = formatTime(state.timer * 1000);
+
+                // Deferred start-countdown beep decision (see initMatch). Now that a real state
+                // patch has applied, state.timer is trustworthy. Beep only if we joined at the
+                // genuine round start (timer ≈ 0) — i.e. we started/created the game — and not if
+                // we dropped into a round already underway (2s, 15s, … in).
+                if (pendingStartCountdown) {
+                    pendingStartCountdown = false;
+                    const _START_GRACE_MS = 1000; // joined within 1s of round start = present from the start
+                    if ((state.timer * 1000) < _START_GRACE_MS) Synth.countdownBeep();
+                }
 
                 // Update goal
                 goal.x = state.goalX;
