@@ -247,6 +247,11 @@ export class GameRoom extends Room<{ state: GameState }> {
 
         if (options.isPrivate) this.setPrivate(true);
 
+        // Lock immediately if this room was created with no random-joinable slots
+        // (e.g. all friend_only/inactive), so random matchmaking never reserves a seat
+        // here that onJoin would reject with ROOM_FULL.
+        this.refreshLock();
+
         // 100 ms tick — AI moves every 300–600 ms so 60 fps server ticks are pointless overhead
         this.setSimulationInterval((dt) => {
             // Idle kick runs regardless of round state so players can't squat through post-match
@@ -571,6 +576,10 @@ export class GameRoom extends Room<{ state: GameState }> {
         });
         if (joinedViaCode) track('friend_code_used', client.sessionId, _aid, {});
         // ───────────────────────────────────────────────────────────────────────
+
+        // This seat is now taken — re-evaluate whether random matchmaking should still
+        // target this room (prevents the seat-reservation race that yields ROOM_FULL).
+        this.refreshLock();
     }
 
     async onLeave(client: Client, code?: number) {
@@ -648,7 +657,12 @@ export class GameRoom extends Room<{ state: GameState }> {
         if (remaining.length === 0) {
             console.log(`Room ${this.roomId}: no players remain. Shutting down.`);
             this.disconnect();
+            return;
         }
+
+        // A slot likely just reopened (player converted to AI / friend slot freed) —
+        // reopen the room to random matchmaking if there's now a joinable slot.
+        this.refreshLock();
     }
 
     // --- Helpers ---
@@ -757,6 +771,29 @@ export class GameRoom extends Room<{ state: GameState }> {
         this.state.players.delete(clientSessionId);
         this.state.players.set(aiId, player);
         this.initAIState(aiId, player);
+    }
+
+    /**
+     * Keep the room's matchmaking lock in sync with whether a *random* joiner could
+     * actually be seated. Colyseus reserves seats purely on client-count vs maxClients,
+     * but onJoin only accepts empty `local`/`ai_online` slots — so a room with free seats
+     * but only `friend_only`/`inactive` openings would hand out a reservation that onJoin
+     * then rejects with ROOM_FULL (the seat-reservation race). Locking removes the room
+     * from random matchmaking while still allowing friend-code joinById, which bypasses the lock.
+     *
+     * The match-over flow (matchComplete) owns the lock during its 25s freeze / 5s window,
+     * so we defer to it and do nothing while it's active.
+     */
+    private refreshLock(): void {
+        if (this.matchComplete) return;
+        const hasOpenSlot = this.state.slots.some(
+            s => s.sessionId === "" && (s.mode === "local" || s.mode === "ai_online")
+        );
+        if (hasOpenSlot) {
+            this.unlock();
+        } else {
+            this.lock();
+        }
     }
 
     // --- AI Navigation ---
@@ -1324,6 +1361,8 @@ export class GameRoom extends Room<{ state: GameState }> {
                     this.resetRound();
                     this.roundStartMs = Date.now();
                     this.broadcast("match_reset");
+                    // matchComplete just cleared — re-sync lock to actual slot availability.
+                    this.refreshLock();
                 }, 30000);
             } else {
                 this.clock.setTimeout(() => {
