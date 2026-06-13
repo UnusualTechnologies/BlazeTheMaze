@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.365</div>
+    <div id="version-number">v1.5.366</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2251,6 +2251,7 @@
             _killBoost() {
                 this._speedBoostActive = false;
                 this._recentMoveGaps = [];
+                this.dirStreak = 0;
             }
 
             /**
