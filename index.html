@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.373</div>
+    <div id="version-number">v1.5.374</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -4672,6 +4672,14 @@
                 try { newRoom.leave(); } catch (_) {}
                 return;
             }
+            // If a previous join already attached a room (e.g. a slow join that resolved
+            // late, or a Steam invite accepted while a button-join was still in flight),
+            // abandon it before taking over — otherwise it stays connected on the server
+            // with its handlers still firing against the shared globals.
+            if (room && room !== newRoom) {
+                leavingIntentionally = true;
+                try { room.leave(); } catch (_) {}
+            }
             room = newRoom;
             reconnectionToken = newRoom.reconnectionToken ?? null;
             const isCodeJoin = joiningViaCode;
@@ -5809,11 +5817,14 @@
             // Text-based checks (handles various Colyseus / SDK phrasings)
             const lc = (msg || '').toLowerCase();
             if (lc.includes('not found') || lc.includes('not_found')) return true;
-            // HTTP 404 or Colyseus matchmaker code 4212 mean "room does not exist"
-            if (e?.status === 404 || e?.code === 4212) return true;
-            if (e?.message?.code === 4212) return true;
-            // Colyseus Cloud returns HTTP 522 / MatchMakeError when the room doesn't exist
-            if (e?.status === 522 || e?.name === 'MatchMakeError' || lc.includes('matchmakeerror')) return true;
+            // Colyseus MATCHMAKE_INVALID_ROOM_ID (522) is the real "room does not exist"
+            // code in this SDK (set on .code). NOTE: a Cloudflare origin-timeout also yields
+            // HTTP 522, so this can fire on a transient server outage too — for code/Steam
+            // joins, falling through to "create the room with this code" is acceptable.
+            // We deliberately do NOT treat every MatchMakeError as not-found: other codes
+            // (ROOM_FULL/MATCH_OVER come back as ServerError 526; 520/521/523/524/525 are
+            // real matchmaker failures) must surface as errors, not silent duplicate rooms.
+            if (e?.code === 522 || e?.message?.code === 522) return true;
             return false;
         }
 
@@ -5928,9 +5939,15 @@
                 try {
                     newRoom = await withTimeout(client.joinOrCreate("game", settings), 10000);
                 } catch (joinErr) {
-                    // All existing rooms are full, or stale seat reservation — create a fresh room
+                    // Matched room was full, finished its match, or the seat reservation went
+                    // stale before we could consume it — create a fresh room instead of failing.
                     const msg = colyseusErrorText(joinErr).toLowerCase();
-                    if (msg.includes('seat reservation') || msg.includes('room_full') || msg.includes('full')) {
+                    const recoverable =
+                        msg.includes('seat reservation') ||
+                        msg.includes('room_full') ||
+                        msg.includes('full') ||
+                        msg.includes('match_over');
+                    if (recoverable) {
                         newRoom = await withTimeout(client.create("game", settings), 10000);
                     } else {
                         throw joinErr;

@@ -53,16 +53,16 @@ When a player is teleported (collision, power-up, rocket hit), the destination m
 
 ## Idle Kick & Reconnection
 - **Idle timeout:** 3 minutes (`IDLE_TIMEOUT_MS = 180 000 ms`) — updated on every move or input
-- **Reconnection window:** 8 s for unexpected disconnects, **only** if at least one other human remains in the room
+- **Reconnection window:** 8 s for unexpected disconnects, **only** if at least one other human is still present — counting both connected humans and humans currently inside their own reconnect hold
 - **Intentional leave codes:** 1000, 4001, 4002, 4003 — skips the reconnection window entirely
-- **Last human rule:** If the departing player is the last human, the room shuts down immediately (no reconnection hold)
+- **Last human rule:** The room shuts down immediately only when the departing player leaves **no** other humans behind — neither connected nor mid-reconnect. If others are still in their 8 s reconnect hold, the room stays alive so they can rejoin
 
 ## Room Lifecycle
 - **Max clients:** 8
 - **Default grid:** 20 × 20 (configurable)
 - **Room code format:** 9-character alphanumeric, excluding `I O 0 1` to avoid visual confusion
 - **Owner protection:** Room owner and friend-code joiners cannot be kicked to make room for others
-- **Room shutdown:** Triggered immediately when the last human leaves
+- **Room shutdown:** Triggered when no humans remain — neither connected nor in a reconnect hold
 
 ## Tension & Warning System
 - **Tension activates** when the closest player is within `cols + rows` cells (BFS) of the goal

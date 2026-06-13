@@ -67,6 +67,10 @@ export class GameRoom extends Room<{ state: GameState }> {
     distanceMap: number[] = [];
     // Tracks which connected sessionIds joined via friend code (cannot be kicked)
     friendCodeJoiners = new Set<string>();
+    // Human sessionIds currently inside their allowReconnection() hold window. Colyseus
+    // removes suspended clients from `this.clients`, so without this the "last human left"
+    // check would tear the room down while these players are mid-reconnect, dropping them.
+    pendingReconnects = new Set<string>();
     // Per-client analytics state: analytics session UUID, join timestamp, round number at join
     private clientAnalytics = new Map<string, { analyticsSessionId: string; startMs: number; joinRound: number }>();
     // Incremented on every round win — used to calculate rounds_played per session
@@ -592,19 +596,31 @@ export class GameRoom extends Room<{ state: GameState }> {
             // Only hold the reconnect window if other humans are still in the game.
             // If this player is the last human, tear down immediately so joinOrCreate
             // doesn't match new players to a zombie room and hit "seat reservation expired".
-            const otherHumans = this.clients.filter(c => c.sessionId !== client.sessionId).length;
+            // Count both still-connected humans and humans currently in their own
+            // reconnect hold — Colyseus has already pulled suspended clients out of
+            // `this.clients`, so relying on that alone would tear down the room while
+            // others are mid-reconnect.
+            const otherHumans =
+                this.clients.filter(c => c.sessionId !== client.sessionId).length +
+                [...this.pendingReconnects].filter(id => id !== client.sessionId).length;
             if (otherHumans > 0) {
+                this.pendingReconnects.add(client.sessionId);
                 try {
                     await this.allowReconnection(client, 8);
                     // Player reconnected — restore activity timestamp and keep playing
+                    this.pendingReconnects.delete(client.sessionId);
                     this.lastInputTime.set(client.sessionId, Date.now());
                     console.log(`Client ${client.sessionId} reconnected.`);
                     return;
                 } catch {
+                    this.pendingReconnects.delete(client.sessionId);
                     console.log(`Client ${client.sessionId} reconnection window expired. Cleaning up.`);
                 }
             }
         }
+
+        // Capture any active freeze before cleanup so it can transfer to the AI takeover.
+        const frozenUntil = this.frozenPlayers.get(client.sessionId);
 
         // Player is truly leaving — clean up all tracking state
         this.lastInputTime.delete(client.sessionId);
@@ -614,6 +630,8 @@ export class GameRoom extends Room<{ state: GameState }> {
         this.aiPUTarget.delete(client.sessionId);
         this.aiCooldowns.delete(client.sessionId);
         this.playerPrevPos.delete(client.sessionId);
+        this.frozenPlayers.delete(client.sessionId);
+        this.moveRejectCounts.delete(client.sessionId);
 
         // ── Telemetry: session end ─────────────────────────────────────────────
         const _anal = this.clientAnalytics.get(client.sessionId);
@@ -633,6 +651,11 @@ export class GameRoom extends Room<{ state: GameState }> {
             const slot = this.state.slots[slotIndex];
             if (slot.mode === "ai_online" || slot.mode === "local" || slot.mode === "ai_friend") {
                 this.convertPlayerToAI(client.sessionId, player, slotIndex);
+                // Carry over an in-progress freeze so the AI takeover stays frozen for
+                // the remaining duration instead of moving freely.
+                if (frozenUntil !== undefined && frozenUntil > Date.now()) {
+                    this.frozenPlayers.set(`ai_${slotIndex}`, frozenUntil);
+                }
                 const label = slot.mode === "ai_friend" ? "Friend" : "Player";
                 console.log(`${label} ${client.sessionId} left. AI taking over slot ${slotIndex}.`);
             } else if (slot.mode === "friend_only") {
@@ -652,9 +675,13 @@ export class GameRoom extends Room<{ state: GameState }> {
             });
         }
 
-        // Shut down if no human players remain (excluding this departing client)
-        const remaining = this.clients.filter(c => c.sessionId !== client.sessionId);
-        if (remaining.length === 0) {
+        // Shut down only if no human players remain AND nobody is mid-reconnect.
+        // Suspended (reconnecting) clients are not in `this.clients`, so we must also
+        // honour pendingReconnects — otherwise the last connected human leaving would
+        // disconnect the room out from under players still trying to rejoin.
+        const remaining = this.clients.filter(c => c.sessionId !== client.sessionId).length;
+        const holding = [...this.pendingReconnects].filter(id => id !== client.sessionId).length;
+        if (remaining === 0 && holding === 0) {
             console.log(`Room ${this.roomId}: no players remain. Shutting down.`);
             this.disconnect();
             return;
@@ -1347,12 +1374,12 @@ export class GameRoom extends Room<{ state: GameState }> {
             this.broadcast("round_won", this.lastRoundWon);
             if (isMatchWon) {
                 this.matchComplete = true;
+                // Stay locked for the entire match-over window. onJoin throws MATCH_OVER
+                // while matchComplete is true, so unlocking early would only expose the
+                // room to random matchmaking that immediately gets rejected (the same
+                // seat-reservation race refreshLock exists to prevent). Friend-code
+                // joinById bypasses the lock, so it is unaffected.
                 this.lock();
-                // At 25 s: unlock so new players can join for the final 5-second window.
-                this.clock.setTimeout(() => {
-                    if (!this.matchComplete) return;
-                    this.unlock();
-                }, 25000);
                 // At 30 s: reset scores, regenerate maze, broadcast match_reset.
                 this.clock.setTimeout(() => {
                     if (!this.matchComplete) return;
