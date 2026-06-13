@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.363</div>
+    <div id="version-number">v1.5.364</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2290,7 +2290,11 @@
                         // Activate once we've taken more than 3 steps in the same direction
                         if (this.dirStreak === 4 && !this._speedBoostActive) {
                             this._speedBoostActive = true;
-                            Synth.speedBoost();
+                            // Count remaining cells in this direction before a wall
+                            let lookahead = 0;
+                            let lx = this.gridX, ly = this.gridY;
+                            while (this.canMoveAtCell(lx, ly, dx, dy)) { lx += dx; ly += dy; lookahead++; }
+                            if (lookahead > 2) Synth.speedBoost();
                         }
                     }
                 }
