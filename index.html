@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.371</div>
+    <div id="version-number">v1.5.372</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1243,6 +1243,9 @@
             },
             toggleSfx() {
                 this.isSfxMuted = !this.isSfxMuted;
+                // Muting should silence anything already playing (e.g. the countdown beep),
+                // not just block future SFX.
+                if (this.isSfxMuted) this.stopAllSfx();
                 if (_isElectron) localStorage.setItem('blazeSfxMuted', this.isSfxMuted ? '1' : '0');
                 this._syncButtons();
             }
