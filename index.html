@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.367</div>
+    <div id="version-number">v1.5.368</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -3054,7 +3054,16 @@
             const _rawTimer = (room && room.state && typeof room.state.timer === 'number') ? room.state.timer : 0;
             const serverElapsedMs = _rawTimer * 1000;
             const remainingLockMs = Math.max(0, MOVE_LOCK_MS - serverElapsedMs);
-            initRound(remainingLockMs, remainingLockMs === 0); // suppress beep only if lock already expired
+            // The countdown beep should only play for players present at the genuine round start.
+            // A mid-game join — even one that lands DURING the move-lock window (e.g. 2s in, lock
+            // not yet expired) — must stay frozen for the remaining lock and show the concentric
+            // ring (both handled by initRound regardless), but must NOT hear the countdown. We
+            // detect "present from the start" via a small grace window: if the server timer has
+            // already advanced past it, the round was underway when we joined. The freeze (via
+            // remainingLockMs) and the rings (via roundRingTime in initRound) are unaffected.
+            const COUNTDOWN_GRACE_MS = 500; // joined within this of round start = present from the start
+            const isMidGameJoin = serverElapsedMs > COUNTDOWN_GRACE_MS;
+            initRound(remainingLockMs, isMidGameJoin); // suppress beep for any join already in progress
         }
 
         // lockMs: how long to lock movement from now. -1 (default) = full 3-second lock.
