@@ -30,6 +30,12 @@ Non-obvious rules and numeric constants. Update this file whenever a mechanic is
 - **Move validation:** Server rejects anything other than exactly 1 orthogonal cell step — no diagonals, no teleport-to-goal, no wall clipping
 - **Turn intent leniency:** Client holds a queued turn direction for up to **300 ms** (Pac-Man style cornering)
 
+## Speed Streak (client-side)
+- Earned by travelling **more than 3 cells straight** in one direction (activates on the 4th consecutive step) without stopping, changing direction, bumping a wall, or being teleported.
+- While active, the move interval is capped at `min(100 ms, moveCooldown)` — i.e. it speeds the player up only when their base cooldown is above 100 ms.
+- **Kills the streak immediately:** any direction change, a pause longer than 15 % over the move cooldown, a wall bump, or a teleport. There is **no cooldown** before it can be re-earned.
+- **Sound:** the boost "whoosh" only plays if **more than 1 cell** remains open ahead in the current direction at activation, so it doesn't fire right as the player is about to stop. The speed effect itself still activates regardless.
+
 ## Player-Player Collisions
 - Controlled by the `collisions` lobby setting (default **on**)
 - When two players land on the same cell, **both** are teleported away

@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.366</div>
+    <div id="version-number">v1.5.367</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2152,15 +2152,12 @@
                 this.lastDx = 0;
                 this.lastDy = 0;
                 this.dirStreak = 0;  // consecutive cells in the same direction
-                this.speedGlow = 0; // 0→1: white hot-streak glow (ramps dirStreak 3→6)
+                this.speedGlow = 0; // 0→1: white hot-streak glow (follows _speedBoostActive)
                 this.speedBlur = 0;  // 0–1 smoothed, drives motion-blur ghost opacity
 
-                // Speed-boost: 6 consecutive fast cells, ≤2 direction changes, no wall bumps
-                this._recentMoveGaps    = []; // last 5 inter-move gaps (real ms)
+                // Speed-boost: earned by travelling >3 cells straight without stopping, turning, or teleporting
                 this._lastMoveTs        = 0;  // real timestamp of last executed move
                 this._speedBoostActive  = false;
-                this._boostCooldownUntil = 0; // timestamp after which boost can activate again
-                this._dirChangeCount    = 0;  // direction changes since last 3-cell straight run
 
                 this.heldDirections = [];
                 this.turnIntent = null;
@@ -2245,12 +2242,10 @@
                 this.bonkTimer = 1.0;
                 // Wall bump kills the speed streak
                 this._killBoost();
-                this._dirChangeCount = 0;
             }
 
             _killBoost() {
                 this._speedBoostActive = false;
-                this._recentMoveGaps = [];
                 this.dirStreak = 0;
             }
 
@@ -2287,16 +2282,14 @@
                     if (gap > tolerance) {
                         // Stopped moving — kill streak
                         this._killBoost();
-                    } else if (_moveNow >= this._boostCooldownUntil) {
+                    } else if (this.dirStreak === 4 && !this._speedBoostActive) {
                         // Activate once we've taken more than 3 steps in the same direction
-                        if (this.dirStreak === 4 && !this._speedBoostActive) {
-                            this._speedBoostActive = true;
-                            // Count remaining cells in this direction before a wall
-                            let lookahead = 0;
-                            let lx = this.gridX, ly = this.gridY;
-                            while (this.canMoveAtCell(lx, ly, dx, dy)) { lx += dx; ly += dy; lookahead++; }
-                            if (lookahead > 1) Synth.speedBoost();
-                        }
+                        this._speedBoostActive = true;
+                        // Count remaining cells in this direction before a wall
+                        let lookahead = 0;
+                        let lx = this.gridX, ly = this.gridY;
+                        while (this.canMoveAtCell(lx, ly, dx, dy)) { lx += dx; ly += dy; lookahead++; }
+                        if (lookahead > 1) Synth.speedBoost();
                     }
                 }
                 this._lastMoveTs = _moveNow;
@@ -2682,7 +2675,7 @@
                 ctx.shadowBlur = 0;
                 ctx.globalAlpha = 1;
 
-                // Speed-glow white outline — brightens at dirStreak 3→6 without washing out the fill colour
+                // Speed-glow white outline — brightens while speed boost is active without washing out the fill colour
                 if (this.speedGlow > 0.01 && !isFrozen && !isMirrored) {
                     ctx.beginPath();
                     ctx.moveTo(0, -cellSize * 0.4);
@@ -3022,10 +3015,7 @@
             blazer.bonkDx = 0;
             blazer.bonkDy = 0;
             blazer._speedBoostActive = false;
-            blazer._recentMoveGaps = [];
             blazer._lastMoveTs = 0;
-            blazer._dirChangeCount = 0;
-            blazer._boostCooldownUntil = 0;
         }
 
         function initMatch() {
@@ -4881,11 +4871,8 @@
                             blazer.gridX = playerState.x;
                             blazer.gridY = playerState.y;
                             blazer.sentMoves = []; // pre-teleport predictions are moot now
-                            // Teleport always breaks the speed boost (no cooldown — not a natural end)
-                            blazer._speedBoostActive = false;
-                            blazer._recentMoveGaps = [];
-                            blazer._dirChangeCount = 0;
-                            blazer._boostCooldownUntil = 0;
+                            // Teleport always breaks the speed boost
+                            blazer._killBoost();
                         } else if (blazer.state === 'teleport_out' || blazer.state === 'teleport_in') {
                             // Mid-teleport animation with no new teleport — leave it alone so the
                             // animation can finish landing on its target.
