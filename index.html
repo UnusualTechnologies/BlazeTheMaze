@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.369</div>
+    <div id="version-number">v1.5.370</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1112,6 +1112,9 @@
                 document.querySelectorAll('.music-btn').forEach(b => b.classList.toggle('muted', this.isMusicMuted));
                 document.querySelectorAll('.sfx-btn').forEach(b => b.classList.toggle('muted', this.isSfxMuted));
             },
+            // Active one-shot SFX instances, tracked so stopAllSfx() can silence them
+            // (e.g. when leaving a game or the instant a round/match is won).
+            _activeSfx: [],
             playSound(filename, volume = 0.6) {
                 if (this.isSfxMuted) return;
                 const audio = new Audio('./assets/audio/' + filename);
@@ -1120,7 +1123,22 @@
                     console.warn(`[Audio] Missing SFX: ${filename}`);
                     if (typeof Sentry !== 'undefined') Sentry.captureMessage(`Audio file missing: ${filename}`, 'warning');
                 };
-                audio.play().catch(() => {});
+                this._activeSfx.push(audio);
+                const _cleanup = () => {
+                    const i = this._activeSfx.indexOf(audio);
+                    if (i !== -1) this._activeSfx.splice(i, 1);
+                };
+                audio.addEventListener('ended', _cleanup);
+                audio.play().catch(_cleanup);
+            },
+            // Immediately stop every in-flight sound effect: one-shots, the heartbeat,
+            // and the win/lose stingers. Leaves music (menu/game) untouched.
+            stopAllSfx() {
+                this._activeSfx.forEach(a => { try { a.pause(); a.currentTime = 0; } catch (_) {} });
+                this._activeSfx = [];
+                this.stopHeartbeat();
+                try { this.victoryMusic.pause(); this.victoryMusic.currentTime = 0; } catch (_) {}
+                try { this.defeatMusic.pause();  this.defeatMusic.currentTime  = 0; } catch (_) {}
             },
             // One-shot stingers controlled by the music button, not the SFX button
             playMusicSound(filename, volume = 0.6) {
@@ -3067,16 +3085,17 @@
             const _rawTimer = (room && room.state && typeof room.state.timer === 'number') ? room.state.timer : 0;
             const serverElapsedMs = _rawTimer * 1000;
             const remainingLockMs = Math.max(0, MOVE_LOCK_MS - serverElapsedMs);
-            // The countdown beep should only play for players present at the genuine round start.
-            // A mid-game join — even one that lands DURING the move-lock window (e.g. 2s in, lock
-            // not yet expired) — must stay frozen for the remaining lock and show the concentric
-            // ring (both handled by initRound regardless), but must NOT hear the countdown. We
-            // detect "present from the start" via a small grace window: if the server timer has
-            // already advanced past it, the round was underway when we joined. The freeze (via
-            // remainingLockMs) and the rings (via roundRingTime in initRound) are unaffected.
-            const COUNTDOWN_GRACE_MS = 500; // joined within this of round start = present from the start
-            const isMidGameJoin = serverElapsedMs > COUNTDOWN_GRACE_MS;
-            initRound(remainingLockMs, isMidGameJoin); // suppress beep for any join already in progress
+            // The countdown beep must NEVER play on this first-join path. The room runs
+            // continuously (AI fill the slots), so a human always joins a round already in
+            // progress — they are never "there from the start". Players who ARE present when a
+            // round genuinely begins hear the beep via the round_reset/match_reset broadcasts,
+            // which call initRound() with the beep enabled. We also can't trust state.timer here
+            // anyway: the first state patch may not have applied yet, so it often still reads 0
+            // (that stale 0 was why a 15s-late join still beeped). The freeze still works — the
+            // remaining lock is applied, and the server's per-client movement_unlock releases it
+            // in sync with everyone — and the concentric rings still show (roundRingTime in
+            // initRound, independent of the beep).
+            initRound(remainingLockMs, true); // midGameJoin = true → never beep on first join
         }
 
         // lockMs: how long to lock movement from now. -1 (default) = full 3-second lock.
@@ -3261,7 +3280,7 @@
             lobbyLayer.classList.add('hidden');
             lobbyRulesLayer.classList.add('hidden');
             initialMenu.classList.remove('hidden');
-            Synth.stopHeartbeat();
+            Synth.stopAllSfx(); // kill any in-flight game SFX (countdown beep, speed, stingers, …)
             Synth.muffle(true);
             Synth.startMenuMusic();
 
@@ -5002,6 +5021,10 @@
 
             room.onMessage("round_won", ({ winnerId, winnerColor, winnerScore, isMatchWon }) => {
                 if (gameState === 'ROUND_OVER_COUNTDOWN' || gameState === 'MATCH_OVER') return;
+
+                // Silence any in-flight game SFX the moment the round/match is decided
+                // (countdown beep, speed loop, heartbeat, …) before the win cue plays.
+                Synth.stopAllSfx();
 
                 const winnerBlazer = blazers.find(b => b.id === winnerId);
                 const oldScore = scores[winnerId] ?? 0;
