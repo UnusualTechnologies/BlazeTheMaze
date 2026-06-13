@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.364</div>
+    <div id="version-number">v1.5.365</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2294,7 +2294,7 @@
                             let lookahead = 0;
                             let lx = this.gridX, ly = this.gridY;
                             while (this.canMoveAtCell(lx, ly, dx, dy)) { lx += dx; ly += dy; lookahead++; }
-                            if (lookahead > 2) Synth.speedBoost();
+                            if (lookahead > 1) Synth.speedBoost();
                         }
                     }
                 }
