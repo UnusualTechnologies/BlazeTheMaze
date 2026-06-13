@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.376</div>
+    <div id="version-number">v1.5.377</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -5197,9 +5197,21 @@
                     stopWinnerLap();
                     initRound();
                 } else {
-                    // Player didn't opt in — return to menu
+                    // Player didn't opt into the next game. Keep them on the end-game
+                    // screen (their only way out is the Main Menu button), but leave the
+                    // room so they don't hold a slot — the server converts it to AI for
+                    // the new round.
                     pmJoinIntent = false;
-                    returnToMenu();
+                    if (pmNextGameBtn) pmNextGameBtn.style.display = 'none';
+                    stopVictoryStars();
+                    stopWinnerLap();
+                    if (room) {
+                        leavingIntentionally = true;
+                        try { room.leave(); } catch (_) {}
+                        room = null;
+                    }
+                    // postMatchLayer stays visible; gameState remains 'MATCH_OVER' until
+                    // the player clicks Main Menu (menuBtn → returnToMenu).
                 }
             });
 
