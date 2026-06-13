@@ -71,6 +71,10 @@ app.on('window-all-closed', () => {
 
 // ── IPC handlers ─────────────────────────────────────────────────────────────
 
+// Synchronous so the renderer can read it at preload time, before the page scripts run.
+// app.isPackaged is false under `electron .` (dev) and true in the built/Steam app.
+ipcMain.on('app:is-packaged', (event) => { event.returnValue = app.isPackaged })
+
 ipcMain.handle('steam:create-lobby', async (_event, roomCode) => {
   if (!steamClient) return null
   try {

@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.368</div>
+    <div id="version-number">v1.5.369</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1040,14 +1040,24 @@
         }
 
         // --- BULLETPROOF AUDIO SYSTEM ---
-        // Web: always starts muted — first click anywhere unmutes, then only buttons control it.
-        // Electron: starts unmuted (no autoplay restrictions); localStorage saves the preference.
+        // Audio defaults OFF in development and ON in the shipped/live build, so we can dev
+        // without audio fatigue but never forget to re-enable it before pushing live.
+        //   Production = packaged Electron/Steam app, OR web served from a real domain.
+        //   Dev        = `electron .` (unpackaged), OR localhost/file:// web.
+        // Electron: localStorage saves an explicit user choice and overrides the default.
+        // Web: always starts muted (autoplay is blocked); first click unlocks audio and, in a
+        // production build, unmutes. In dev web it unlocks but stays muted.
         const _isElectron = !!window.electronAPI;
+        const _devHosts = ['', 'localhost', '127.0.0.1', '::1'];
+        const _isProductionBuild = _isElectron
+            ? (window.electronAPI.isPackaged === true)
+            : !_devHosts.includes(location.hostname);
+        const _defaultMuted = !_isProductionBuild;
         const _savedMusicMuted = _isElectron ? localStorage.getItem('blazeMusicMuted') : null;
         const _savedSfxMuted   = _isElectron ? localStorage.getItem('blazeSfxMuted')   : null;
         const Synth = {
-            isMusicMuted: _savedMusicMuted !== null ? _savedMusicMuted === '1' : !_isElectron,
-            isSfxMuted:   _savedSfxMuted   !== null ? _savedSfxMuted   === '1' : !_isElectron,
+            isMusicMuted: _savedMusicMuted !== null ? _savedMusicMuted === '1' : _defaultMuted,
+            isSfxMuted:   _savedSfxMuted   !== null ? _savedSfxMuted   === '1' : _defaultMuted,
             bgMusic:       new Audio('./assets/audio/music_game.ogg'),
             menuMusic:     new Audio('./assets/audio/music_menu.ogg'),
             victoryMusic:  new Audio('./assets/audio/music_victory.ogg'),
@@ -1343,12 +1353,15 @@
             Synth.init();
             Synth.startMenuMusic();
         } else {
-            // Web: always muted on load. First click anywhere unmutes and starts audio.
-            // After that, only the music/sfx buttons control the state.
+            // Web: always muted on load (autoplay is blocked). First click unlocks the audio
+            // context and starts music. It only unmutes in a production build — dev web stays
+            // muted so we don't fatigue on the audio while developing.
             document.addEventListener('pointerdown', function _firstInteraction() {
                 Synth.init();
-                Synth.isMusicMuted = false;
-                Synth.isSfxMuted   = false;
+                if (!_defaultMuted) {
+                    Synth.isMusicMuted = false;
+                    Synth.isSfxMuted   = false;
+                }
                 Synth._syncButtons();
                 Synth.startMenuMusic();
             }, { once: true, capture: true });
