@@ -10,7 +10,7 @@ Non-obvious rules and numeric constants. Update this file whenever a mechanic is
 - **Round winner:** First player to step onto the goal cell
 - **Round-start movement lock:** Players cannot move for the first **3000 ms** of each round (`MOVE_LOCK_MS = 3000`). The unlock point is 2/3 through the countdown ring animation (`ROUND_START_MS = 4500 ms`)
 - **Solo wait:** If only one human is left after a round win, the next round auto-starts after **10 s**
-- **Match end countdown:** 30 s after match is won before the room resets
+- **Match end countdown:** 15 s after match is won before the room resets. The server reset timer (`GameRoom.ts`) and the client countdown (`MATCH_END_WAIT` in `index.html`) **must** use the same value — if they drift, the "Join now" button stalls on "Joining next game…" waiting for the later reset. The Join button unlocks in the final 5 s (at 10 s); clicking it greys the button but the countdown continues, and everyone who clicked in time enters the new round when it hits 0
 
 ## Spawn Positions (8 fixed slots)
 | Slot | Position |

@@ -1405,7 +1405,11 @@ export class GameRoom extends Room<{ state: GameState }> {
                 // seat-reservation race refreshLock exists to prevent). Friend-code
                 // joinById bypasses the lock, so it is unaffected.
                 this.lock();
-                // At 30 s: reset scores, regenerate maze, broadcast match_reset.
+                // At 15 s: reset scores, regenerate maze, broadcast match_reset. This MUST
+                // match the client's post-match countdown (MATCH_END_WAIT in index.html) so
+                // the "Join now" button (unlocked in the last 5 s) drops clickers straight
+                // into the new round when the timer hits 0, instead of stalling on
+                // "Joining next game…" until a later server reset.
                 this.clock.setTimeout(() => {
                     if (!this.matchComplete) return;
                     this.state.players.forEach(p => { p.score = 0; });
@@ -1415,7 +1419,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                     this.broadcast("match_reset");
                     // matchComplete just cleared — re-sync lock to actual slot availability.
                     this.refreshLock();
-                }, 30000);
+                }, 15000);
             } else {
                 this.clock.setTimeout(() => {
                     this.broadcast("round_reset");
