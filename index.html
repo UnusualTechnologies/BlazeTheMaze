@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.382</div>
+    <div id="version-number">v1.5.383</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1414,8 +1414,8 @@
                     localPlayer.gridX = validCell.x;
                     localPlayer.gridY = validCell.y;
                     localPlayer.updatePixelPos(true);
-                    // Send move to server
-                    if (room) room.send('move', { x: validCell.x, y: validCell.y });
+                    // Send debug teleport to server (bypasses move validation)
+                    if (room) room.send('debug_teleport', { x: validCell.x, y: validCell.y });
                 }
             });
             body.appendChild(teleportBtn);

@@ -349,6 +349,29 @@ export class GameRoom extends Room<{ state: GameState }> {
             }
         });
 
+        // Debug: teleport player to a specific cell (bypasses move validation for testing)
+        this.onMessage("debug_teleport", (client, message) => {
+            try {
+                const player = this.state.players.get(client.sessionId);
+                if (!player || player.isAI) return;
+                const { x, y } = message;
+                // Validate the target is a valid in-bounds cell
+                if (!this.isInBounds(x, y)) return;
+                const cell = this.state.grid[this.idx(x, y)];
+                if (!cell) return;
+                // Update position without move validation
+                this.playerPrevPos.set(client.sessionId, { x: player.x, y: player.y });
+                player.x = x;
+                player.y = y;
+                this.lastInputTime.set(client.sessionId, Date.now());
+                console.log(`[DEBUG] ${client.sessionId} teleported to (${x},${y})`);
+                // Check for collisions/goal/power-ups at the new position
+                this.checkCollisions(player, client.sessionId);
+            } catch (err) {
+                console.error(`Debug teleport handler error for ${client.sessionId}:`, err);
+            }
+        });
+
         // Allows the host to drive unclaimed 'local' slots from the same machine (co-op)
         this.onMessage("move_secondary", (client, message) => {
             try {
