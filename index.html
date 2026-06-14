@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.381</div>
+    <div id="version-number">v1.5.382</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1385,6 +1385,40 @@
             Object.keys(Synth._volumes)
                 .filter(f => !LOOP_FILES.has(f))
                 .forEach(f => addRowB(f.replace('.ogg',''), f, null));
+
+            // ── Gameplay Debug Section ──
+            addSectionB('── Gameplay Debug ──');
+            const teleportBtn = document.createElement('button');
+            Object.assign(teleportBtn.style, {
+                width: '100%', padding: '4px', margin: '4px 0',
+                background: '#ff6600', color: '#000', border: 'none',
+                borderRadius: '3px', cursor: 'pointer', fontSize: '11px',
+                fontWeight: 'bold'
+            });
+            teleportBtn.textContent = '📍 Teleport to Goal (−1)';
+            teleportBtn.addEventListener('click', () => {
+                // Find local player
+                const localPlayer = blazers.find(b => b.isLocal);
+                if (!localPlayer || !goal) return;
+                // Teleport to cell adjacent to goal (try up first, then right, left, down)
+                const adjacentCells = [
+                    { x: goal.x, y: goal.y - 1 },
+                    { x: goal.x + 1, y: goal.y },
+                    { x: goal.x - 1, y: goal.y },
+                    { x: goal.x, y: goal.y + 1 },
+                ];
+                const validCell = adjacentCells.find(c =>
+                    c.x >= 0 && c.x < cols && c.y >= 0 && c.y < rows && grid[c.x]?.[c.y]
+                );
+                if (validCell) {
+                    localPlayer.gridX = validCell.x;
+                    localPlayer.gridY = validCell.y;
+                    localPlayer.updatePixelPos(true);
+                    // Send move to server
+                    if (room) room.send('move', { x: validCell.x, y: validCell.y });
+                }
+            });
+            body.appendChild(teleportBtn);
 
             document.body.appendChild(panel);
         })();
