@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.377</div>
+    <div id="version-number">v1.5.378</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -824,9 +824,9 @@
                 <h1 id="pm-title">Match Over</h1>
 
                 <div class="pm-buttons-vertical">
-                    <button class="action-btn" id="pm-next-game-btn" disabled
-                            style="display:none; opacity:0.4; cursor:not-allowed;">
-                        Next game starting in 15
+                    <button class="action-btn" id="pm-next-game-btn"
+                            style="display:none;">
+                        Join now (15)
                     </button>
                     <button class="action-btn secondary-btn" id="menu-btn">Main Menu</button>
                 </div>
@@ -3217,17 +3217,17 @@
                 return;
             }
 
-            // Networked: wait for server match_reset (up to 15 s); button unlocks in last 5 s.
+            // Networked: wait for server match_reset (15 s). The "Join now" button is
+            // available for the entire window; it disappears at 0 if not clicked.
             const MATCH_END_WAIT = 15000;
-            const JOIN_UNLOCK_MS = 10000;
             pmJoinIntent = false;
             const btn = pmNextGameBtn;
             if (btn) {
                 btn.style.display = '';
-                btn.disabled = true;
-                btn.style.opacity = '0.4';
-                btn.style.cursor = 'default';
-                btn.textContent = 'Next game starting in 15';
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+                btn.textContent = 'Join now (15)';
                 btn.onclick = () => {
                     if (btn.disabled) return;
                     pmJoinIntent = true;
@@ -3242,16 +3242,7 @@
                 const elapsed  = Date.now() - startTime;
                 const secsLeft = Math.max(0, Math.ceil((MATCH_END_WAIT - elapsed) / 1000));
                 if (btn && !pmJoinIntent) {
-                    if (elapsed < JOIN_UNLOCK_MS) {
-                        btn.textContent = `Next game starting in ${secsLeft}`;
-                    } else {
-                        if (btn.disabled) {
-                            btn.disabled = false;
-                            btn.style.opacity = '1';
-                            btn.style.cursor = 'pointer';
-                        }
-                        btn.textContent = `Game available - Join now (${secsLeft})`;
-                    }
+                    btn.textContent = `Join now (${secsLeft})`;
                 }
                 if (elapsed >= MATCH_END_WAIT) {
                     clearInterval(matchEndTimerInterval);
