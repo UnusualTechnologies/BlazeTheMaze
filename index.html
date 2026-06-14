@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.380</div>
+    <div id="version-number">v1.5.381</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -831,34 +831,33 @@
                     <button class="action-btn secondary-btn" id="menu-btn">Main Menu</button>
                 </div>
 
+                <!-- Post-Match Share Prompt (integrated into post-match layer) -->
+                <div id="share-prompt-section" style="display: none; margin-top: 24px; padding: 16px; border-top: 1px solid #333; text-align: center;">
+                    <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 12px;">Share your match:</p>
+                    <!-- Stats card will be rendered here as canvas -->
+                    <canvas id="share-stats-canvas" style="border: 2px solid #0af; border-radius: 8px; max-width: 100%; background: #111; margin-bottom: 12px; display: block; margin-left: auto; margin-right: auto;"></canvas>
+
+                    <!-- Share buttons -->
+                    <div id="share-buttons-container" style="display: flex; flex-direction: column; gap: 8px; max-width: 400px; margin: 0 auto;">
+                        <button id="share-copy-btn" class="action-btn" style="background: #00ff00; color: #000; font-weight: bold; font-size: 0.9rem;">
+                            📋 Copy Image to Clipboard
+                        </button>
+                        <button id="share-discord-btn" class="action-btn secondary-btn" style="display: none; font-size: 0.9rem;">
+                            🎮 Share to Discord
+                        </button>
+                        <button id="share-steam-btn" class="action-btn secondary-btn" style="display: none; font-size: 0.9rem;">
+                            🎮 Share to Steam
+                        </button>
+                        <button id="share-close-btn" class="action-btn secondary-btn" style="font-size: 0.9rem;">
+                            ✕ Dismiss
+                        </button>
+                    </div>
+                </div>
+
                 <div class="stats-container">
                     <p class="subtitle" id="pm-subtitle" style="margin-bottom: 0;"></p>
                     <div id="pm-round-times" class="scrollable-rounds">
                         <!-- Round times dynamically added here -->
-                    </div>
-                </div>
-            </div>
-
-            <!-- Post-Match Share Prompt -->
-            <div id="share-prompt-overlay" class="menu-overlay hidden" style="z-index: 1000;">
-                <div id="share-prompt-content" style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 20px; max-width: 600px; width: 100%;">
-                    <!-- Stats card will be rendered here as canvas -->
-                    <canvas id="share-stats-canvas" style="border: 2px solid #0af; border-radius: 8px; max-width: 100%; background: #111;"></canvas>
-
-                    <!-- Share buttons -->
-                    <div id="share-buttons-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 400px;">
-                        <button id="share-copy-btn" class="action-btn" style="background: #00ff00; color: #000; font-weight: bold;">
-                            📋 Copy Image to Clipboard
-                        </button>
-                        <button id="share-discord-btn" class="action-btn secondary-btn" style="display: none;">
-                            🎮 Share to Discord
-                        </button>
-                        <button id="share-steam-btn" class="action-btn secondary-btn" style="display: none;">
-                            🎮 Share to Steam
-                        </button>
-                        <button id="share-close-btn" class="action-btn secondary-btn">
-                            Close
-                        </button>
                     </div>
                 </div>
             </div>
@@ -5852,7 +5851,7 @@
         }
 
         // ── Post-Match Share Prompt ────────────────────────────────────────────────
-        const sharePromptOverlay = document.getElementById('share-prompt-overlay');
+        const sharePromptSection = document.getElementById('share-prompt-section');
         const shareStatsCanvas = document.getElementById('share-stats-canvas');
         const shareCopyBtn = document.getElementById('share-copy-btn');
         const shareDiscordBtn = document.getElementById('share-discord-btn');
@@ -5932,7 +5931,7 @@
 
         function showSharePrompt(matchWinnerId, isLocalPlayerWinner) {
             renderStatsCard(matchWinnerId, isLocalPlayerWinner);
-            sharePromptOverlay.classList.remove('hidden');
+            sharePromptSection.style.display = 'block';
 
             // Show/hide platform buttons based on what's available
             shareDiscordBtn.style.display = window.electronAPI ? 'block' : 'none';
@@ -5940,7 +5939,7 @@
         }
 
         function hideSharePrompt() {
-            sharePromptOverlay.classList.add('hidden');
+            sharePromptSection.style.display = 'none';
             lastShareCanvasDataUrl = null;
         }
 
