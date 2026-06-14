@@ -425,6 +425,18 @@ export class GameRoom extends Room<{ state: GameState }> {
             } catch (_) {}
         });
 
+        this.onMessage("share_action", (client, message) => {
+            try {
+                const _anal = this.clientAnalytics.get(client.sessionId);
+                if (!_anal) return;
+                const platform = typeof message?.platform === 'string' ? message.platform.slice(0, 32) : null;
+                if (!platform) return;
+                track('match_shared', client.sessionId, _anal.analyticsSessionId, {
+                    platform,
+                });
+            } catch (_) {}
+        });
+
         console.log(`Room created: ${this.roomId}`);
 
         // ── Telemetry: settings used to create this room ───────────────────────
