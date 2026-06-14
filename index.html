@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.378</div>
+    <div id="version-number">v1.5.379</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -826,7 +826,7 @@
                 <div class="pm-buttons-vertical">
                     <button class="action-btn" id="pm-next-game-btn"
                             style="display:none;">
-                        Join now (15)
+                        Join the next game starting in 15s.
                     </button>
                     <button class="action-btn secondary-btn" id="menu-btn">Main Menu</button>
                 </div>
@@ -3227,13 +3227,12 @@
                 btn.disabled = false;
                 btn.style.opacity = '1';
                 btn.style.cursor = 'pointer';
-                btn.textContent = 'Join now (15)';
+                btn.textContent = 'Join the next game starting in 15s.';
                 btn.onclick = () => {
                     if (btn.disabled) return;
                     pmJoinIntent = true;
                     btn.disabled = true;
                     btn.style.cursor = 'default';
-                    btn.textContent = 'Joining next game…';
                 };
             }
             clearInterval(matchEndTimerInterval);
@@ -3241,8 +3240,10 @@
             matchEndTimerInterval = setInterval(() => {
                 const elapsed  = Date.now() - startTime;
                 const secsLeft = Math.max(0, Math.ceil((MATCH_END_WAIT - elapsed) / 1000));
-                if (btn && !pmJoinIntent) {
-                    btn.textContent = `Join now (${secsLeft})`;
+                if (btn) {
+                    btn.textContent = pmJoinIntent
+                        ? `Next game starting in ${secsLeft}s.`
+                        : `Join the next game starting in ${secsLeft}s.`;
                 }
                 if (elapsed >= MATCH_END_WAIT) {
                     clearInterval(matchEndTimerInterval);
