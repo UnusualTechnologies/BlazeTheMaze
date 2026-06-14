@@ -74,6 +74,11 @@ Project key: `blaze_the_maze`
 | `rounds_played` | Number of rounds completed during the session |
 | `leave_code` | WebSocket close code |
 
+#### `match_shared` — fired when a player clicks a share button in the post-match prompt
+| Property | Description |
+|---|---|
+| `platform` | Which platform was shared to: `clipboard`, `discord`, or `steam` |
+
 ---
 
 ## Development

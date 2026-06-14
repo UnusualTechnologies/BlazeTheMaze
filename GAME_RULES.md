@@ -12,6 +12,22 @@ Non-obvious rules and numeric constants. Update this file whenever a mechanic is
 - **Solo wait:** If only one human is left after a round win, the next round auto-starts after **10 s**
 - **Match end countdown:** 15 s after match is won before the room resets. The server reset timer (`GameRoom.ts`) and the client countdown (`MATCH_END_WAIT` in `index.html`) **must** use the same value — if they drift, the "Join now" button stalls on "Joining next game…" waiting for the later reset. The "Join now" button is available for the entire 15 s countdown; clicking it greys the button but the countdown continues, and everyone who clicked in time enters the new round when it hits 0. Players who did **not** click in time stay on the end-game screen (Main Menu is their only exit) and are removed from the room so an AI takes over their slot for the new round
 
+## Post-Match Share Prompt
+- **When:** Appears immediately after every match (win or loss), blocking the normal "Join now" / "Return to menu" flow
+- **What:** A stats card showing:
+  - Match result (WIN / LOSS, green / red)
+  - Match time, fastest round time, slowest round time
+  - Player count and grid dimensions
+  - Personal best time (if local player won)
+  - Date/time stamp
+- **Share options:** "Copy Image to Clipboard" (primary, no auth required), "Share to Discord" (if Discord API available), "Share to Steam" (if Steam API available), "Close"
+- **Behavior:**
+  - User can click any share button or "Close" to proceed
+  - After clicking a share button, the prompt auto-dismisses in 1.5 s (so user sees feedback like "✓ Copied!")
+  - If user doesn't interact, the prompt auto-dismisses after 8 s
+  - After dismissal, the normal match_reset flow proceeds (auto-join if user clicked "Join now", or stay on end-game screen otherwise)
+- **Analytics:** `match_shared` events tracked with platform (clipboard, discord, steam)
+
 ## Spawn Positions (8 fixed slots)
 | Slot | Position |
 |---|---|
