@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.384</div>
+    <div id="version-number">v1.5.385</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1533,6 +1533,8 @@
         let joiningViaCode = false; // true when joining via friend code — triggers maze compat check
         let animationId;
         let lastTime = 0;
+        const MAX_FPS = 144;
+        const MIN_FRAME_TIME_MS = 1000 / MAX_FPS; // ~6.94 ms per frame at 144 FPS
         let avgFps = 60;        // exponential moving average, seeded at 60
         let screenShake = 0;
         let mazeCache = null;        // offscreen canvas caching static walls + floor grid
@@ -3916,10 +3918,20 @@
 
         function draw(force = false) {
             if (gameState === 'MENU' && !force) return;
-            pollGamepads();
 
             const now = performance.now();
             const dt = now - lastTime;
+
+            // FPS cap: skip frame if not enough time has passed (144 FPS max)
+            if (!force && dt < MIN_FRAME_TIME_MS) {
+                if (gameState !== 'MENU') {
+                    if (animationId) cancelAnimationFrame(animationId);
+                    animationId = requestAnimationFrame(() => draw(false));
+                }
+                return;
+            }
+
+            pollGamepads();
             lastTime = now;
             if (dt > 0 && dt < 500) avgFps = avgFps * 0.95 + (1000 / dt) * 0.05;
 
