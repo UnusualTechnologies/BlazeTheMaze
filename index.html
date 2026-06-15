@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.383</div>
+    <div id="version-number">v1.5.384</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -831,34 +831,14 @@
                     <button class="action-btn secondary-btn" id="menu-btn">Main Menu</button>
                 </div>
 
-                <!-- Post-Match Share Prompt (integrated into post-match layer) -->
-                <div id="share-prompt-section" style="display: none; margin-top: 24px; padding: 16px; border-top: 1px solid #333; text-align: center;">
-                    <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 12px;">Share your match:</p>
-                    <!-- Stats card will be rendered here as canvas -->
-                    <canvas id="share-stats-canvas" style="border: 2px solid #0af; border-radius: 8px; max-width: 100%; background: #111; margin-bottom: 12px; display: block; margin-left: auto; margin-right: auto;"></canvas>
-
-                    <!-- Share buttons -->
-                    <div id="share-buttons-container" style="display: flex; flex-direction: column; gap: 8px; max-width: 400px; margin: 0 auto;">
-                        <button id="share-copy-btn" class="action-btn" style="background: #00ff00; color: #000; font-weight: bold; font-size: 0.9rem;">
-                            📋 Copy Image to Clipboard
-                        </button>
-                        <button id="share-discord-btn" class="action-btn secondary-btn" style="display: none; font-size: 0.9rem;">
-                            🎮 Share to Discord
-                        </button>
-                        <button id="share-steam-btn" class="action-btn secondary-btn" style="display: none; font-size: 0.9rem;">
-                            🎮 Share to Steam
-                        </button>
-                        <button id="share-close-btn" class="action-btn secondary-btn" style="font-size: 0.9rem;">
-                            ✕ Dismiss
-                        </button>
-                    </div>
-                </div>
-
                 <div class="stats-container">
                     <p class="subtitle" id="pm-subtitle" style="margin-bottom: 0;"></p>
                     <div id="pm-round-times" class="scrollable-rounds">
                         <!-- Round times dynamically added here -->
                     </div>
+                    <button id="pm-copy-btn" class="action-btn" style="margin-top: 16px; background: #00ff00; color: #000; font-weight: bold; width: 100%; max-width: 300px;">
+                        📋 Copy Results to Clipboard
+                    </button>
                 </div>
             </div>
 
@@ -5155,6 +5135,7 @@
                         if (bestTime === null || matchTime < bestTime) { bestTime = matchTime; localStorage.setItem('blazeTheMazeBestTime', bestTime); }
                         if (worstTime === null || matchTime > worstTime) { worstTime = matchTime; localStorage.setItem('blazeTheMazeWorstTime', worstTime); }
                         pmSubtitle.innerHTML = `You won the Best-of-3!<br>Match Time: ${formatTime(matchTime)}<br>Fastest Round: ${formatTime(fastestRoundTime)}<br>Best Match Ever: ${formatTime(bestTime)} | Worst: ${formatTime(worstTime)}`;
+                        matchResultsText = `You won the Best-of-3!\nMatch Time: ${formatTime(matchTime)}\nFastest Round: ${formatTime(fastestRoundTime)}\nBest Match Ever: ${formatTime(bestTime)} | Worst: ${formatTime(worstTime)}`;
 
                         unlockAchievement('ACH_WIN_ROUND');
                         unlockAchievement('ACH_WIN_MATCH');
@@ -5163,14 +5144,21 @@
                         if (prevBest === null || matchTime < prevBest) unlockAchievement('ACH_PERSONAL_BEST');
                     } else {
                         pmSubtitle.innerHTML = `${escapeHtml(winnerId)} won the Best-of-3!<br>Match Time: ${formatTime(matchTime)}<br>Fastest Round: ${formatTime(fastestRoundTime)}`;
+                        matchResultsText = `${winnerId} won the Best-of-3!\nMatch Time: ${formatTime(matchTime)}\nFastest Round: ${formatTime(fastestRoundTime)}`;
                     }
 
                     startMatchEndTimer();
 
                     const roundTimesList = document.getElementById('pm-round-times');
-                    roundTimesList.innerHTML = roundTimes.map((rt, index) =>
+                    const roundTimesHtml = roundTimes.map((rt, index) =>
                         `<div>Round ${index + 1}: <span style="color:${safeColor(rt.winnerColor)};font-weight:bold;">${escapeHtml(rt.winnerId)}</span> - ${formatTime(rt.time)}</div>`
                     ).join('');
+                    roundTimesList.innerHTML = roundTimesHtml;
+
+                    // Add round times to the text version for copying
+                    matchResultsText += '\n\n' + roundTimes.map((rt, index) =>
+                        `Round ${index + 1}: ${rt.winnerId} - ${formatTime(rt.time)}`
+                    ).join('\n');
                 } else {
                     // Round win (not match): animate the score label flying to the new column.
                     // Score stays at oldScore visually until the animation lands (at 2 s).
@@ -5272,26 +5260,8 @@
                 });
                 blazers.forEach(resetBlazerInputState);
 
-                // Show share prompt and defer the join/menu flow until it's dismissed
-                sharePromptDismissed = false;
-                showSharePrompt(matchWinnerId, isMatchWinnerLocal);
-
-                // Set up one-time close handler for this match_reset cycle
-                const handlePromptClose = () => {
-                    if (!sharePromptDismissed) {
-                        sharePromptDismissed = true;
-                        hideSharePrompt();
-                        proceedWithMatchReset();
-                    }
-                };
-
-                // User can click Close to proceed immediately
-                shareCloseBtn.onclick = handlePromptClose;
-
-                // Or auto-close after a timeout if user doesn't interact
-                setTimeout(() => {
-                    if (!sharePromptDismissed) handlePromptClose();
-                }, 8000); // 8 second timeout
+                // Proceed with the normal match_reset flow (join next game or return to menu)
+                proceedWithMatchReset();
             });
 
             room.onLeave(async (code) => {
@@ -5884,153 +5854,24 @@
             if (_slowToast) { _slowToast.remove(); _slowToast = null; }
         }
 
-        // ── Post-Match Share Prompt ────────────────────────────────────────────────
-        const sharePromptSection = document.getElementById('share-prompt-section');
-        const shareStatsCanvas = document.getElementById('share-stats-canvas');
-        const shareCopyBtn = document.getElementById('share-copy-btn');
-        const shareDiscordBtn = document.getElementById('share-discord-btn');
-        const shareSteamBtn = document.getElementById('share-steam-btn');
-        const shareCloseBtn = document.getElementById('share-close-btn');
+        // ── Copy Results Button ────────────────────────────────────────────────
+        const pmCopyBtn = document.getElementById('pm-copy-btn');
+        let matchResultsText = '';
 
-        let lastShareCanvasDataUrl = null; // Cache the canvas image for sharing
-
-        function renderStatsCard(matchWinnerId, isLocalPlayerWinner) {
-            const canvas = shareStatsCanvas;
-            const ctx = canvas.getContext('2d');
-            const w = 500, h = 320;
-            canvas.width = w;
-            canvas.height = h;
-
-            // Background
-            ctx.fillStyle = '#0a0a0a';
-            ctx.fillRect(0, 0, w, h);
-            ctx.strokeStyle = '#00aaff';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(0, 0, w, h);
-
-            // Title
-            ctx.fillStyle = '#00aaff';
-            ctx.font = 'bold 28px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('MATCH RESULTS', w / 2, 40);
-
-            // Result line
-            ctx.fillStyle = isLocalPlayerWinner ? '#00ff00' : '#ff6666';
-            ctx.font = 'bold 24px Arial';
-            ctx.fillText(isLocalPlayerWinner ? '✓ YOU WON!' : '✗ YOU LOST', w / 2, 80);
-
-            // Stats
-            const fastestRound = roundTimes.length > 0 ? Math.min(...roundTimes.map(rt => rt.time)) : 0;
-            const slowestRound = roundTimes.length > 0 ? Math.max(...roundTimes.map(rt => rt.time)) : 0;
-            const playerCount = blazers.length;
-            const gridSizeStr = `${cols}×${rows}`;
-
-            ctx.fillStyle = '#ffffff';
-            ctx.font = '14px Arial';
-            ctx.textAlign = 'left';
-            let y = 120;
-            const lineHeight = 30;
-            const leftX = 40, rightX = 280;
-
-            // Left column
-            ctx.fillText(`Match Time: ${formatTime(matchTime)}`, leftX, y);
-            ctx.fillText(`Fastest Round: ${formatTime(fastestRound)}`, leftX, y + lineHeight);
-            ctx.fillText(`Slowest Round: ${formatTime(slowestRound)}`, leftX, y + lineHeight * 2);
-
-            // Right column
-            ctx.fillText(`Players: ${playerCount}`, rightX, y);
-            ctx.fillText(`Grid: ${gridSizeStr}`, rightX, y + lineHeight);
-            ctx.fillText(`Rounds: ${roundTimes.length}/3`, rightX, y + lineHeight * 2);
-
-            // Personal best (if local player won)
-            if (isLocalPlayerWinner) {
-                const bestTime = localStorage.getItem('blazeTheMazeBestTime');
-                if (bestTime && formatTime(parseFloat(bestTime)) !== formatTime(matchTime)) {
-                    ctx.fillStyle = '#ffff00';
-                    ctx.font = 'bold 12px Arial';
-                    ctx.fillText(`Personal Best: ${bestTime}`, leftX, y + lineHeight * 4);
-                }
-            }
-
-            // Date/time footer
-            ctx.fillStyle = '#666666';
-            ctx.font = '12px Arial';
-            ctx.textAlign = 'center';
-            const now = new Date();
-            const dateStr = now.toLocaleString();
-            ctx.fillText(dateStr, w / 2, h - 15);
-
-            lastShareCanvasDataUrl = canvas.toDataURL('image/png');
-        }
-
-        function showSharePrompt(matchWinnerId, isLocalPlayerWinner) {
-            renderStatsCard(matchWinnerId, isLocalPlayerWinner);
-            sharePromptSection.style.display = 'block';
-
-            // Show/hide platform buttons based on what's available
-            shareDiscordBtn.style.display = window.electronAPI ? 'block' : 'none';
-            shareSteamBtn.style.display = window.electronAPI ? 'block' : 'none';
-        }
-
-        function hideSharePrompt() {
-            sharePromptSection.style.display = 'none';
-            lastShareCanvasDataUrl = null;
-        }
-
-        let shareActionInProgress = false;
-
-        async function handleShareCopy() {
-            if (!lastShareCanvasDataUrl || shareActionInProgress) return;
-            shareActionInProgress = true;
+        pmCopyBtn.addEventListener('click', async () => {
+            if (!matchResultsText) return;
             try {
-                const blob = await (await fetch(lastShareCanvasDataUrl)).blob();
-                await navigator.clipboard.write([
-                    new ClipboardItem({ 'image/png': blob })
-                ]);
-                shareCopyBtn.textContent = '✓ Copied!';
-                setTimeout(() => { shareCopyBtn.textContent = '📋 Copy Image to Clipboard'; shareActionInProgress = false; }, 2000);
-
+                await navigator.clipboard.writeText(matchResultsText);
+                pmCopyBtn.textContent = '✓ Copied!';
+                setTimeout(() => { pmCopyBtn.textContent = '📋 Copy Results to Clipboard'; }, 2000);
                 // Track analytics
                 if (room) room.send('share_action', { platform: 'clipboard' });
             } catch (err) {
-                console.error('Failed to copy image:', err);
-                shareCopyBtn.textContent = '✗ Copy failed';
-                setTimeout(() => { shareCopyBtn.textContent = '📋 Copy Image to Clipboard'; shareActionInProgress = false; }, 2000);
+                console.error('Failed to copy:', err);
+                pmCopyBtn.textContent = '✗ Copy failed';
+                setTimeout(() => { pmCopyBtn.textContent = '📋 Copy Results to Clipboard'; }, 2000);
             }
-        }
-
-        function handleShareDiscord() {
-            if (!window.electronAPI || shareActionInProgress) return;
-            shareActionInProgress = true;
-            try {
-                window.electronAPI.shareToDiscord?.(lastShareCanvasDataUrl, matchTime, cols, rows);
-                // Track analytics
-                if (room) room.send('share_action', { platform: 'discord' });
-                shareActionInProgress = false;
-            } catch (err) {
-                console.error('Failed to share to Discord:', err);
-                shareActionInProgress = false;
-            }
-        }
-
-        function handleShareSteam() {
-            if (!window.electronAPI || shareActionInProgress) return;
-            shareActionInProgress = true;
-            try {
-                window.electronAPI.shareToSteam?.(matchTime, cols, rows);
-                // Track analytics
-                if (room) room.send('share_action', { platform: 'steam' });
-                shareActionInProgress = false;
-            } catch (err) {
-                console.error('Failed to share to Steam:', err);
-                shareActionInProgress = false;
-            }
-        }
-
-        shareCopyBtn.addEventListener('click', handleShareCopy);
-        shareDiscordBtn.addEventListener('click', handleShareDiscord);
-        shareSteamBtn.addEventListener('click', handleShareSteam);
-        shareCloseBtn.addEventListener('click', hideSharePrompt);
+        });
 
         function colyseusErrorText(e) {
             if (e == null) return 'Unknown error';
