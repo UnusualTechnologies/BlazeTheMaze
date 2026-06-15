@@ -794,7 +794,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.385</div>
+    <div id="version-number">v1.5.386</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -5117,6 +5117,7 @@
                     // Match win: update score immediately then show post-match
                     scores[winnerId] = winnerScore;
                     updateScoreboard();
+                    if (room) room.send("client_telemetry", { fps: Math.round(avgFps) });
 
                     if (winnerBlazer?.isLocal) {
                         Synth.win();
@@ -5456,12 +5457,12 @@
                 initRound();
             });
 
-            // ── Client telemetry: latency + FPS ───────────────────────────────
+            // ── Client telemetry: latency (every 30s) + FPS (once per match end) ──
             let _pendingPingT = 0;
             room.onMessage("pong", (data) => {
                 if (data && data.t) {
                     const latencyMs = Date.now() - data.t;
-                    if (room) room.send("client_telemetry", { fps: Math.round(avgFps), latency_ms: latencyMs });
+                    if (room) room.send("client_telemetry", { latency_ms: latencyMs });
                 }
             });
             const _telemetryInterval = setInterval(() => {

@@ -47,10 +47,10 @@ Project key: `blaze_the_maze`
 | `scheme` | Control scheme used (e.g. `WASD`, `Arrows`, `TouchMouse`, `Gamepad0`) |
 | `slot_index` | Slot index of the player |
 
-#### `fps_sample` — fired every 30 seconds per connected player
+#### `fps_sample` — fired once at the end of each match per connected player
 | Property | Description |
 |---|---|
-| `fps` | Exponential moving average FPS on the client |
+| `fps` | Exponential moving average FPS on the client at match end |
 
 #### `latency_sample` — fired every 30 seconds per connected player
 | Property | Description |
