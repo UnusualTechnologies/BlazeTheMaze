@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, ipcMain, shell } = require('electron')
 const path = require('path')
 
 let mainWindow
@@ -123,6 +123,13 @@ ipcMain.handle('steam:set-rich-presence', (_event, status) => {
     steamClient.localplayer.setRichPresence('status', status)
   } catch (e) {
     console.warn('Failed to set rich presence:', e.message)
+  }
+})
+
+ipcMain.handle('shell:open-external', (_event, url) => {
+  // Only allow https URLs to prevent abuse
+  if (typeof url === 'string' && url.startsWith('https://')) {
+    shell.openExternal(url)
   }
 })
 

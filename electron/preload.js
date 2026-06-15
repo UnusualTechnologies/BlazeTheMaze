@@ -10,5 +10,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setRichPresence:    (status)   => ipcRenderer.invoke('steam:set-rich-presence', status),
   unlockAchievement:  (apiName)  => ipcRenderer.invoke('steam:unlock-achievement', apiName),
   // cb(roomCode) is called when a friend accepts an invite or clicks Join Game
-  onSteamJoinRequest: (cb)      => ipcRenderer.on('steam:join-requested', (_event, roomCode) => cb(roomCode))
+  onSteamJoinRequest: (cb)      => ipcRenderer.on('steam:join-requested', (_event, roomCode) => cb(roomCode)),
+  openExternal:       (url)     => ipcRenderer.invoke('shell:open-external', url)
 })
