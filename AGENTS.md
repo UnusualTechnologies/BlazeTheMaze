@@ -51,6 +51,16 @@ When suggesting a push, provide a brief bulleted summary of what we've done so I
 - After pushing a session that includes server changes, always tell the user: "The server is deploying — please wait a few minutes before testing."
 - Server credentials are in `server/.colyseus-cloud.json` (applicationId: `1505-maze`).
 
+## Branch & Environment Model
+
+| Branch | Runs on | Analytics project | Server |
+|---|---|---|---|
+| `develop` / `feature*` / `hotfix*` | Local only (`electron .` or localhost) | None — no events sent | Shared Colyseus instance |
+| `staging` | GitHub Pages | `blaze_the_maze_staging` | Shared Colyseus instance |
+| `main` | itch.io (HTML5) + packaged Electron/Steam | `blaze_the_maze_live` | Shared Colyseus instance (split-ready) |
+
+Default working branch is `develop`. The server URL is extracted to `SERVER_URL` constant in `index.html` — change it there when splitting staging/live servers.
+
 ## Steam Build Pipeline (IN PROGRESS — pick up here next session)
 
 An automated Steam deploy pipeline has been partially set up. **Do not re-explain what was done — just resume from the next step below.**

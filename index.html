@@ -804,7 +804,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.391</div>
+    <div id="version-number">v1.5.392</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -1069,6 +1069,20 @@
             ? (window.electronAPI.isPackaged === true)
             : !_devHosts.includes(location.hostname);
         const _defaultMuted = !_isProductionBuild;
+
+        // Server URL — single constant to change when splitting staging/live servers.
+        const SERVER_URL = 'wss://gb-lhr-5b4d543b.colyseus.cloud';
+
+        // Analytics environment: 'live' (itch.io, Steam), 'staging' (GitHub Pages),
+        // or 'none' (local dev — no analytics sent).
+        function detectAnalyticsEnv() {
+            if (_isElectron) return window.electronAPI.isPackaged ? 'live' : 'none';
+            const host = location.hostname;
+            if (!host || host === 'localhost' || host === '127.0.0.1' || host === '::1') return 'none';
+            if (host.includes('github.io')) return 'staging';
+            return 'live'; // itch.io or any other production domain
+        }
+        const _analyticsEnv = detectAnalyticsEnv();
         const _savedMusicMuted = _isElectron ? localStorage.getItem('blazeMusicMuted') : null;
         const _savedSfxMuted   = _isElectron ? localStorage.getItem('blazeSfxMuted')   : null;
         const Synth = {
@@ -4683,7 +4697,7 @@
         let client;
         try {
             if (typeof Colyseus === 'undefined' || window.__colyseusLoadFailed) throw new Error('SDK_NOT_LOADED');
-            client = new Colyseus.Client("wss://gb-lhr-5b4d543b.colyseus.cloud");
+            client = new Colyseus.Client(SERVER_URL);
         } catch(e) { console.warn('Colyseus unavailable (offline / SDK failed to load?):', e); }
         let room;
 
@@ -5785,6 +5799,7 @@
             const opts = {
                 playerGuid,
                 clientVersion: _verText,
+                analyticsEnv: _analyticsEnv,
                 isMobile: /Android|iPhone|iPad|iPod/i.test(navigator.userAgent),
                 screenW: screen.width,
                 screenH: screen.height,

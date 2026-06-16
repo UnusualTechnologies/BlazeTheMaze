@@ -4,16 +4,20 @@ import { GameState, Player, Cell, PowerUp, Slot } from "./GameState.js";
 import { randomUUID } from "crypto";
 
 // ── Analytics ──────────────────────────────────────────────────────────────
-const ANALYTICS_URL     = 'https://analytics-api.unusualtechnologies.com';
-const ANALYTICS_API_KEY = process.env.ANALYTICS_API_KEY ?? '';
-const ANALYTICS_PROJECT = 'blaze_the_maze';
+const ANALYTICS_URL             = 'https://analytics-api.unusualtechnologies.com';
+const ANALYTICS_API_KEY         = process.env.ANALYTICS_API_KEY         ?? '';
+const ANALYTICS_PROJECT_STAGING = process.env.ANALYTICS_PROJECT_STAGING ?? 'blaze_the_maze_staging';
+const ANALYTICS_PROJECT_LIVE    = process.env.ANALYTICS_PROJECT_LIVE    ?? 'blaze_the_maze_live';
 
-function track(event_name: string, player_id: string | null, session_id: string, properties: Record<string, unknown> = {}): void {
-    if (!ANALYTICS_URL || !ANALYTICS_API_KEY) return;
+type AnalyticsEnv = 'live' | 'staging' | 'none';
+
+function track(event_name: string, player_id: string | null, session_id: string, properties: Record<string, unknown> = {}, env: AnalyticsEnv = 'none'): void {
+    if (env === 'none' || !ANALYTICS_API_KEY) return;
+    const project = env === 'live' ? ANALYTICS_PROJECT_LIVE : ANALYTICS_PROJECT_STAGING;
     fetch(ANALYTICS_URL, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': ANALYTICS_API_KEY },
-        body:    JSON.stringify({ project: ANALYTICS_PROJECT, event_name, player_id, session_id, properties }),
+        body:    JSON.stringify({ project, event_name, player_id, session_id, properties }),
     }).catch(() => {});
 }
 // ───────────────────────────────────────────────────────────────────────────
@@ -54,6 +58,7 @@ interface JoinOptions {
     screenW?:      number;
     screenH?:      number;
     humanSlotCount?: number;
+    analyticsEnv?: AnalyticsEnv;
 }
 
 export class GameRoom extends Room<{ state: GameState }> {
@@ -72,7 +77,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     // check would tear the room down while these players are mid-reconnect, dropping them.
     pendingReconnects = new Set<string>();
     // Per-client analytics state: analytics session UUID, join timestamp, round number at join
-    private clientAnalytics = new Map<string, { playerId: string | null; analyticsSessionId: string; startMs: number; joinRound: number }>();
+    private clientAnalytics = new Map<string, { playerId: string | null; analyticsSessionId: string; startMs: number; joinRound: number; env: AnalyticsEnv }>();
     // Incremented on every round win — used to calculate rounds_played per session
     private roundCount = 0;
     // Per-AI session state (not broadcast)
@@ -429,8 +434,8 @@ export class GameRoom extends Room<{ state: GameState }> {
                 if (!_anal) return;
                 const fps = typeof message?.fps === 'number' ? Math.round(message.fps) : null;
                 const latency_ms = typeof message?.latency_ms === 'number' ? Math.round(message.latency_ms) : null;
-                if (fps !== null) track('fps_sample', _anal.playerId, _anal.analyticsSessionId, { fps });
-                if (latency_ms !== null) track('latency_sample', _anal.playerId, _anal.analyticsSessionId, { latency_ms });
+                if (fps !== null) track('fps_sample', _anal.playerId, _anal.analyticsSessionId, { fps }, _anal.env);
+                if (latency_ms !== null) track('latency_sample', _anal.playerId, _anal.analyticsSessionId, { latency_ms }, _anal.env);
             } catch (_) {}
         });
 
@@ -444,7 +449,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                 track('controls_used', _anal.playerId, _anal.analyticsSessionId, {
                     scheme,
                     slot_index: typeof message?.slotIndex === 'number' ? message.slotIndex : null,
-                });
+                }, _anal.env);
             } catch (_) {}
         });
 
@@ -456,33 +461,12 @@ export class GameRoom extends Room<{ state: GameState }> {
                 if (!platform) return;
                 track('match_shared', _anal.playerId, _anal.analyticsSessionId, {
                     platform,
-                });
+                }, _anal.env);
             } catch (_) {}
         });
 
         console.log(`Room created: ${this.roomId}`);
-
-        // ── Telemetry: settings used to create this room ───────────────────────
-        const _activeSlots = (options.slots ?? []).filter(s => s.mode !== 'inactive' && s.mode !== 'friend_only');
-        track('settings_applied', 'server', randomUUID(), {
-            grid_cols:       this.cols,
-            grid_rows:       this.rows,
-            collisions:      this.collisions,
-            orb_leader_only: this.orbLeaderOnly,
-            pu_opponent:     options.puOpp     ?? 0,
-            pu_self:         options.puSelf    ?? 0,
-            pu_rocket:       options.puRocket  ?? 0,
-            pu_mirror:       options.puMirror  ?? 0,
-            pu_mystery:      options.puMystery ?? 0,
-            pu_freeze:       options.puFreeze  ?? 0,
-            pu_beacon:       options.puBeacon  ?? 0,
-            active_players:  _activeSlots.length,
-            human_players:   _activeSlots.filter(s => s.mode === 'local' || s.mode === 'secondary').length,
-            ai_players:      _activeSlots.filter(s => s.mode === 'ai' || s.mode === 'ai_online' || s.mode === 'ai_friend').length,
-            used_defaults:   !options.slots || options.slots.length === 0,
-            client_version:  typeof options.clientVersion === 'string' ? options.clientVersion : null,
-        });
-        // ───────────────────────────────────────────────────────────────────────
+        // settings_applied is fired in onJoin (host) so we have the client's analyticsEnv.
     }
 
     onJoin(client: Client, options: JoinOptions) {
@@ -604,7 +588,33 @@ export class GameRoom extends Room<{ state: GameState }> {
         // ── Telemetry: session start ───────────────────────────────────────────
         const _aid = randomUUID();
         const _playerId = options.playerGuid ?? null;
-        this.clientAnalytics.set(client.sessionId, { playerId: _playerId, analyticsSessionId: _aid, startMs: Date.now(), joinRound: this.roundCount });
+        const _env: AnalyticsEnv = (options.analyticsEnv === 'live' || options.analyticsEnv === 'staging')
+            ? options.analyticsEnv : 'none';
+        this.clientAnalytics.set(client.sessionId, { playerId: _playerId, analyticsSessionId: _aid, startMs: Date.now(), joinRound: this.roundCount, env: _env });
+        if (isHost) {
+            // settings_applied is fired here (on host join) rather than onCreate so we
+            // have access to _env for routing to the correct analytics project.
+            const _so = this.spawnOptions;
+            const _activeSlots = (_so.slots ?? []).filter(s => s.mode !== 'inactive' && s.mode !== 'friend_only');
+            track('settings_applied', null, randomUUID(), {
+                grid_cols:       this.cols,
+                grid_rows:       this.rows,
+                collisions:      this.collisions,
+                orb_leader_only: this.orbLeaderOnly,
+                pu_opponent:     _so.puOpp     ?? 0,
+                pu_self:         _so.puSelf    ?? 0,
+                pu_rocket:       _so.puRocket  ?? 0,
+                pu_mirror:       _so.puMirror  ?? 0,
+                pu_mystery:      _so.puMystery ?? 0,
+                pu_freeze:       _so.puFreeze  ?? 0,
+                pu_beacon:       _so.puBeacon  ?? 0,
+                active_players:  _activeSlots.length,
+                human_players:   _activeSlots.filter(s => s.mode === 'local' || s.mode === 'secondary').length,
+                ai_players:      _activeSlots.filter(s => s.mode === 'ai' || s.mode === 'ai_online' || s.mode === 'ai_friend').length,
+                used_defaults:   !_so.slots || _so.slots.length === 0,
+                client_version:  typeof _so.clientVersion === 'string' ? _so.clientVersion : null,
+            }, _env);
+        }
         track('session_start', _playerId, _aid, {
             joined_via_code:  joinedViaCode,
             is_host:          isHost,
@@ -612,8 +622,8 @@ export class GameRoom extends Room<{ state: GameState }> {
             screen_w:         options.screenW    ?? null,
             screen_h:         options.screenH    ?? null,
             human_slot_count: options.humanSlotCount ?? 1,
-        });
-        if (joinedViaCode) track('friend_code_used', _playerId, _aid, {});
+        }, _env);
+        if (joinedViaCode) track('friend_code_used', _playerId, _aid, {}, _env);
         // ───────────────────────────────────────────────────────────────────────
 
         // This seat is now taken — re-evaluate whether random matchmaking should still
@@ -675,7 +685,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                 duration_ms:   Date.now() - _anal.startMs,
                 rounds_played: this.roundCount - _anal.joinRound,
                 leave_code:    code ?? 0,
-            });
+            }, _anal.env);
             this.clientAnalytics.delete(client.sessionId);
         }
         // ───────────────────────────────────────────────────────────────────────
@@ -1414,7 +1424,7 @@ export class GameRoom extends Room<{ state: GameState }> {
             // ── Telemetry: round result ────────────────────────────────────────
             this.roundCount++;
             const _winnerAnal = this.clientAnalytics.get(sessionId);
-            track('round_won', _winnerAnal?.playerId ?? sessionId, _winnerAnal?.analyticsSessionId ?? 'ai', {
+            track('round_won', _winnerAnal?.playerId ?? null, _winnerAnal?.analyticsSessionId ?? 'ai', {
                 winner_is_ai:  player.isAI,
                 round_time_ms: Date.now() - this.roundStartMs,
                 winner_score:  player.score,
@@ -1422,7 +1432,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                 round_number:  this.roundCount,
                 player_count:  this.state.players.size,
                 human_count:   [...this.state.players.values()].filter((p: Player) => !p.isAI).length,
-            });
+            }, _winnerAnal?.env ?? 'none');
             // ──────────────────────────────────────────────────────────────────
             // Persist winner info in synced state so late joiners catch up via onStateChange
             this.state.roundOver = true;

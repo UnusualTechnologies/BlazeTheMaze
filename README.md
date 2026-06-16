@@ -19,6 +19,13 @@ Every event envelope carries two identity fields:
 - **`player_id`** — the persistent player identity: the `localStorage` GUID (`blazeTheMazePlayerId`) set once per browser/device. `null` when unavailable (cleared storage, incognito). Use this to group events by unique player across sessions; filter `WHERE player_id IS NOT NULL` for known-player analysis.
 - **`session_id`** — a UUID minted fresh on each `onJoin`. Use this to scope events to a single play session.
 
+### Projects
+| Project | When used |
+|---|---|
+| `blaze_the_maze_live` | itch.io (HTML5) and packaged Electron/Steam builds |
+| `blaze_the_maze_staging` | GitHub Pages (`staging` branch) |
+| *(none)* | Local dev (`electron .`, localhost, file://) — no events sent |
+
 ### Events
 
 #### `settings_applied` — fired once per room creation
