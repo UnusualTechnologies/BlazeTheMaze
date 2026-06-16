@@ -64,7 +64,7 @@ Every event envelope carries two identity fields:
 #### `controls_used` — fired the first time a player actually moves with a given scheme
 | Property | Type | Description |
 |---|---|---|
-| `scheme` | `string` | Control scheme used (e.g. `WASD`, `Arrows`, `TouchMouse`, `Gamepad0`) |
+| `scheme` | `string` | Control scheme used: `WASD`, `Arrows`, `TFGH`, `IJKL`, `Numpad`, `TouchMouse`, `Gamepad0`…, or `solo_any` when the player is the only local player (all keys merged, so the configured scheme is not meaningful) |
 | `slot_index` | `int` | Slot index of the player |
 
 #### `fps_sample` — fired once at the end of each match per connected player

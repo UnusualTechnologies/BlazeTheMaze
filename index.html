@@ -804,7 +804,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.392</div>
+    <div id="version-number">v1.5.393</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -2419,9 +2419,11 @@
                         if (this.sentMoves.length > 32) this.sentMoves.shift();
                     }
                     const scheme = this.controlScheme || 'WASD';
-                    if (!controlSchemesReported.has(scheme)) {
-                        controlSchemesReported.add(scheme);
-                        room.send("controls_used", { scheme, slotIndex: this.slotIndex });
+                    const localCount = blazers.filter(b => b.isPlayer && b.isActuallyLocal()).length;
+                    const reportedScheme = localCount === 1 ? 'solo_any' : scheme;
+                    if (!controlSchemesReported.has(reportedScheme)) {
+                        controlSchemesReported.add(reportedScheme);
+                        room.send("controls_used", { scheme: reportedScheme, slotIndex: this.slotIndex });
                     }
                 }
             }
