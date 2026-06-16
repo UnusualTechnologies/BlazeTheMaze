@@ -804,7 +804,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.393</div>
+    <div id="version-number">v1.5.394</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -5821,7 +5821,7 @@
                     id: s.id,
                     color: s.color,
                     aiSpeed: s.aiSpeedSelect.value,
-                    aiCustomSpeed: parseInt(s.customSpeedSlider.value, 10),
+                    aiCustomSpeed: speedScaleToMs(parseInt(s.customSpeedSlider.value, 10)),
                     aiBehavior: s.aiBehaviorSelect.value,
                     controlScheme: s.controlSelect.value
                 })),
