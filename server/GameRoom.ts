@@ -191,7 +191,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                 } else if (speedKey === "random") {
                     slot.aiSpeed = Math.floor(Math.random() * 900 + 100);
                 } else if (speedKey === "scaling") {
-                    slot.aiSpeed = 1000; // starts at easy; updated each move from scores
+                    slot.aiSpeed = 600; // starts at medium; updated each move from scores
                     this.scalingSpeedSlots.add(i);
                 } else {
                     slot.aiSpeed = aiSpeedMs[speedKey] ?? 600;
@@ -1416,7 +1416,7 @@ export class GameRoom extends Room<{ state: GameState }> {
             if (this.scalingSpeedSlots.size > 0) {
                 let maxScore = 0;
                 this.state.players.forEach(p => { if (p.score > maxScore) maxScore = p.score; });
-                const scaledMs = maxScore >= 2 ? 300 : maxScore >= 1 ? 600 : 1000;
+                const scaledMs = maxScore >= 2 ? 200 : maxScore >= 1 ? 400 : 600;
                 this.scalingSpeedSlots.forEach(idx => { this.state.slots[idx].aiSpeed = scaledMs; });
             }
             const isMatchWon = player.score >= GameRoom.WINS_TO_MATCH;
