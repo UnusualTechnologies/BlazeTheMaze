@@ -22,65 +22,76 @@ Every event envelope carries two identity fields:
 ### Events
 
 #### `settings_applied` — fired once per room creation
-| Property | Description |
-|---|---|
-| `grid_cols`, `grid_rows` | Maze dimensions |
-| `collisions` | Whether player collisions are enabled |
-| `orb_leader_only` | Whether orbs are restricted to the leader |
-| `pu_opponent`, `pu_self`, `pu_rocket`, `pu_mirror`, `pu_mystery`, `pu_freeze`, `pu_beacon` | Power-up counts configured for the room |
-| `active_players`, `human_players`, `ai_players` | Slot breakdown at room creation |
-| `used_defaults` | Whether the host used Quick Start defaults |
-| `client_version` | Game version string (e.g. `v1.5.279`) from the client at room creation |
+| Property | Type | Description |
+|---|---|---|
+| `grid_cols` | `int` | Maze width in cells |
+| `grid_rows` | `int` | Maze height in cells |
+| `collisions` | `bool` | Whether player collisions are enabled |
+| `orb_leader_only` | `bool` | Whether orbs are restricted to the leader |
+| `pu_opponent` | `int` | Opponents power-up count |
+| `pu_self` | `int` | Self power-up count |
+| `pu_rocket` | `int` | Warp Wheel count |
+| `pu_mirror` | `int` | Mirror count |
+| `pu_mystery` | `int` | Mystery count |
+| `pu_freeze` | `int` | Freeze count |
+| `pu_beacon` | `int` | Beacon count |
+| `active_players` | `int` | Total player slots |
+| `human_players` | `int` | Human slots |
+| `ai_players` | `int` | AI slots |
+| `used_defaults` | `bool` | Whether the host used Quick Start defaults |
+| `client_version` | `string` | Game version string (e.g. `v1.5.390`) |
 
 #### `session_start` — fired when a player joins
-| Property | Description |
-|---|---|
-| `joined_via_code` | Player joined via friend code |
-| `is_host` | Player created the room |
-| `is_mobile` | Whether the device is a phone/tablet |
-| `screen_w`, `screen_h` | Physical screen resolution |
-| `human_slot_count` | Number of human players configured on this device (co-op) |
+| Property | Type | Description |
+|---|---|---|
+| `joined_via_code` | `bool` | Player joined via friend code |
+| `is_host` | `bool` | Player created the room |
+| `is_mobile` | `bool` | Whether the device is a phone/tablet |
+| `screen_w` | `int` | Physical screen width in pixels |
+| `screen_h` | `int` | Physical screen height in pixels |
+| `human_slot_count` | `int` | Number of human players configured on this device (co-op) |
 
 #### `friend_code_used` — fired when a player joins via friend code
 *(no extra properties)*
 
 #### `controls_used` — fired the first time a player actually moves with a given scheme
-| Property | Description |
-|---|---|
-| `scheme` | Control scheme used (e.g. `WASD`, `Arrows`, `TouchMouse`, `Gamepad0`) |
-| `slot_index` | Slot index of the player |
+| Property | Type | Description |
+|---|---|---|
+| `scheme` | `string` | Control scheme used (e.g. `WASD`, `Arrows`, `TouchMouse`, `Gamepad0`) |
+| `slot_index` | `int` | Slot index of the player |
 
 #### `fps_sample` — fired once at the end of each match per connected player
-| Property | Description |
-|---|---|
-| `fps` | Exponential moving average FPS on the client at match end |
+| Property | Type | Description |
+|---|---|---|
+| `fps` | `int` | Exponential moving average FPS on the client at match end |
 
 #### `latency_sample` — fired every 30 seconds per connected player
-| Property | Description |
-|---|---|
-| `latency_ms` | Round-trip time to the server (ping/pong, measured client-side) |
+| Property | Type | Description |
+|---|---|---|
+| `latency_ms` | `int` | Round-trip time to the server (ping/pong, measured client-side) |
 
 #### `round_won` — fired at the end of each round
-| Property | Description |
-|---|---|
-| `winner_is_ai` | Whether the winner was an AI player |
-| `round_time_ms` | How long the round lasted |
-| `winner_score` | Winner's score at time of win |
-| `is_match_won` | Whether this round also ended the match |
-| `round_number` | Which round this was |
-| `player_count`, `human_count` | Total and human player counts at round end |
+| Property | Type | Description |
+|---|---|---|
+| `winner_is_ai` | `bool` | Whether the winner was an AI player |
+| `round_time_ms` | `int` | How long the round lasted in milliseconds |
+| `winner_score` | `int` | Winner's score at time of win |
+| `is_match_won` | `bool` | Whether this round also ended the match |
+| `round_number` | `int` | Which round this was (1-indexed) |
+| `player_count` | `int` | Total players at round end |
+| `human_count` | `int` | Human players at round end |
 
 #### `session_end` — fired when a player disconnects
-| Property | Description |
-|---|---|
-| `duration_ms` | How long the player was connected |
-| `rounds_played` | Number of rounds completed during the session |
-| `leave_code` | WebSocket close code |
+| Property | Type | Description |
+|---|---|---|
+| `duration_ms` | `int` | How long the player was connected in milliseconds |
+| `rounds_played` | `int` | Number of rounds completed during the session |
+| `leave_code` | `int` | WebSocket close code (1000 = normal, 4001–4003 = server-initiated, 0 = unknown) |
 
-#### `match_shared` — fired when a player clicks a share button in the post-match prompt
-| Property | Description |
-|---|---|
-| `platform` | Which platform was shared to: `clipboard`, `discord`, or `steam` |
+#### `match_shared` — fired when a player clicks the copy results button post-match
+| Property | Type | Description |
+|---|---|---|
+| `platform` | `string` | Which platform was shared to: `clipboard`, `discord`, or `steam` |
 
 ---
 
