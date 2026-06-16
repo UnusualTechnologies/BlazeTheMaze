@@ -72,7 +72,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     // check would tear the room down while these players are mid-reconnect, dropping them.
     pendingReconnects = new Set<string>();
     // Per-client analytics state: analytics session UUID, join timestamp, round number at join
-    private clientAnalytics = new Map<string, { analyticsSessionId: string; startMs: number; joinRound: number }>();
+    private clientAnalytics = new Map<string, { playerId: string; analyticsSessionId: string; startMs: number; joinRound: number }>();
     // Incremented on every round win — used to calculate rounds_played per session
     private roundCount = 0;
     // Per-AI session state (not broadcast)
@@ -429,8 +429,8 @@ export class GameRoom extends Room<{ state: GameState }> {
                 if (!_anal) return;
                 const fps = typeof message?.fps === 'number' ? Math.round(message.fps) : null;
                 const latency_ms = typeof message?.latency_ms === 'number' ? Math.round(message.latency_ms) : null;
-                if (fps !== null) track('fps_sample', client.sessionId, _anal.analyticsSessionId, { fps });
-                if (latency_ms !== null) track('latency_sample', client.sessionId, _anal.analyticsSessionId, { latency_ms });
+                if (fps !== null) track('fps_sample', _anal.playerId, _anal.analyticsSessionId, { fps });
+                if (latency_ms !== null) track('latency_sample', _anal.playerId, _anal.analyticsSessionId, { latency_ms });
             } catch (_) {}
         });
 
@@ -441,7 +441,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                 if (!_anal) return;
                 const scheme = typeof message?.scheme === 'string' ? message.scheme.slice(0, 32) : null;
                 if (!scheme) return;
-                track('controls_used', client.sessionId, _anal.analyticsSessionId, {
+                track('controls_used', _anal.playerId, _anal.analyticsSessionId, {
                     scheme,
                     slot_index: typeof message?.slotIndex === 'number' ? message.slotIndex : null,
                 });
@@ -454,7 +454,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                 if (!_anal) return;
                 const platform = typeof message?.platform === 'string' ? message.platform.slice(0, 32) : null;
                 if (!platform) return;
-                track('match_shared', client.sessionId, _anal.analyticsSessionId, {
+                track('match_shared', _anal.playerId, _anal.analyticsSessionId, {
                     platform,
                 });
             } catch (_) {}
@@ -603,17 +603,17 @@ export class GameRoom extends Room<{ state: GameState }> {
 
         // ── Telemetry: session start ───────────────────────────────────────────
         const _aid = randomUUID();
-        this.clientAnalytics.set(client.sessionId, { analyticsSessionId: _aid, startMs: Date.now(), joinRound: this.roundCount });
-        track('session_start', client.sessionId, _aid, {
+        const _playerId = options.playerGuid ?? client.sessionId;
+        this.clientAnalytics.set(client.sessionId, { playerId: _playerId, analyticsSessionId: _aid, startMs: Date.now(), joinRound: this.roundCount });
+        track('session_start', _playerId, _aid, {
             joined_via_code:  joinedViaCode,
             is_host:          isHost,
-            player_guid:      options.playerGuid ?? null,
             is_mobile:        options.isMobile   ?? false,
             screen_w:         options.screenW    ?? null,
             screen_h:         options.screenH    ?? null,
             human_slot_count: options.humanSlotCount ?? 1,
         });
-        if (joinedViaCode) track('friend_code_used', client.sessionId, _aid, {});
+        if (joinedViaCode) track('friend_code_used', _playerId, _aid, {});
         // ───────────────────────────────────────────────────────────────────────
 
         // This seat is now taken — re-evaluate whether random matchmaking should still
@@ -671,7 +671,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         // ── Telemetry: session end ─────────────────────────────────────────────
         const _anal = this.clientAnalytics.get(client.sessionId);
         if (_anal) {
-            track('session_end', client.sessionId, _anal.analyticsSessionId, {
+            track('session_end', _anal.playerId, _anal.analyticsSessionId, {
                 duration_ms:   Date.now() - _anal.startMs,
                 rounds_played: this.roundCount - _anal.joinRound,
                 leave_code:    code ?? 0,
@@ -1414,7 +1414,7 @@ export class GameRoom extends Room<{ state: GameState }> {
             // ── Telemetry: round result ────────────────────────────────────────
             this.roundCount++;
             const _winnerAnal = this.clientAnalytics.get(sessionId);
-            track('round_won', sessionId, _winnerAnal?.analyticsSessionId ?? 'ai', {
+            track('round_won', _winnerAnal?.playerId ?? sessionId, _winnerAnal?.analyticsSessionId ?? 'ai', {
                 winner_is_ai:  player.isAI,
                 round_time_ms: Date.now() - this.roundStartMs,
                 winner_score:  player.score,

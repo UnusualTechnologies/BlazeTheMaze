@@ -15,6 +15,10 @@ All telemetry is server-side. The client measures and sends data via WebSocket; 
 Analytics endpoint: `https://analytics-api.unusualtechnologies.com`  
 Project key: `blaze_the_maze`
 
+Every event envelope carries two identity fields:
+- **`player_id`** — the persistent player identity: the `localStorage` GUID (`blazeTheMazePlayerId`) set once per browser/device, falling back to the Colyseus `sessionId` if unavailable (cleared storage, incognito). Use this to group events by unique player across sessions.
+- **`session_id`** — a UUID minted fresh on each `onJoin`. Use this to scope events to a single play session.
+
 ### Events
 
 #### `settings_applied` — fired once per room creation
@@ -33,7 +37,6 @@ Project key: `blaze_the_maze`
 |---|---|
 | `joined_via_code` | Player joined via friend code |
 | `is_host` | Player created the room |
-| `player_guid` | Persistent browser/app GUID from `localStorage` — used to identify returning players |
 | `is_mobile` | Whether the device is a phone/tablet |
 | `screen_w`, `screen_h` | Physical screen resolution |
 | `human_slot_count` | Number of human players configured on this device (co-op) |
