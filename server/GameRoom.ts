@@ -8,7 +8,7 @@ const ANALYTICS_URL     = 'https://analytics-api.unusualtechnologies.com';
 const ANALYTICS_API_KEY = process.env.ANALYTICS_API_KEY ?? '';
 const ANALYTICS_PROJECT = 'blaze_the_maze';
 
-function track(event_name: string, player_id: string, session_id: string, properties: Record<string, unknown> = {}): void {
+function track(event_name: string, player_id: string | null, session_id: string, properties: Record<string, unknown> = {}): void {
     if (!ANALYTICS_URL || !ANALYTICS_API_KEY) return;
     fetch(ANALYTICS_URL, {
         method:  'POST',
@@ -72,7 +72,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     // check would tear the room down while these players are mid-reconnect, dropping them.
     pendingReconnects = new Set<string>();
     // Per-client analytics state: analytics session UUID, join timestamp, round number at join
-    private clientAnalytics = new Map<string, { playerId: string; analyticsSessionId: string; startMs: number; joinRound: number }>();
+    private clientAnalytics = new Map<string, { playerId: string | null; analyticsSessionId: string; startMs: number; joinRound: number }>();
     // Incremented on every round win — used to calculate rounds_played per session
     private roundCount = 0;
     // Per-AI session state (not broadcast)
@@ -603,7 +603,7 @@ export class GameRoom extends Room<{ state: GameState }> {
 
         // ── Telemetry: session start ───────────────────────────────────────────
         const _aid = randomUUID();
-        const _playerId = options.playerGuid ?? client.sessionId;
+        const _playerId = options.playerGuid ?? null;
         this.clientAnalytics.set(client.sessionId, { playerId: _playerId, analyticsSessionId: _aid, startMs: Date.now(), joinRound: this.roundCount });
         track('session_start', _playerId, _aid, {
             joined_via_code:  joinedViaCode,

@@ -16,7 +16,7 @@ Analytics endpoint: `https://analytics-api.unusualtechnologies.com`
 Project key: `blaze_the_maze`
 
 Every event envelope carries two identity fields:
-- **`player_id`** — the persistent player identity: the `localStorage` GUID (`blazeTheMazePlayerId`) set once per browser/device, falling back to the Colyseus `sessionId` if unavailable (cleared storage, incognito). Use this to group events by unique player across sessions.
+- **`player_id`** — the persistent player identity: the `localStorage` GUID (`blazeTheMazePlayerId`) set once per browser/device. `null` when unavailable (cleared storage, incognito). Use this to group events by unique player across sessions; filter `WHERE player_id IS NOT NULL` for known-player analysis.
 - **`session_id`** — a UUID minted fresh on each `onJoin`. Use this to scope events to a single play session.
 
 ### Events
