@@ -804,7 +804,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.395</div>
+    <div id="version-number">v1.5.396</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -5029,9 +5029,15 @@
                             const rdx = playerState.x - blazer.gridX;
                             const rdy = playerState.y - blazer.gridY;
                             if ((Math.abs(rdx) === 1 && rdy === 0) || (rdx === 0 && Math.abs(rdy) === 1)) {
+                                if (rdx === blazer.lastDx && rdy === blazer.lastDy) {
+                                    blazer.dirStreak = (blazer.dirStreak || 0) + 1;
+                                } else {
+                                    blazer.dirStreak = 1;
+                                }
                                 blazer.lastDx = rdx;
                                 blazer.lastDy = rdy;
                             }
+                            blazer._speedBoostActive = !!playerState.speedBoostActive;
                             blazer.gridX = playerState.x;
                             blazer.gridY = playerState.y;
                         } else if (_moveLocked) {

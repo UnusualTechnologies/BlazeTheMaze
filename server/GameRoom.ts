@@ -113,6 +113,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     // through each other and should both be teleported even though they never occupied the
     // same cell at the same server tick.
     playerPrevPos = new Map<string, { x: number; y: number }>();
+    dirStreaks = new Map<string, { dx: number; dy: number; count: number }>();
     orbLeaderOnly: boolean = false;
     // Server-authoritative rockets. A rocket is spawned when a player collects a rocket
     // power-up; it walks the BFS path to the goal and teleports any non-owner it overlaps.
@@ -285,7 +286,8 @@ export class GameRoom extends Room<{ state: GameState }> {
                     const cooldown = (this.aiCooldowns.get(sessionId) ?? 0) + dt;
                     this.aiCooldowns.set(sessionId, cooldown);
                     const slotSpeed = this.state.slots[player.slotIndex]?.aiSpeed ?? 600;
-                    if (cooldown >= slotSpeed) {
+                    const effectiveSpeed = player.speedBoostActive ? Math.round(slotSpeed * 2 / 3) : slotSpeed;
+                    if (cooldown >= effectiveSpeed) {
                         this.aiCooldowns.set(sessionId, 0);
                         this.moveAI(sessionId, player);
                     }
@@ -345,9 +347,11 @@ export class GameRoom extends Room<{ state: GameState }> {
                 }
                 if (rj.lockDrops > 0 || rj.illegal > 0) this.moveRejectCounts.delete(client.sessionId);
                 this.lastInputTime.set(client.sessionId, now);
+                const _hPrevX = player.x, _hPrevY = player.y;
                 this.playerPrevPos.set(client.sessionId, { x: player.x, y: player.y });
                 player.x = message.x;
                 player.y = message.y;
+                this.updateDirStreak(client.sessionId, player, player.x - _hPrevX, player.y - _hPrevY);
                 this.checkCollisions(player, client.sessionId);
             } catch (err) {
                 console.error(`Move handler error for ${client.sessionId}:`, err);
@@ -767,6 +771,17 @@ export class GameRoom extends Room<{ state: GameState }> {
         return !cell.walls[wall];
     }
 
+    /** Track consecutive same-direction moves; set speedBoostActive after 4 in a row. */
+    private updateDirStreak(sessionId: string, player: Player, dx: number, dy: number): void {
+        const prev = this.dirStreaks.get(sessionId);
+        if (prev && prev.dx === dx && prev.dy === dy) {
+            prev.count++;
+        } else {
+            this.dirStreaks.set(sessionId, { dx, dy, count: 1 });
+        }
+        player.speedBoostActive = (this.dirStreaks.get(sessionId)!.count >= 4);
+    }
+
     /** Token-bucket rate limit. Refills MOVE_BURST tokens at one per MOVE_REFILL_MS and
      *  consumes one per accepted move. Short bursts (network jitter delivering several
      *  client-paced moves at once) are absorbed instead of dropped — dropping a legit move
@@ -1135,9 +1150,11 @@ export class GameRoom extends Room<{ state: GameState }> {
         // Remember where the player was before this move (for random anti-backtrack next tick)
         this.aiLastPos.set(sessionId, { x: player.x, y: player.y });
         this.playerPrevPos.set(sessionId, { x: player.x, y: player.y });
+        const _aiPrevX = player.x, _aiPrevY = player.y;
 
         player.x = move.x;
         player.y = move.y;
+        this.updateDirStreak(sessionId, player, player.x - _aiPrevX, player.y - _aiPrevY);
         this.checkCollisions(player, sessionId);
     }
 
@@ -1499,10 +1516,12 @@ export class GameRoom extends Room<{ state: GameState }> {
 
         this.moveRejectCounts.clear(); // fresh per-round reconciliation diagnostics
         this.playerPrevPos.clear();    // stale crossing-detection data from previous round
+        this.dirStreaks.clear();
         this.state.players.forEach((player, sessionId) => {
             const spawn = this.getSpawnPosition(player.slotIndex);
             player.x = spawn.x;
             player.y = spawn.y;
+            player.speedBoostActive = false;
             this.aiCooldowns.set(sessionId, 0);
             if (player.isAI) this.initAIState(sessionId, player);
         });
@@ -1544,11 +1563,13 @@ export class GameRoom extends Room<{ state: GameState }> {
         this.distanceMap = this.computeDistanceMap(this.state.goalX, this.state.goalY);
 
         // Reset all player positions to starting corners
+        this.dirStreaks.clear();
         this.state.players.forEach((player, sessionId) => {
             const i = player.slotIndex;
             const spawn = this.getSpawnPosition(i);
             player.x = spawn.x;
             player.y = spawn.y;
+            player.speedBoostActive = false;
             this.aiCooldowns.set(sessionId, 0);
             this.aiLoggedState.delete(sessionId);
             this.aiLastPos.delete(sessionId);
@@ -1661,6 +1682,10 @@ export class GameRoom extends Room<{ state: GameState }> {
         }
         // If destIdx is still -1 (impossible in practice: would need every cell to be a
         // power-up or the goal) the player stays put — better than corrupting state.
+
+        // Teleport breaks any speed streak
+        player.speedBoostActive = false;
+        this.state.players.forEach((p, sid) => { if (p === player) this.dirStreaks.delete(sid); });
 
         // Authoritative teleport signal — the client plays the teleport animation when this
         // changes, rather than guessing from position displacement.

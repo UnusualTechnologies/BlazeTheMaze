@@ -12,6 +12,7 @@ export class Player extends Schema {
     @type("string") color: string = "#ffffff";
     @type("boolean") isAI: boolean = false;
     @type("number") slotIndex: number = -1;
+    @type("boolean") speedBoostActive: boolean = false;
     // Increments every time the server teleports this player (collision, power-up, rocket).
     // The client watches this to decide when to play the teleport animation, instead of
     // guessing from position displacement (which false-fires on prediction/patch lag).
