@@ -84,7 +84,7 @@ Every event envelope carries two identity fields:
 | `round_time_ms` | `int` | How long the round lasted in milliseconds |
 | `winner_score` | `int` | Winner's score at time of win |
 | `is_match_won` | `bool` | Whether this round also ended the match |
-| `round_number` | `int` | Which round this was (1-indexed) |
+| `round_number` | `int` | Which round this was within the current match (1-indexed, resets each match) |
 | `player_count` | `int` | Total players at round end |
 | `human_count` | `int` | Human players at round end |
 

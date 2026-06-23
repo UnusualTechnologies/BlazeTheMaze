@@ -1446,16 +1446,28 @@ export class GameRoom extends Room<{ state: GameState }> {
 
             // ── Telemetry: round result ────────────────────────────────────────
             this.roundCount++;
-            const _winnerAnal = this.clientAnalytics.get(sessionId);
-            track('round_won', _winnerAnal?.playerId ?? null, _winnerAnal?.analyticsSessionId ?? 'ai', {
+            // Round number WITHIN the current match (resets each match). Equals the sum of all
+            // player scores right after this win — every round produces exactly one score point.
+            // NOT roundCount, which is a monotonic per-room counter used for rounds_played and
+            // would otherwise make "round 1" appear only once in a room's entire lifetime.
+            let _matchRoundNumber = 0;
+            this.state.players.forEach(p => { _matchRoundNumber += p.score; });
+            // AI winners have no client analytics entry (their session is a server-side
+            // pseudo-session). Attribute the event to the host's session instead: that gives a
+            // valid UUID session_id — the literal 'ai' string was rejected by the analytics
+            // backend (non-UUID), which is why AI wins never appeared even once the env was
+            // routed correctly. winner_is_ai still flags that an AI actually won.
+            const _winnerAnal = this.clientAnalytics.get(sessionId) ?? this.clientAnalytics.get(this.ownerSessionId);
+            track('round_won', _winnerAnal?.playerId ?? null, _winnerAnal?.analyticsSessionId ?? randomUUID(), {
                 winner_is_ai:  player.isAI,
                 round_time_ms: Date.now() - this.roundStartMs,
                 winner_score:  player.score,
                 is_match_won:  isMatchWon,
-                round_number:  this.roundCount,
+                round_number:  _matchRoundNumber,
                 player_count:  this.state.players.size,
                 human_count:   [...this.state.players.values()].filter((p: Player) => !p.isAI).length,
             }, _winnerAnal?.env ?? this.roomAnalyticsEnv);
+            console.log(`[analytics] round_won winner_is_ai=${player.isAI} env=${_winnerAnal?.env ?? this.roomAnalyticsEnv} session=${_winnerAnal?.analyticsSessionId ?? 'host-missing'}`);
             // ──────────────────────────────────────────────────────────────────
             // Persist winner info in synced state so late joiners catch up via onStateChange
             this.state.roundOver = true;
