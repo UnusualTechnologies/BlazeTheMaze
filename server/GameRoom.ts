@@ -78,6 +78,11 @@ export class GameRoom extends Room<{ state: GameState }> {
     pendingReconnects = new Set<string>();
     // Per-client analytics state: analytics session UUID, join timestamp, round number at join
     private clientAnalytics = new Map<string, { playerId: string | null; analyticsSessionId: string; startMs: number; joinRound: number; env: AnalyticsEnv }>();
+    // Room-level analytics env, captured from joining clients. Used as the fallback when the
+    // event's "owner" isn't a real client — e.g. an AI winning a round (its pseudo-session is
+    // not in clientAnalytics, so without this the event's env would default to 'none' and the
+    // track() call would be silently dropped, making AI wins invisible in analytics).
+    private roomAnalyticsEnv: AnalyticsEnv = 'none';
     // Incremented on every round win — used to calculate rounds_played per session
     private roundCount = 0;
     // Per-AI session state (not broadcast)
@@ -595,6 +600,7 @@ export class GameRoom extends Room<{ state: GameState }> {
         const _env: AnalyticsEnv = (options.analyticsEnv === 'live' || options.analyticsEnv === 'staging')
             ? options.analyticsEnv : 'none';
         this.clientAnalytics.set(client.sessionId, { playerId: _playerId, analyticsSessionId: _aid, startMs: Date.now(), joinRound: this.roundCount, env: _env });
+        if (_env !== 'none') this.roomAnalyticsEnv = _env;
         if (isHost) {
             // settings_applied is fired here (on host join) rather than onCreate so we
             // have access to _env for routing to the correct analytics project.
@@ -1449,7 +1455,7 @@ export class GameRoom extends Room<{ state: GameState }> {
                 round_number:  this.roundCount,
                 player_count:  this.state.players.size,
                 human_count:   [...this.state.players.values()].filter((p: Player) => !p.isAI).length,
-            }, _winnerAnal?.env ?? 'none');
+            }, _winnerAnal?.env ?? this.roomAnalyticsEnv);
             // ──────────────────────────────────────────────────────────────────
             // Persist winner info in synced state so late joiners catch up via onStateChange
             this.state.roundOver = true;
