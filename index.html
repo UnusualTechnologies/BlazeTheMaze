@@ -817,7 +817,7 @@
 </head>
 <body>
 
-    <div id="version-number">v1.5.406</div>
+    <div id="version-number">v1.5.407</div>
 
     <div id="main-wrapper">
         <!-- Top bar: audio controls (left) + menu button (right), above the canvas -->
@@ -6216,6 +6216,13 @@
             }
             resizeMini();
             window.addEventListener('resize', resizeMini);
+            // Some embeds (e.g. itch.io's non-fullscreen iframe) settle to their final
+            // size without ever dispatching a 'resize' event the iframe can observe,
+            // leaving this canvas stuck at whatever size it computed on first load.
+            // ResizeObserver catches the actual box-size change regardless of cause.
+            if (window.ResizeObserver) {
+                new ResizeObserver(resizeMini).observe(document.documentElement);
+            }
 
             const MOVE = 280; // ms per cell
 
